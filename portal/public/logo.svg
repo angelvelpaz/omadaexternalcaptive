@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Señal Wi-Fi estilizada -->
+  <circle cx="50" cy="68" r="6" fill="#2563EB"/>
+  <path d="M28 50 Q50 32 72 50" stroke="#2563EB" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M17 39 Q50 14 83 39" stroke="#93C5FD" stroke-width="5" fill="none" stroke-linecap="round"/>
+</svg>

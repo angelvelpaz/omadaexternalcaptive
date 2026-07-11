@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Wi-Fi</title>
+  <script src="/static/js/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center p-4">
+
+  <!-- Pantalla de carga para Autologin -->
+  <div id="autologin-overlay" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-6 transition-opacity duration-300">
+    <div class="text-center">
+      <img id="autologin-logo" src="/static/logo.svg" alt="Logo" class="h-16 mx-auto mb-6" onerror="this.style.display='none'">
+      <div class="flex justify-center mb-4">
+        <svg class="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      </div>
+      <h2 id="autologin-status" class="text-lg font-bold text-gray-800">Verificando conexión...</h2>
+      <p id="autologin-substatus" class="text-sm text-gray-500 mt-2">Por favor espere un momento.</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+    <!-- Logo y nombre del portal -->
+    <div class="text-center mb-8">
+      <img id="portal-logo" src="/static/logo.svg" alt="Logo" class="h-16 mx-auto mb-3"
+           onerror="this.style.display='none'">
+      <h1 id="portal-name" class="text-2xl font-bold text-gray-800">Portal Wi-Fi</h1>
+      <p id="welcome-text" class="text-gray-500 text-sm mt-1">Ingrese su número de cédula para conectarse</p>
+    </div>
+
+    <!-- Advertencia e instrucciones de MAC Aleatoria / Privada -->
+    <div class="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+      <div class="flex gap-2.5 items-start mb-2">
+        <span class="text-xl" role="img" aria-label="advertencia">⚠️</span>
+        <div>
+          <h2 class="text-sm font-bold text-amber-800">ATENCIÓN: Acción requerida</h2>
+          <p class="text-xs text-amber-700 mt-0.5">
+            Para garantizar tu conexión estable, debes desactivar la "MAC Aleatoria" o "Dirección Privada" en tu dispositivo exclusivamente para esta red.
+          </p>
+        </div>
+      </div>
+      
+      <details class="group mt-3 border-t border-amber-200 pt-2.5">
+        <summary class="flex justify-between items-center text-xs font-bold text-amber-800 cursor-pointer list-none focus:outline-none select-none">
+          <span>¿Cómo desactivarla en mi dispositivo?</span>
+          <span class="transition-transform duration-200 group-open:rotate-180">
+            <svg class="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+        </summary>
+        <ul class="mt-2.5 space-y-2 text-xs text-amber-700 list-disc pl-4">
+          <li><strong>🍎 iPhone y iPad:</strong> Ajustes &gt; Wi-Fi &gt; Toca la "i" azul &gt; Apaga "Dirección Wi-Fi privada".</li>
+          <li><strong>🤖 Android:</strong> Ajustes &gt; Wi-Fi &gt; Toca el engranaje ⚙️ &gt; Privacidad &gt; Elige "Usar MAC del dispositivo".</li>
+          <li><strong>💻 Windows:</strong> Ícono Wi-Fi &gt; Propiedades de la red &gt; Desactiva "Direcciones de hardware aleatorias".</li>
+          <li><strong>🍏 Mac:</strong> Configuración del Sistema &gt; Wi-Fi &gt; Detalles... &gt; Desactiva "Dirección Wi-Fi privada".</li>
+        </ul>
+      </details>
+    </div>
+
+    <!-- Formulario de cédula -->
+    <form id="form-cedula" autocomplete="off" novalidate>
+      <div class="mb-4">
+        <label for="cedula" class="block text-sm font-medium text-gray-700 mb-1">
+          Número de Cédula
+        </label>
+        <input
+          type="text"
+          id="cedula"
+          name="cedula"
+          maxlength="10"
+          inputmode="numeric"
+          pattern="[0-9]{10}"
+          placeholder="0000000000"
+          class="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg tracking-widest text-center
+                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                 transition-colors"
+          autocomplete="off"
+        >
+        <p id="cedula-error" class="text-red-500 text-sm mt-1 hidden"></p>
+        <p id="cedula-ok" class="text-green-600 text-sm mt-1 hidden">✓ Cédula válida</p>
+      </div>
+
+      <!-- Términos y condiciones (oculto en home, se aceptan en registro) -->
+      <div id="terms-container" class="hidden mb-5 flex items-start gap-3 mt-4">
+        <input type="checkbox" id="terms" name="terms" checked
+          class="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer">
+        <label for="terms" class="text-sm text-gray-600 cursor-pointer">
+          Acepto los <a href="/static/terms.html" target="_blank" class="text-blue-600 underline hover:text-blue-800">términos de uso</a>
+        </label>
+      </div>
+      <p id="terms-error" class="text-red-500 text-xs -mt-4 mb-4 hidden">Debe aceptar los términos de uso.</p>
+
+      <button
+        type="submit"
+        id="btn-ingresar"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg
+               transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+               disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        <span id="btn-text">Ingresar</span>
+        <span id="btn-spinner" class="hidden">
+          <svg class="animate-spin inline h-5 w-5 mr-2 -mt-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          Verificando...
+        </span>
+      </button>
+    </form>
+
+    <!-- MikroTik auto-submit form (oculto) -->
+    <form id="form-mikrotik" method="POST" class="hidden">
+      <input type="hidden" id="mk-username" name="username">
+      <input type="hidden" id="mk-password" name="password">
+    </form>
+
+  </div>
+
+  <script>
+    // ── Configuración desde el servidor ──────────────────────────────────────
+    const PORTAL_NAME = document.getElementById('portal-name');
+    const PORTAL_LOGO = document.getElementById('portal-logo');
+
+    fetch('/auth/config').then(r => r.json()).then(cfg => {
+      if (cfg.name) PORTAL_NAME.textContent = cfg.name;
+      document.title = cfg.name || 'Portal Wi-Fi';
+      if (cfg.logo) PORTAL_LOGO.src = cfg.logo;
+      if (cfg.welcomeText) document.getElementById('welcome-text').textContent = cfg.welcomeText;
+      
+      // Aplicar colores personalizados dinámicamente
+      if (cfg.primaryColor && cfg.accentColor) {
+        const style = document.createElement('style');
+        style.innerHTML = `
+          .bg-blue-600 { background-color: ${cfg.primaryColor} !important; }
+          .hover\\:bg-blue-700:hover { background-color: ${cfg.accentColor} !important; }
+          .text-blue-600 { color: ${cfg.primaryColor} !important; }
+          .hover\\:text-blue-800:hover { color: ${cfg.accentColor} !important; }
+          .focus\\:ring-blue-500:focus { --tw-ring-color: ${cfg.primaryColor} !important; }
+          .from-blue-600 { --tw-gradient-from: ${cfg.primaryColor} !important; }
+          .to-indigo-800 { --tw-gradient-to: ${cfg.accentColor} !important; }
+        `;
+        document.head.appendChild(style);
+      }
+    }).catch(() => {});
+
+    // ── Parámetros del vendor (de la URL) ────────────────────────────────────
+    const params = new URLSearchParams(window.location.search);
+
+    function detectVendor() {
+      if (params.has('link-login') || params.has('link-login-only')) return 'mikrotik';
+      if (params.has('cmd') && params.has('id')) return 'unifi';
+      if (params.has('clientMac')) return 'omada';
+      return 'unknown';
+    }
+
+    const vendor = detectVendor();
+
+    function getVendorParams() {
+      switch (vendor) {
+        case 'mikrotik':
+          return {
+            mac: params.get('mac') || '',
+            ip: params.get('ip') || '',
+            linkLogin: params.get('link-login') || '',
+            linkLoginOnly: params.get('link-login-only') || params.get('link-login') || '',
+            linkOrig: params.get('link-orig') || '',
+          };
+        case 'unifi':
+          return {
+            clientMac: params.get('id') || '',
+            apMac: params.get('ap') || '',
+            ssid: params.get('ssid') || '',
+            redirectUrl: params.get('url') || '',
+          };
+        case 'omada':
+          return {
+            clientMac: params.get('clientMac') || '',
+            apMac: params.get('apMac') || '',
+            ssidName: params.get('ssidName') || params.get('ssid') || '',
+            radioId: params.get('radioId') || '0',
+            vid: params.get('vid') || '1',
+            siteId: params.get('siteId') || params.get('site') || 'default',
+            redirectUrl: params.get('redirectUrl') || params.get('originUrl') || '',
+          };
+        default:
+          return { redirectUrl: params.get('url') || '' };
+      }
+    }
+
+    // ── Validación de cédula en tiempo real (módulo 10) ──────────────────────
+    function validateCedula(c) {
+      if (!/^\d{10}$/.test(c)) return false;
+      const d = c.split('').map(Number);
+      const prov = d[0] * 10 + d[1];
+      if (prov < 1 || prov > 24 || d[2] >= 6) return false;
+      const coef = [2,1,2,1,2,1,2,1,2];
+      let sum = 0;
+      for (let i = 0; i < 9; i++) {
+        let r = d[i] * coef[i];
+        if (r >= 10) r -= 9;
+        sum += r;
+      }
+      return ((10 - (sum % 10)) % 10) === d[9];
+    }
+
+    const cedulaInput = document.getElementById('cedula');
+    const cedulaError = document.getElementById('cedula-error');
+    const cedulaOk    = document.getElementById('cedula-ok');
+
+    cedulaInput.addEventListener('input', () => {
+      const val = cedulaInput.value.replace(/\D/g, '').slice(0, 10);
+      cedulaInput.value = val;
+
+      cedulaError.classList.add('hidden');
+      cedulaOk.classList.add('hidden');
+
+      if (val.length === 10) {
+        if (validateCedula(val)) {
+          cedulaOk.classList.remove('hidden');
+        } else {
+          cedulaError.textContent = 'Número de cédula no válido.';
+          cedulaError.classList.remove('hidden');
+        }
+      }
+    });
+
+    // ── Submit ────────────────────────────────────────────────────────────────
+    const form = document.getElementById('form-cedula');
+    const btnIngresar = document.getElementById('btn-ingresar');
+    const btnText = document.getElementById('btn-text');
+    const btnSpinner = document.getElementById('btn-spinner');
+
+    function setLoading(loading) {
+      btnIngresar.disabled = loading;
+      btnText.classList.toggle('hidden', loading);
+      btnSpinner.classList.toggle('hidden', !loading);
+    }
+
+    function showError(msg) {
+      cedulaError.textContent = msg;
+      cedulaError.classList.remove('hidden');
+      cedulaOk.classList.add('hidden');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ced = cedulaInput.value.trim();
+
+      if (!validateCedula(ced)) {
+        showError('Ingrese un número de cédula válido (10 dígitos).');
+        return;
+      }
+
+      setLoading(true);
+      cedulaError.classList.add('hidden');
+      document.getElementById('terms-error').classList.add('hidden');
+
+      try {
+        const resp = await fetch('/auth/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cedula: ced }),
+        });
+        const data = await resp.json();
+
+        if (!data.valid) {
+          showError(data.error || 'Cédula no válida.');
+          setLoading(false);
+          return;
+        }
+
+        if (data.exists) {
+          // Usuario existe → login directo
+          await doLogin(ced);
+        } else {
+          // Usuario nuevo → Ir a registro
+          const vp = new URLSearchParams({ 
+            cedula: ced, 
+            vendor, 
+            external: data.external ? 'true' : 'false', 
+            nombres: (data.user && data.user.nombres) || '',
+            apellidos: (data.user && data.user.apellidos) || '',
+            email: (data.user && data.user.email) || '',
+            ...getVendorParams() 
+          });
+          window.location.href = '/register?' + vp.toString();
+        }
+      } catch (err) {
+        showError('Error de conexión. Intente nuevamente.');
+        setLoading(false);
+      }
+    });
+
+    async function doLogin(ced, isAuto = false) {
+      try {
+        const resp = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cedula: ced, terms: true, vendor, vendorParams: getVendorParams() }),
+        });
+        const data = await resp.json();
+
+        if (!data.success) {
+          showError(data.error || 'Error de autenticación.');
+          setLoading(false);
+          // Ocultar overlay si falla
+          const overlay = document.getElementById('autologin-overlay');
+          if (overlay) {
+            overlay.classList.add('opacity-0');
+            setTimeout(() => overlay.remove(), 300);
+          }
+          return;
+        }
+
+        handleRedirect(data, ced);
+      } catch (err) {
+        showError('Error de conexión. Intente nuevamente.');
+        setLoading(false);
+        // Ocultar overlay si falla
+        const overlay = document.getElementById('autologin-overlay');
+        if (overlay) {
+          overlay.classList.add('opacity-0');
+          setTimeout(() => overlay.remove(), 300);
+        }
+      }
+    }
+
+    function handleRedirect(data, ced) {
+      const url = data.redirectUrl || '/success';
+
+      if (url.startsWith('__mikrotik__:')) {
+        // MikroTik: auto-submit form POST
+        const parts = url.split(':');
+        // formato: __mikrotik__:{linkLoginOnly}:{username}:{password}
+        // reagrupar correctamente (URL puede tener ":" en el protocolo)
+        const withoutPrefix = url.slice('__mikrotik__:'.length);
+        const lastColon2 = withoutPrefix.lastIndexOf(':');
+        const lastColon1 = withoutPrefix.lastIndexOf(':', lastColon2 - 1);
+        const mkUrl      = withoutPrefix.slice(0, lastColon1);
+        const mkUser     = withoutPrefix.slice(lastColon1 + 1, lastColon2);
+        const mkPass     = withoutPrefix.slice(lastColon2 + 1);
+
+        const mkForm = document.getElementById('form-mikrotik');
+        mkForm.action = mkUrl;
+        document.getElementById('mk-username').value = mkUser;
+        document.getElementById('mk-password').value = mkPass;
+        mkForm.submit();
+      } else {
+        const successUrl = '/success?nombre=' + encodeURIComponent(data.nombre || '') +
+                           '&redirect=' + encodeURIComponent(url);
+        window.location.href = successUrl;
+      }
+    }
+
+    // ── Autologin por MAC ──────────────────────────────────────────────────────
+    function getClientMac() {
+      if (vendor === 'omada') return params.get('clientMac');
+      if (vendor === 'unifi') return params.get('id');
+      if (vendor === 'mikrotik') return params.get('mac');
+      return params.get('clientMac') || params.get('mac') || params.get('id');
+    }
+
+    async function checkAutologin() {
+      const overlay = document.getElementById('autologin-overlay');
+      const statusEl = document.getElementById('autologin-status');
+      const clientMac = getClientMac();
+
+      if (!clientMac || vendor === 'unknown') {
+        // No hay MAC o vendor, no es posible hacer autologin
+        overlay.classList.add('opacity-0');
+        setTimeout(() => overlay.remove(), 300);
+        return;
+      }
+
+      try {
+        const resp = await fetch('/auth/check-mac?mac=' + encodeURIComponent(clientMac));
+        const data = await resp.json();
+
+        if (data.registered) {
+          statusEl.textContent = 'Dispositivo reconocido...';
+          document.getElementById('autologin-substatus').textContent = 'Conectando como ' + data.nombre;
+          await doLogin(data.cedula, true);
+        } else {
+          // No registrado: ocultar pantalla de carga
+          overlay.classList.add('opacity-0');
+          setTimeout(() => overlay.remove(), 300);
+        }
+      } catch (err) {
+        console.error('Error en autologin:', err);
+        overlay.classList.add('opacity-0');
+        setTimeout(() => overlay.remove(), 300);
+      }
+    }
+
+    // Iniciar verificación de autologin al cargar
+    checkAutologin();
+  </script>
+</body>
+</html>

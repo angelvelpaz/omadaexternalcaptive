@@ -1,0 +1,67 @@
+##
+## sites-enabled/default — Virtual server principal
+## Portal Cautivo: autenticación PAP con rlm_sql/PostgreSQL
+##
+
+server default {
+    listen {
+        type      = auth
+        ipaddr    = *
+        port      = 1812
+        limit {
+            max_connections = 16
+            lifetime        = 0
+            idle_timeout    = 30
+        }
+    }
+
+    listen {
+        type      = acct
+        ipaddr    = *
+        port      = 1813
+        limit {}
+    }
+
+    # ── Sección authorize ─────────────────────────────────────────────────────
+    # Se ejecuta para cada Access-Request recibido.
+    # Busca el usuario en radcheck vía SQL y establece Auth-Type.
+    authorize {
+        # Buscar usuario en SQL (radcheck)
+        sql
+
+        # Si el usuario tiene Cleartext-Password en radcheck, usar PAP
+        pap
+    }
+
+    # ── Sección authenticate ──────────────────────────────────────────────────
+    # Autenticación efectiva según Auth-Type detectado en authorize.
+    authenticate {
+        Auth-Type PAP {
+            pap
+        }
+    }
+
+    # ── Accounting ────────────────────────────────────────────────────────────
+    accounting {
+        sql
+    }
+
+    # ── Session ───────────────────────────────────────────────────────────────
+    session {
+        sql
+    }
+
+    # ── Post-Auth ─────────────────────────────────────────────────────────────
+    post-auth {
+        # Registrar en radpostauth si existe la tabla
+        # sql
+
+        Post-Auth-Type REJECT {
+            attr_filter.access_reject
+        }
+    }
+
+    # ── Pre-Proxy / Post-Proxy ────────────────────────────────────────────────
+    pre-proxy {}
+    post-proxy {}
+}

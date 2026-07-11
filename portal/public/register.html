@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro — Portal Wi-Fi</title>
+  <script src="/static/js/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center p-4">
+
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+    <div class="text-center mb-6">
+      <img id="portal-logo" src="/static/logo.svg" alt="Logo" class="h-12 mx-auto mb-3" onerror="this.style.display='none'">
+      <h1 id="portal-title" class="text-xl font-bold text-gray-800">Registro de Usuario</h1>
+      <p id="portal-subtitle" class="text-gray-500 text-sm mt-1">Complete sus datos para conectarse por primera vez</p>
+    </div>
+
+    <div id="alert-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+
+    <!-- Advertencia e instrucciones de MAC Aleatoria / Privada -->
+    <div class="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+      <div class="flex gap-2.5 items-start mb-2">
+        <span class="text-xl" role="img" aria-label="advertencia">⚠️</span>
+        <div>
+          <h2 class="text-sm font-bold text-amber-800">ATENCIÓN: Acción requerida</h2>
+          <p class="text-xs text-amber-700 mt-0.5">
+            Para garantizar tu conexión estable, debes desactivar la "MAC Aleatoria" o "Dirección Privada" en tu dispositivo exclusivamente para esta red.
+          </p>
+        </div>
+      </div>
+      
+      <details class="group mt-3 border-t border-amber-200 pt-2.5">
+        <summary class="flex justify-between items-center text-xs font-bold text-amber-800 cursor-pointer list-none focus:outline-none select-none">
+          <span>¿Cómo desactivarla en mi dispositivo?</span>
+          <span class="transition-transform duration-200 group-open:rotate-180">
+            <svg class="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+        </summary>
+        <ul class="mt-2.5 space-y-2 text-xs text-amber-700 list-disc pl-4">
+          <li><strong>🍎 iPhone y iPad:</strong> Ajustes &gt; Wi-Fi &gt; Toca la "i" azul &gt; Apaga "Dirección Wi-Fi privada".</li>
+          <li><strong>🤖 Android:</strong> Ajustes &gt; Wi-Fi &gt; Toca el engranaje ⚙️ &gt; Privacidad &gt; Elige "Usar MAC del dispositivo".</li>
+          <li><strong>💻 Windows:</strong> Ícono Wi-Fi &gt; Propiedades de la red &gt; Desactiva "Direcciones de hardware aleatorias".</li>
+          <li><strong>🍏 Mac:</strong> Configuración del Sistema &gt; Wi-Fi &gt; Detalles... &gt; Desactiva "Dirección Wi-Fi privada".</li>
+        </ul>
+      </details>
+    </div>
+
+    <form id="form-registro" novalidate autocomplete="off">
+      <!-- Cédula (pre-completada, editable) -->
+      <div class="mb-4">
+        <label for="cedula" class="block text-sm font-medium text-gray-700 mb-1">
+          Número de Cédula <span class="text-red-500">*</span>
+        </label>
+        <input type="text" id="cedula" name="cedula"
+          maxlength="10" inputmode="numeric" pattern="[0-9]{10}"
+          class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2
+                 focus:ring-blue-500 focus:border-transparent transition-colors tracking-widest text-center">
+        <p id="cedula-error" class="text-red-500 text-xs mt-1 hidden"></p>
+      </div>
+
+      <!-- Nombres -->
+      <div class="mb-4">
+        <label for="nombres" class="block text-sm font-medium text-gray-700 mb-1">
+          Nombres <span class="text-red-500">*</span>
+        </label>
+        <input type="text" id="nombres" name="nombres"
+          maxlength="100" placeholder="Ej: Juan Carlos"
+          class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2
+                 focus:ring-blue-500 focus:border-transparent transition-colors">
+        <p id="nombres-error" class="text-red-500 text-xs mt-1 hidden"></p>
+      </div>
+
+      <!-- Apellidos -->
+      <div class="mb-4">
+        <label for="apellidos" class="block text-sm font-medium text-gray-700 mb-1">
+          Apellidos <span class="text-red-500">*</span>
+        </label>
+        <input type="text" id="apellidos" name="apellidos"
+          maxlength="100" placeholder="Ej: Pérez García"
+          class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2
+                 focus:ring-blue-500 focus:border-transparent transition-colors">
+        <p id="apellidos-error" class="text-red-500 text-xs mt-1 hidden"></p>
+      </div>
+
+      <!-- Email -->
+      <div class="mb-5">
+        <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
+          Correo Electrónico <span class="text-red-500">*</span>
+        </label>
+        <input type="email" id="email" name="email"
+          maxlength="150" placeholder="correo@ejemplo.com"
+          class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2
+                 focus:ring-blue-500 focus:border-transparent transition-colors">
+        <p id="email-error" class="text-red-500 text-xs mt-1 hidden"></p>
+      </div>
+
+      <!-- Términos y condiciones (Caja deslizable) -->
+      <div class="mb-3">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Términos y condiciones de uso</label>
+        <div id="terms-box" class="overflow-y-auto max-h-36 border border-gray-300 rounded-lg p-3 bg-gray-50 text-xs text-gray-600 leading-relaxed" style="white-space: pre-wrap;">
+          Cargando términos de uso...
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">Por favor deslice la caja de términos hasta el final para habilitar la aceptación.</p>
+      </div>
+
+      <div class="mb-5 flex items-start gap-3">
+        <input type="checkbox" id="terms" name="terms" disabled
+          class="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-not-allowed opacity-60 transition-opacity">
+        <label for="terms" id="terms-label" class="text-sm text-gray-600 cursor-not-allowed opacity-60 font-medium select-none">
+          He leído y acepto los términos y condiciones
+        </label>
+      </div>
+      <p id="terms-error" class="text-red-500 text-xs -mt-4 mb-4 hidden">Debe leer y aceptar los términos y condiciones para continuar.</p>
+
+      <button type="submit" id="btn-registro"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg
+               transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+               disabled:opacity-60 disabled:cursor-not-allowed">
+        <span id="btn-text">Registrarme y Conectarme</span>
+        <span id="btn-spinner" class="hidden">
+          <svg class="animate-spin inline h-5 w-5 mr-2 -mt-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          Procesando...
+        </span>
+      </button>
+    </form>
+
+    <p class="text-center mt-4">
+      <a href="/" class="text-sm text-gray-500 hover:text-gray-700 underline">← Volver</a>
+    </p>
+
+    <!-- MikroTik auto-submit form -->
+    <form id="form-mikrotik" method="POST" class="hidden">
+      <input type="hidden" id="mk-username" name="username">
+      <input type="hidden" id="mk-password" name="password">
+    </form>
+  </div>
+
+  <script>
+    const DEFAULT_TERMS = `1. Aceptación\nAl conectarse a esta red Wi-Fi pública, usted acepta cumplir con estos términos y condiciones.\n\n2. Uso Permitido\nEsta red está destinada para uso general de navegación, comunicaciones y acceso a información. El uso es personal e intransferible.\n\n3. Uso Prohibido\nEstá prohibido utilizar la red para actividades ilegales, distribución de contenido inapropiado, ataques informáticos o cualquier actividad que viole la ley ecuatoriana.\n\n4. Privacidad\nLos datos de registro son recopilados únicamente para fines de autenticación y no serán compartidos con terceros sin autorización legal.\n\n5. Limitación de Responsabilidad\nEl administrador de la red no se responsabiliza por el contenido accedido por los usuarios ni por interrupciones del servicio.\n\n6. Duración de Sesión\nCada sesión tiene una duración limitada. Al expirar, deberá autenticarse nuevamente.`;
+
+    // ── Configuración desde el servidor (Branding) ───────────────────────────
+    fetch('/auth/config').then(r => r.json()).then(cfg => {
+      document.title = 'Registro — ' + (cfg.name || 'Portal Wi-Fi');
+      if (cfg.logo) document.getElementById('portal-logo').src = cfg.logo;
+
+      // Cargar los términos de uso en la caja deslizable
+      const termsBox = document.getElementById('terms-box');
+      const termsCheckbox = document.getElementById('terms');
+      const termsLabel = document.getElementById('terms-label');
+
+      const termsTextToLoad = (cfg.termsText && cfg.termsText.trim()) ? cfg.termsText : DEFAULT_TERMS;
+      termsBox.textContent = termsTextToLoad;
+
+      // Habilitar checkbox al hacer scroll hasta el final
+      termsBox.addEventListener('scroll', () => {
+        if (termsBox.scrollHeight - termsBox.scrollTop <= termsBox.clientHeight + 5) {
+          enableTermsCheckbox();
+        }
+      });
+
+      // Si no es lo suficientemente largo para requerir scroll, habilitar de inmediato
+      setTimeout(() => {
+        if (termsBox.scrollHeight <= termsBox.clientHeight) {
+          enableTermsCheckbox();
+        }
+      }, 250);
+
+      function enableTermsCheckbox() {
+        termsCheckbox.disabled = false;
+        termsCheckbox.classList.remove('cursor-not-allowed', 'opacity-60');
+        termsCheckbox.classList.add('cursor-pointer');
+        termsLabel.classList.remove('cursor-not-allowed', 'opacity-60');
+        termsLabel.classList.add('cursor-pointer');
+      }
+      
+      // Aplicar colores personalizados dinámicamente
+      if (cfg.primaryColor && cfg.accentColor) {
+        const style = document.createElement('style');
+        style.innerHTML = `
+          .bg-blue-600 { background-color: ${cfg.primaryColor} !important; }
+          .hover\\:bg-blue-700:hover { background-color: ${cfg.accentColor} !important; }
+          .text-blue-600 { color: ${cfg.primaryColor} !important; }
+          .hover\\:text-blue-800:hover { color: ${cfg.accentColor} !important; }
+          .focus\\:ring-blue-500:focus { --tw-ring-color: ${cfg.primaryColor} !important; }
+          .from-blue-600 { --tw-gradient-from: ${cfg.primaryColor} !important; }
+          .to-indigo-800 { --tw-gradient-to: ${cfg.accentColor} !important; }
+        `;
+        document.head.appendChild(style);
+      }
+    }).catch(() => {});
+
+    const urlParams = new URLSearchParams(window.location.search);
+
+    // Preservar los parámetros de red del vendor al volver a la página de inicio
+    const volverLink = document.querySelector('a[href="/"]');
+    if (volverLink) {
+      const backParams = new URLSearchParams(window.location.search);
+      backParams.delete('cedula');
+      backParams.delete('external');
+      backParams.delete('nombres');
+      backParams.delete('apellidos');
+      backParams.delete('email');
+      volverLink.href = '/?' + backParams.toString();
+    }
+
+    // Pre-completar cédula desde URL
+    const cedulaInput = document.getElementById('cedula');
+    cedulaInput.value = urlParams.get('cedula') || '';
+
+    const external = urlParams.get('external') === 'true';
+    if (external) {
+      document.getElementById('nombres').closest('.mb-4').classList.add('hidden');
+      document.getElementById('apellidos').closest('.mb-4').classList.add('hidden');
+      document.getElementById('email').closest('.mb-5').classList.add('hidden');
+      document.getElementById('portal-subtitle').textContent = 
+        'Usted es funcionario de la institución. Por favor acepte los términos de uso para conectarse.';
+    }
+
+    const vendor = urlParams.get('vendor') || 'unknown';
+
+    function getVendorParams() {
+      const allParams = {};
+      for (const [k, v] of urlParams.entries()) {
+        if (k !== 'cedula' && k !== 'vendor') allParams[k] = v;
+      }
+      return allParams;
+    }
+
+    // Validación módulo 10
+    function validateCedula(c) {
+      if (!/^\d{10}$/.test(c)) return false;
+      const d = c.split('').map(Number);
+      const prov = d[0] * 10 + d[1];
+      if (prov < 1 || prov > 24 || d[2] >= 6) return false;
+      const coef = [2,1,2,1,2,1,2,1,2];
+      let sum = 0;
+      for (let i = 0; i < 9; i++) {
+        let r = d[i] * coef[i]; if (r >= 10) r -= 9; sum += r;
+      }
+      return ((10 - (sum % 10)) % 10) === d[9];
+    }
+
+    function showFieldError(id, msg) {
+      const el = document.getElementById(id + '-error');
+      if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+    }
+
+    function clearErrors() {
+      ['cedula','nombres','apellidos','email','terms'].forEach(id => {
+        const el = document.getElementById(id + '-error');
+        if (el) el.classList.add('hidden');
+      });
+      document.getElementById('alert-error').classList.add('hidden');
+    }
+
+    function setLoading(v) {
+      document.getElementById('btn-registro').disabled = v;
+      document.getElementById('btn-text').classList.toggle('hidden', v);
+      document.getElementById('btn-spinner').classList.toggle('hidden', !v);
+    }
+
+    document.getElementById('form-registro').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearErrors();
+
+      const ced       = cedulaInput.value.trim();
+      const nombres   = document.getElementById('nombres').value.trim();
+      const apellidos = document.getElementById('apellidos').value.trim();
+      const email     = document.getElementById('email').value.trim();
+      const terms     = document.getElementById('terms').checked;
+
+      let valid = true;
+
+      let nombresVal = nombres;
+      let apellidosVal = apellidos;
+      let emailVal = email;
+
+      if (!validateCedula(ced)) {
+        showFieldError('cedula', 'Número de cédula no válido.'); valid = false;
+      }
+
+      if (external) {
+        nombresVal = urlParams.get('nombres') || 'Verificado';
+        apellidosVal = urlParams.get('apellidos') || 'Externo';
+        emailVal = urlParams.get('email') || 'externo@wifi.local';
+      } else {
+        if (nombres.length < 2) {
+          showFieldError('nombres', 'Ingrese sus nombres (mínimo 2 caracteres).'); valid = false;
+        }
+        if (apellidos.length < 2) {
+          showFieldError('apellidos', 'Ingrese sus apellidos (mínimo 2 caracteres).'); valid = false;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showFieldError('email', 'Ingrese un correo electrónico válido.'); valid = false;
+        }
+      }
+
+      if (!terms) {
+        document.getElementById('terms-error').classList.remove('hidden'); valid = false;
+      }
+
+      if (!valid) return;
+
+      setLoading(true);
+
+      try {
+        const resp = await fetch('/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            cedula: ced, 
+            nombres: nombresVal, 
+            apellidos: apellidosVal, 
+            email: emailVal, 
+            terms, 
+            vendor, 
+            vendorParams: getVendorParams() 
+          }),
+        });
+        const data = await resp.json();
+
+        if (!data.success) {
+          const alertEl = document.getElementById('alert-error');
+          alertEl.textContent = data.error || 'Error al registrar. Intente nuevamente.';
+          alertEl.classList.remove('hidden');
+          setLoading(false);
+          return;
+        }
+
+        handleRedirect(data);
+      } catch (err) {
+        document.getElementById('alert-error').textContent = 'Error de conexión. Intente nuevamente.';
+        document.getElementById('alert-error').classList.remove('hidden');
+        setLoading(false);
+      }
+    });
+
+    function handleRedirect(data) {
+      const url = data.redirectUrl || '/success';
+      if (url.startsWith('__mikrotik__:')) {
+        const withoutPrefix = url.slice('__mikrotik__:'.length);
+        const lastColon2 = withoutPrefix.lastIndexOf(':');
+        const lastColon1 = withoutPrefix.lastIndexOf(':', lastColon2 - 1);
+        const mkUrl  = withoutPrefix.slice(0, lastColon1);
+        const mkUser = withoutPrefix.slice(lastColon1 + 1, lastColon2);
+        const mkPass = withoutPrefix.slice(lastColon2 + 1);
+        const mkForm = document.getElementById('form-mikrotik');
+        mkForm.action = mkUrl;
+        document.getElementById('mk-username').value = mkUser;
+        document.getElementById('mk-password').value = mkPass;
+        mkForm.submit();
+      } else {
+        const successUrl = '/success?nombre=' + encodeURIComponent(data.nombre || '') +
+                           '&redirect=' + encodeURIComponent(url);
+        window.location.href = successUrl;
+      }
+    }
+  </script>
+</body>
+</html>

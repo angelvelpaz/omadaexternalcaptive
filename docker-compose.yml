@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: captive_postgres
+    command: postgres -c max_connections=200
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - captive_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  freeradius:
+    build:
+      context: ./freeradius
+      dockerfile: Dockerfile
+    container_name: captive_freeradius
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      RADIUS_SECRET: ${RADIUS_SECRET}
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    networks:
+      - captive_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  portal:
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+    container_name: captive_portal
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_POOL_MAX: ${DB_POOL_MAX:-40}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      RADIUS_HOST: freeradius
+      RADIUS_PORT: 1812
+      RADIUS_SECRET: ${RADIUS_SECRET}
+      RADIUS_TIMEOUT: ${RADIUS_TIMEOUT:-5000}
+      SESSION_SECRET: ${SESSION_SECRET}
+      ADMIN_SECRET: ${ADMIN_SECRET}
+      PORTAL_NAME: ${PORTAL_NAME:-Portal Cautivo}
+      PORTAL_LOGO_URL: ${PORTAL_LOGO_URL:-/static/logo.svg}
+      SESSION_DURATION_MINUTES: ${SESSION_DURATION_MINUTES:-480}
+      UNIFI_CONTROLLER_URL: ${UNIFI_CONTROLLER_URL:-}
+      UNIFI_USER: ${UNIFI_USER:-}
+      UNIFI_PASS: ${UNIFI_PASS:-}
+      UNIFI_SITE: ${UNIFI_SITE:-default}
+      UNIFI_VERIFY_SSL: ${UNIFI_VERIFY_SSL:-false}
+      OMADA_CONTROLLER_URL: ${OMADA_CONTROLLER_URL:-}
+      OMADA_SITE_ID: ${OMADA_SITE_ID:-}
+      OMADA_CLIENT_ID: ${OMADA_CLIENT_ID:-}
+      OMADA_CLIENT_SECRET: ${OMADA_CLIENT_SECRET:-}
+    networks:
+      - captive_net
+    volumes:
+      - ./ssl:/app/ssl
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: captive_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl
+    networks:
+      - captive_net
+    depends_on:
+      - portal
+
+networks:
+  captive_net:
+    driver: bridge
+
+volumes:
+  postgres_data:

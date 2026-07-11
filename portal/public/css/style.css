@@ -1,0 +1,27 @@
+/* Portal Cautivo — Estilos personalizados */
+
+/* Transiciones suaves en inputs */
+input[type="text"],
+input[type="email"] {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Spinner personalizado para el botón */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* Barra de progreso */
+#progress-bar {
+  transition: width 1s linear;
+}
+
+/* Limitar ancho del logo en mobile */
+#portal-logo {
+  max-height: 64px;
+  width: auto;
+}

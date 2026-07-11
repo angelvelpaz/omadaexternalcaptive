@@ -1,0 +1,23 @@
+{
+  "name": "captive-portal",
+  "version": "1.0.0",
+  "description": "Portal cautivo externo para MikroTik, UniFi y TP-Link Omada",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "express-validator": "^7.1.0",
+    "pg": "^8.12.0",
+    "radius": "^1.1.4",
+    "uuid": "^10.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Términos de Uso — Portal Wi-Fi</title>
+  <script src="/static/js/tailwind.min.js"></script>
+</head>
+<body class="min-h-screen bg-gray-50 p-6">
+  <div class="max-w-2xl mx-auto bg-white rounded-xl shadow p-8">
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Términos y Condiciones de Uso de la Red</h1>
+    <p id="last-update" class="text-sm text-gray-500 mb-6">Última actualización: 2024</p>
+
+    <div id="terms-content" class="prose prose-sm text-gray-700 space-y-4">
+      <h2 class="text-lg font-semibold">1. Aceptación</h2>
+      <p>Al conectarse a esta red Wi-Fi pública, usted acepta cumplir con estos términos y condiciones.</p>
+
+      <h2 class="text-lg font-semibold">2. Uso Permitido</h2>
+      <p>Esta red está destinada para uso general de navegación, comunicaciones y acceso a información. El uso es personal e intransferible.</p>
+
+      <h2 class="text-lg font-semibold">3. Uso Prohibido</h2>
+      <p>Está prohibido utilizar la red para actividades ilegales, distribución de contenido inapropiado, ataques informáticos o cualquier actividad que viole la ley ecuatoriana.</p>
+
+      <h2 class="text-lg font-semibold">4. Privacidad</h2>
+      <p>Los datos de registro son recopilados únicamente para fines de autenticación y no serán compartidos con terceros sin autorización legal.</p>
+
+      <h2 class="text-lg font-semibold">5. Limitación de Responsabilidad</h2>
+      <p>El administrador de la red no se responsabiliza por el contenido accedido por los usuarios ni por interrupciones del servicio.</p>
+
+      <h2 class="text-lg font-semibold">6. Duración de Sesión</h2>
+      <p>Cada sesión tiene una duración limitada. Al expirar, deberá autenticarse nuevamente.</p>
+    </div>
+
+    <button onclick="window.close()" class="mt-8 bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg text-sm font-medium transition-colors">
+      Cerrar
+    </button>
+  </div>
+
+  <script>
+    fetch('/auth/config')
+      .then(r => r.json())
+      .then(cfg => {
+        if (cfg.termsUpdatedAt) {
+          const date = new Date(cfg.termsUpdatedAt);
+          const options = { year: 'numeric', month: 'long', day: 'numeric' };
+          document.getElementById('last-update').textContent = 'Última actualización: ' + date.toLocaleDateString('es-EC', options);
+        } else {
+          const date = new Date();
+          const options = { year: 'numeric', month: 'long', day: 'numeric' };
+          document.getElementById('last-update').textContent = 'Última actualización: ' + date.toLocaleDateString('es-EC', options);
+        }
+
+        if (cfg.termsText && cfg.termsText.trim()) {
+          const contentEl = document.getElementById('terms-content');
+          contentEl.textContent = cfg.termsText;
+          contentEl.style.whiteSpace = 'pre-wrap';
+        }
+      })
+      .catch(console.error);
+  </script>
+</body>
+</html>

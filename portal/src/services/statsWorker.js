@@ -1,0 +1,203 @@
+'use strict';
+
+const crypto = require('crypto');
+const db = require('./database');
+const omadaSvc = require('./omada');
+const unifiSvc = require('./unifi');
+
+let intervalId = null;
+let isRunning = false;
+
+/**
+ * Helper para generar el hash acctuniqueid de FreeRADIUS (MD5 de 32 caracteres)
+ */
+function getAcctUniqueId(sessionId) {
+  return crypto.createHash('md5').update(sessionId).digest('hex');
+}
+
+/**
+ * Sincroniza las estadísticas de consumo de los controladores UniFi y Omada hacia radacct.
+ */
+async function syncStats() {
+  if (isRunning) return;
+  isRunning = true;
+
+  try {
+    const activeClients = [];
+
+    // 1. Obtener clientes activos de Omada si está configurado
+    const omadaClients = await omadaSvc.getActiveClients();
+    if (omadaClients && omadaClients.length > 0) {
+      activeClients.push(...omadaClients);
+    }
+
+    // 2. Obtener clientes activos de UniFi si está configurado
+    const unifiClients = await unifiSvc.getActiveClients();
+    if (unifiClients && unifiClients.length > 0) {
+      activeClients.push(...unifiClients);
+    }
+
+    if (activeClients.length === 0) {
+      // Si no hay clientes activos de ningún controlador, cerramos todas las sesiones activas en radacct
+      const pool = db.getPool();
+      if (pool) {
+        await pool.query(`
+          UPDATE radacct
+          SET acctstoptime = NOW(), acctupdatetime = NOW()
+          WHERE acctstoptime IS NULL
+            AND (acctsessionid LIKE 'omada-%' OR acctsessionid LIKE 'unifi-%')
+        `);
+      }
+      isRunning = false;
+      return;
+    }
+
+    const pool = db.getPool();
+    if (!pool) {
+      isRunning = false;
+      return;
+    }
+
+    const activeMacs = new Set();
+
+    // 3. Procesar cada cliente activo obtenido de los controladores
+    for (const client of activeClients) {
+      const mac = client.macAddress.toUpperCase().replace(/:/g, '-');
+      activeMacs.add(mac);
+
+      // Buscar si el dispositivo está registrado a una cédula en la BD
+      const devRes = await pool.query(
+        'SELECT cedula FROM dispositivos_usuario WHERE UPPER(mac_address) = $1',
+        [mac]
+      );
+
+      if (devRes.rows.length === 0) {
+        // Dispositivo no registrado en la base de datos local
+        continue;
+      }
+
+      const cedula = devRes.rows[0].cedula;
+      const uptime = parseInt(client.uptime) || 0;
+      const upload = parseInt(client.upload) || 0;
+      const download = parseInt(client.download) || 0;
+      const ip = client.ipAddress || null;
+      const vendor = client.vendor;
+
+      // Calcular hora aproximada de inicio de conexión basada en su uptime
+      const startTime = new Date(Date.now() - (uptime * 1000));
+      // Generar identificador de sesión único estable
+      const sessionId = `${vendor}-${mac}-${startTime.getTime()}`;
+      const uniqueId = getAcctUniqueId(sessionId);
+
+      // Consultar si ya existe una sesión activa abierta para esta MAC en radacct
+      const accRes = await pool.query(
+        `SELECT radacctid, acctsessionid
+         FROM radacct
+         WHERE callingstationid = $1 AND acctstoptime IS NULL LIMIT 1`,
+        [mac]
+      );
+
+      if (accRes.rows.length > 0) {
+        const existingSessionId = accRes.rows[0].acctsessionid;
+        const radacctId = accRes.rows[0].radacctid;
+
+        // Si es la misma sesión (mismo ID generado), la actualizamos
+        if (existingSessionId === sessionId) {
+          await pool.query(
+            `UPDATE radacct
+             SET acctsessiontime = $1,
+                 acctinputoctets = $2,
+                 acctoutputoctets = $3,
+                 acctupdatetime = NOW(),
+                 framedipaddress = $4
+             WHERE radacctid = $5`,
+            [uptime, upload, download, ip, radacctId]
+          );
+        } else {
+          // Si el ID es diferente, significa que el usuario reconectó y tiene un nuevo uptime.
+          // Cerramos la sesión anterior y abrimos una nueva.
+          await pool.query(
+            `UPDATE radacct
+             SET acctstoptime = NOW(), acctupdatetime = NOW()
+             WHERE radacctid = $1`,
+            [radacctId]
+          );
+
+          await pool.query(
+            `INSERT INTO radacct (
+               acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
+               acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
+               acctinputoctets, acctoutputoctets, callingstationid, framedipaddress
+             ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9)`,
+            [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip]
+          );
+        }
+      } else {
+        // No hay sesión activa abierta en radacct para esta MAC, creamos una nueva
+        await pool.query(
+          `INSERT INTO radacct (
+             acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
+             acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
+             acctinputoctets, acctoutputoctets, callingstationid, framedipaddress
+           ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9)`,
+          [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip]
+        );
+      }
+    }
+
+    // 4. Cerrar sesiones en radacct de dispositivos que ya NO están activos en los controladores
+    const activeSessionsRes = await pool.query(
+      `SELECT radacctid, callingstationid
+       FROM radacct
+       WHERE acctstoptime IS NULL
+         AND (acctsessionid LIKE 'omada-%' OR acctsessionid LIKE 'unifi-%')`
+    );
+
+    for (const session of activeSessionsRes.rows) {
+      const mac = session.callingstationid;
+      if (!activeMacs.has(mac)) {
+        // La MAC ya no está en la lista de activos, cerramos la sesión
+        await pool.query(
+          `UPDATE radacct
+           SET acctstoptime = NOW(), acctupdatetime = NOW()
+           WHERE radacctid = $1`,
+          [session.radacctid]
+        );
+        console.log(`[STATS] Cerrada sesión de consumo inactiva en radacct para MAC: ${mac}`);
+      }
+    }
+
+  } catch (err) {
+    console.error('[STATS] Error en el ciclo del stats worker:', err.message);
+  } finally {
+    isRunning = false;
+  }
+}
+
+/**
+ * Inicia el temporizador del stats worker para ejecutarse periódicamente (cada 1 minuto).
+ */
+function startStatsWorker() {
+  if (intervalId) return;
+
+  console.log('[STATS] Iniciando worker de estadísticas de consumo (intervalo: 1 minuto)...');
+  
+  // Ejecución inicial tras 10 segundos
+  setTimeout(syncStats, 10000);
+
+  // Ciclo periódico de 1 minuto
+  intervalId = setInterval(syncStats, 60000);
+}
+
+/**
+ * Detiene el temporizador del stats worker.
+ */
+function stopStatsWorker() {
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+    console.log('[STATS] Worker de estadísticas de consumo detenido.');
+  }
+}
+
+module.exports = { startStatsWorker, stopStatsWorker, syncStats };

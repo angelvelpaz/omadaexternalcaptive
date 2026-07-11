@@ -1,0 +1,22 @@
+# Dependencias
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Secretos y variables locales
+.env
+.env*.local
+ssl/*.key
+ssl/*.crt
+ssl/*.csr
+ssl/*.pem
+
+# Docker y base de datos
+postgres_data/
+
+# Directorios de sistema de IA y logs temporales
+.gemini/
+.claude/
+.system_generated/
+*.log

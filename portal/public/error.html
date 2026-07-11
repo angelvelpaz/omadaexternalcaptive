@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Error — Portal Wi-Fi</title>
+  <script src="/static/js/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-red-500 to-rose-700 flex items-center justify-center p-4">
+
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+    <!-- Ícono de error -->
+    <div class="flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mx-auto mb-6">
+      <svg class="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
+      </svg>
+    </div>
+
+    <h1 class="text-2xl font-bold text-gray-800 mb-3">Ha ocurrido un error</h1>
+    <p id="error-msg" class="text-gray-600 mb-8">No se pudo completar la autenticación.</p>
+
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="/"
+        class="bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg
+               transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
+        Intentar nuevamente
+      </a>
+    </div>
+
+    <p class="text-xs text-gray-400 mt-8">
+      Si el problema persiste, contacte al administrador de la red.
+    </p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const msg = params.get('msg');
+    if (msg) document.getElementById('error-msg').textContent = msg;
+  </script>
+</body>
+</html>

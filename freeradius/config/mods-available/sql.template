@@ -1,0 +1,52 @@
+##
+## mods-available/sql — Módulo rlm_sql con PostgreSQL
+## Generado desde sql.template por entrypoint.sh
+## NOTA: solo se sustituyen las 5 variables de Postgres; el resto son literales.
+##
+
+sql {
+    driver     = "rlm_sql_postgresql"
+    dialect    = "postgresql"
+
+    # Conexión a PostgreSQL (nombre del servicio Docker)
+    server     = "${POSTGRES_HOST}"
+    port       = ${POSTGRES_PORT}
+    login      = "${POSTGRES_USER}"
+    password   = "${POSTGRES_PASSWORD}"
+    radius_db  = "${POSTGRES_DB}"
+
+    # Nombres de tabla (deben coincidir con 01-schema.sql)
+    acct_table1       = "radacct"
+    acct_table2       = "radacct"
+    postauth_table    = "radpostauth"
+    authcheck_table   = "radcheck"
+    groupcheck_table  = "radgroupcheck"
+    authreply_table   = "radreply"
+    groupreply_table  = "radgroupreply"
+    usergroup_table   = "radusergroup"
+
+    read_clients      = no
+    client_table      = "nas"
+
+    # Atributo de grupo usado en las queries de grupo
+    group_attribute   = "sql-Group"
+
+    # Atributo usado como clave en las queries SQL
+    # %{User-Name} viene del Access-Request
+    sql_user_name = "%{User-Name}"
+
+    pool {
+        start        = 5
+        min          = 3
+        max          = 32
+        spare        = 10
+        uses         = 0
+        retry_delay  = 30
+        lifetime     = 0
+        idle_timeout = 60
+    }
+
+    # Cargar las queries SQL para PostgreSQL (authorize, accounting, etc.)
+    # ${modconfdir} es expandido por FreeRADIUS a /etc/freeradius/mods-config
+    $INCLUDE ${modconfdir}/sql/main/postgresql/queries.conf
+}

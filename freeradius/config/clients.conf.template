@@ -1,0 +1,15 @@
+##
+## clients.conf — Clientes RADIUS autorizados
+## Generado desde clients.conf.template por entrypoint.sh
+##
+## Un único cliente que acepta cualquier IP de la red Docker (0.0.0.0/0).
+## En producción, restringir a la IP del router y del portal.
+##
+
+client captive_net {
+    ipaddr                       = 0.0.0.0/0
+    secret                       = ${RADIUS_SECRET}
+    shortname                    = captive
+    nastype                      = other
+    require_message_authenticator = no
+}

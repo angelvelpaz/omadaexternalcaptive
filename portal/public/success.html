@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conectado — Portal Wi-Fi</title>
+  <script src="/static/js/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center p-4">
+
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+    <!-- Ícono de éxito -->
+    <div class="flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mx-auto mb-6">
+      <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+      </svg>
+    </div>
+
+    <h1 class="text-2xl font-bold text-gray-800 mb-2">¡Bienvenido!</h1>
+    <p id="welcome-msg" class="text-gray-600 mb-2">Ya tiene acceso a internet.</p>
+    <p class="text-sm text-gray-500 mb-6">
+      Su sesión es válida por <strong id="session-duration">8 horas</strong>.
+    </p>
+
+    <!-- Contador de redirección -->
+    <div id="redirect-section" class="hidden mb-4">
+      <p class="text-sm text-gray-500">
+        Preparando navegación segura... Redirigiendo en <span id="countdown" class="font-bold text-green-600">18</span> segundos.
+      </p>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 mt-2 mb-3">
+        <div id="progress-bar" class="bg-green-500 h-1.5 rounded-full transition-all duration-1000"
+             style="width: 100%"></div>
+      </div>
+      <p class="text-xs text-gray-400 mb-2">
+        Si no se redirige, espere unos segundos más y presione <strong>"Listo"</strong> o <strong>"Cerrar"</strong> en la esquina superior de su pantalla.
+      </p>
+      <div class="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200 text-left">
+        <p class="text-[11px] text-amber-800 leading-relaxed">
+          <strong>Nota de red:</strong> Los puntos de acceso pueden tardar hasta 10-12 segundos en aplicar la autorización. Si nota que su navegación no inicia de inmediato, por favor espere unos instantes y recargue la página o desactive y active el Wi-Fi de su dispositivo para forzar la sincronización.
+        </p>
+      </div>
+    </div>
+
+    <a id="btn-browse" href="http://www.google.com" target="_blank"
+      class="inline-block bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-lg
+             transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+      Navegar ahora
+    </a>
+
+    <p class="text-xs text-gray-400 mt-6">
+      <img id="portal-logo-footer" src="/static/logo.svg" alt="Logo" class="h-6 inline mr-1 opacity-50" onerror="this.style.display='none'">
+      <span id="portal-name-footer"></span>
+    </p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const nombre   = params.get('nombre');
+    const redirect = params.get('redirect');
+    const duration = parseInt(params.get('duration') || '480');
+
+    if (nombre) {
+      document.getElementById('welcome-msg').textContent =
+        'Hola ' + nombre + ', ya tiene acceso a internet.';
+    }
+
+    const h = Math.floor(duration / 60);
+    const m = duration % 60;
+    document.getElementById('session-duration').textContent =
+      h > 0 ? (h + ' hora' + (h !== 1 ? 's' : '') + (m > 0 ? ' y ' + m + ' min' : '')) : m + ' minutos';
+
+    fetch('/auth/config').then(r => r.json()).then(cfg => {
+      document.getElementById('portal-name-footer').textContent = cfg.name || '';
+      document.title = 'Conectado — ' + (cfg.name || 'Portal Wi-Fi');
+      if (cfg.logo) document.getElementById('portal-logo-footer').src = cfg.logo;
+      
+      // Aplicar colores personalizados dinámicamente
+      if (cfg.primaryColor && cfg.accentColor) {
+        const style = document.createElement('style');
+        style.innerHTML = `
+          .bg-green-600 { background-color: ${cfg.primaryColor} !important; }
+          .hover\\:bg-green-700:hover { background-color: ${cfg.accentColor} !important; }
+          .text-green-600 { color: ${cfg.primaryColor} !important; }
+          .focus\\:ring-green-500:focus { --tw-ring-color: ${cfg.primaryColor} !important; }
+          .from-green-500 { --tw-gradient-from: ${cfg.primaryColor} !important; }
+          .to-emerald-700 { --tw-gradient-to: ${cfg.accentColor} !important; }
+        `;
+        document.head.appendChild(style);
+      }
+    }).catch(() => {});
+
+    // Auto-redirección si hay URL de destino
+    const defaultUrl = 'http://www.google.com';
+    const targetUrl = (redirect && redirect !== '/success' && redirect !== '') ? redirect : defaultUrl;
+
+    const redirectSection = document.getElementById('redirect-section');
+    redirectSection.classList.remove('hidden');
+    document.getElementById('btn-browse').href = targetUrl;
+
+    let count = 18;
+    const progressBar = document.getElementById('progress-bar');
+    const countdownEl = document.getElementById('countdown');
+
+    const interval = setInterval(() => {
+      count--;
+      countdownEl.textContent = count;
+      progressBar.style.width = (count / 18 * 100) + '%';
+      if (count <= 0) {
+        clearInterval(interval);
+        
+        // Intentar redirección de varias formas para máxima compatibilidad con navegadores cautivos
+        try {
+          window.location.replace(targetUrl);
+        } catch (e) {}
+        try {
+          window.location.href = targetUrl;
+        } catch (e) {}
+        try {
+          // Crear un enlace temporal para simular clic físico (útil en iOS/Android webviews restrictivos)
+          const link = document.createElement('a');
+          link.href = targetUrl;
+          link.target = '_self';
+          document.body.appendChild(link);
+          link.click();
+        } catch (e) {}
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

@@ -5,6 +5,10 @@ const { v4: uuidv4 } = require('uuid');
 
 let pool;
 
+function getPool() {
+  return pool;
+}
+
 async function connect() {
   pool = new Pool({
     host:     process.env.POSTGRES_HOST || 'postgres',
@@ -810,6 +814,7 @@ async function getAdminAuditLogs({ search = '', limit = 50, offset = 0 }) {
 
 module.exports = {
   connect,
+  getPool,
   userExists, getUserByCedula, createUser, logAccess, updateTermsAcceptance,
   // admin
   listUsers, getUserDetail, setUserActive, deleteUser, setUserGroups,

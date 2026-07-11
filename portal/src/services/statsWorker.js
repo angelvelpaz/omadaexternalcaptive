@@ -167,6 +167,9 @@ async function syncStats() {
       }
     }
 
+    // 5. Cerrar sesiones que hayan excedido el tiempo de sesión máximo (cleanup de seguridad)
+    await db.closeExpiredSessions();
+
   } catch (err) {
     console.error('[STATS] Error en el ciclo del stats worker:', err.message);
   } finally {

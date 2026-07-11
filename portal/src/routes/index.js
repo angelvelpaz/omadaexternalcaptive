@@ -291,6 +291,13 @@ router.post('/auth/register',
           
           await authorizeVendor(vendor, params, ced, user.radius_password);
           
+          await db.startAcctSession({
+            username: ced,
+            macAddress: params.mac || params.clientMac,
+            ipAddress: clientIp,
+            vendor: vendor
+          });
+          
           await db.logAccess({
             cedula: ced,
             vendor,
@@ -454,6 +461,13 @@ router.post('/auth/login',
           await new Promise(resolve => setTimeout(resolve, 300));
           
           await authorizeVendor(detectedVendor, finalParams, ced, user.radius_password);
+          
+          await db.startAcctSession({
+            username: ced,
+            macAddress: mac || '',
+            ipAddress: clientIp,
+            vendor: detectedVendor
+          });
           
           await db.logAccess({
             cedula: ced,

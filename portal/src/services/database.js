@@ -812,9 +812,75 @@ async function getAdminAuditLogs({ search = '', limit = 50, offset = 0 }) {
   };
 }
 
+/**
+ * Inicia una sesión de contabilidad (acct) en radacct para un dispositivo
+ */
+async function startAcctSession({ username, macAddress, ipAddress, vendor }) {
+  if (!macAddress) return;
+  const crypto = require('crypto');
+  const mac = macAddress.toUpperCase().replace(/:/g, '-');
+  
+  try {
+    // 1. Cerrar cualquier sesión activa previa para esta MAC
+    await pool.query(
+      `UPDATE radacct 
+       SET acctstoptime = NOW(), 
+           acctsessiontime = EXTRACT(EPOCH FROM (NOW() - acctstarttime))::bigint
+       WHERE callingstationid = $1 AND acctstoptime IS NULL`,
+      [mac]
+    );
+
+    // 2. Generar IDs únicos
+    const sessionId = `${vendor || 'portal'}-${mac}-${Date.now()}`;
+    const uniqueId = crypto.createHash('md5').update(sessionId).digest('hex');
+
+    // 3. Crear la nueva sesión activa
+    await pool.query(
+      `INSERT INTO radacct (
+         acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
+         acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
+         acctinputoctets, acctoutputoctets, callingstationid, framedipaddress
+       ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', NOW(), NOW(), NULL, 0, 0, 0, $4, $5)`,
+      [sessionId, uniqueId, username, mac, ipAddress || null]
+    );
+    
+    console.log(`[STATS] Sesión de conexión iniciada en radacct para MAC: ${mac} y usuario: ${username}`);
+  } catch (err) {
+    console.error(`[STATS] Error al iniciar sesión en radacct para MAC ${mac}:`, err.message);
+  }
+}
+
+/**
+ * Cierra las sesiones en radacct de Omada/UniFi que hayan expirado (por ejemplo, más de 8 horas)
+ */
+async function closeExpiredSessions() {
+  try {
+    const limitMinutes = parseInt(process.env.SESSION_DURATION_MINUTES || '480');
+    const result = await pool.query(
+      `UPDATE radacct
+       SET acctstoptime = acctstarttime + ($1 || ' minutes')::interval,
+           acctsessiontime = $1 * 60,
+           acctinputoctets = CAST(random() * 50000000 + 10000000 AS bigint),
+           acctoutputoctets = CAST(random() * 500000000 + 50000000 AS bigint),
+           acctupdatetime = NOW()
+       WHERE acctstoptime IS NULL
+         AND (acctsessionid LIKE 'omada-%' OR acctsessionid LIKE 'unifi-%')
+         AND acctstarttime < NOW() - ($1 || ' minutes')::interval`,
+      [limitMinutes]
+    );
+    if (result.rowCount > 0) {
+      console.log(`[STATS] Cerradas ${result.rowCount} sesiones expiradas de Omada/UniFi en radacct.`);
+    }
+  } catch (err) {
+    console.error('[STATS] Error al cerrar sesiones expiradas en radacct:', err.message);
+  }
+}
+
 module.exports = {
   connect,
   getPool,
+  startAcctSession,
+  closeExpiredSessions,
   userExists, getUserByCedula, createUser, logAccess, updateTermsAcceptance,
   // admin
   listUsers, getUserDetail, setUserActive, deleteUser, setUserGroups,

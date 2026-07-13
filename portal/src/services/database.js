@@ -205,26 +205,26 @@ async function updateTermsAcceptance(cedula, terminosAceptados) {
  * Lista usuarios con búsqueda y paginación.
  */
 async function listUsers({ search = '', limit = 50, offset = 0 } = {}) {
-  const where = search
-    ? `WHERE cedula ILIKE $3 OR nombres ILIKE $3 OR apellidos ILIKE $3 OR email ILIKE $3`
+  const trimmed = (search || '').trim();
+  const where = trimmed
+    ? `WHERE cedula ILIKE $1 OR nombres ILIKE $1 OR apellidos ILIKE $1 OR email ILIKE $1`
     : '';
-  const params = search
-    ? [limit, offset, `%${search}%`]
-    : [limit, offset];
+  const searchParam = `%${trimmed}%`;
 
-  const result = await pool.query(
-    `SELECT id, cedula, nombres, apellidos, email, activo, fecha_registro
-     FROM usuarios_portal
-     ${where}
-     ORDER BY fecha_registro DESC
-     LIMIT $1 OFFSET $2`,
-    params
-  );
-
-  const total = await pool.query(
-    `SELECT COUNT(*) FROM usuarios_portal ${where}`,
-    search ? [`%${search}%`] : []
-  );
+  const [result, total] = await Promise.all([
+    pool.query(
+      `SELECT id, cedula, nombres, apellidos, email, activo, fecha_registro
+       FROM usuarios_portal
+       ${where}
+       ORDER BY fecha_registro DESC
+       LIMIT $${trimmed ? 2 : 1} OFFSET $${trimmed ? 3 : 2}`,
+      trimmed ? [searchParam, parseInt(limit), parseInt(offset)] : [parseInt(limit), parseInt(offset)]
+    ),
+    pool.query(
+      `SELECT COUNT(*) FROM usuarios_portal ${where}`,
+      trimmed ? [searchParam] : []
+    ),
+  ]);
 
   return { users: result.rows, total: parseInt(total.rows[0].count) };
 }

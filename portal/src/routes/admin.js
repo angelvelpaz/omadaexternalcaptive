@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { body, param, query, validationResult } = require('express-validator');
+const { body, param, query, validationResult, matchedData } = require('express-validator');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
@@ -210,12 +210,15 @@ router.get('/api/reports', requireAdmin,
 // ─── Usuarios ─────────────────────────────────────────────────────────────────
 
 router.get('/api/users', requireAdmin,
-  query('search').optional().isString().trim().escape(),
+  query('search').optional().isString().trim(),
   query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
   query('offset').optional().isInt({ min: 0 }).toInt(),
   async (req, res, next) => {
     try {
-      const { search = '', limit = 50, offset = 0 } = req.query;
+      const matched = matchedData(req, { includeOptionals: true, locations: ['query'] });
+      const search = matched.search || '';
+      const limit  = matched.limit  ?? 50;
+      const offset = matched.offset ?? 0;
       res.json(await db.listUsers({ search, limit, offset }));
     } catch (err) { next(err); }
   }

@@ -38,16 +38,6 @@ async function syncStats() {
     }
 
     if (activeClients.length === 0) {
-      // Si no hay clientes activos de ningún controlador, cerramos todas las sesiones activas en radacct
-      const pool = db.getPool();
-      if (pool) {
-        await pool.query(`
-          UPDATE radacct
-          SET acctstoptime = NOW(), acctupdatetime = NOW()
-          WHERE acctstoptime IS NULL
-            AND (acctsessionid LIKE 'omada-%' OR acctsessionid LIKE 'unifi-%')
-        `);
-      }
       isRunning = false;
       return;
     }
@@ -145,29 +135,7 @@ async function syncStats() {
       }
     }
 
-    // 4. Cerrar sesiones en radacct de dispositivos que ya NO están activos en los controladores
-    const activeSessionsRes = await pool.query(
-      `SELECT radacctid, callingstationid
-       FROM radacct
-       WHERE acctstoptime IS NULL
-         AND (acctsessionid LIKE 'omada-%' OR acctsessionid LIKE 'unifi-%')`
-    );
-
-    for (const session of activeSessionsRes.rows) {
-      const mac = session.callingstationid;
-      if (!activeMacs.has(mac)) {
-        // La MAC ya no está en la lista de activos, cerramos la sesión
-        await pool.query(
-          `UPDATE radacct
-           SET acctstoptime = NOW(), acctupdatetime = NOW()
-           WHERE radacctid = $1`,
-          [session.radacctid]
-        );
-        console.log(`[STATS] Cerrada sesión de consumo inactiva en radacct para MAC: ${mac}`);
-      }
-    }
-
-    // 5. Cerrar sesiones que hayan excedido el tiempo de sesión máximo (cleanup de seguridad)
+    // 4. Limpieza de sesiones expiradas por tiempo de conexión máximo (cleanup de seguridad)
     await db.closeExpiredSessions();
 
   } catch (err) {

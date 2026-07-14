@@ -527,7 +527,7 @@ async function getUsersReport({ search = '', startDate, endDate, limit = 50, off
 
 async function getConnectionsReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
   let query = `
-    SELECT r.radacctid, r.username, u.nombres, u.apellidos, r.callingstationid AS mac_address,
+    SELECT r.radacctid, COALESCE(u.cedula, r.username) AS username, u.nombres, u.apellidos, r.callingstationid AS mac_address,
            r.framedipaddress AS ip_address, r.acctstarttime AS start_time, r.acctstoptime AS stop_time,
            CASE 
              WHEN r.acctstoptime IS NULL THEN EXTRACT(EPOCH FROM (NOW() - r.acctstarttime))::bigint
@@ -535,14 +535,15 @@ async function getConnectionsReport({ search = '', startDate, endDate, limit = 5
            END AS duration,
            r.acctinputoctets AS upload, r.acctoutputoctets AS download
     FROM radacct r
-    LEFT JOIN usuarios_portal u ON r.username = u.cedula
+    LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+    LEFT JOIN usuarios_portal u ON (r.username = u.cedula OR d.cedula = u.cedula)
     WHERE 1=1
   `;
   const params = [];
   let paramIdx = 1;
 
   if (search) {
-    query += ` AND (r.username ILIKE $${paramIdx} OR u.nombres ILIKE $${paramIdx} OR u.apellidos ILIKE $${paramIdx} OR r.callingstationid ILIKE $${paramIdx} OR CAST(r.framedipaddress AS TEXT) ILIKE $${paramIdx})`;
+    query += ` AND (r.username ILIKE $${paramIdx} OR u.cedula ILIKE $${paramIdx} OR u.nombres ILIKE $${paramIdx} OR u.apellidos ILIKE $${paramIdx} OR r.callingstationid ILIKE $${paramIdx} OR CAST(r.framedipaddress AS TEXT) ILIKE $${paramIdx})`;
     params.push(`%${search}%`);
     paramIdx++;
   }

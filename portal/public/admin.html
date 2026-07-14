@@ -52,7 +52,7 @@
   <header class="bg-white shadow-sm sticky top-0 z-10">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <img src="/static/logo.svg" class="h-7 opacity-80" onerror="this.style.display='none'">
+        <img src="/static/logo_upload.png" class="h-7 opacity-80" onerror="this.style.display='none'">
         <div>
           <h1 class="font-bold text-gray-800 text-lg leading-tight">Panel de Administración</h1>
           <p id="header-portal-name" class="text-xs text-gray-400"></p>
@@ -62,6 +62,7 @@
         <div class="hidden sm:flex flex-col items-end text-right">
           <span class="text-xs text-gray-400">Sesión iniciada</span>
           <span id="header-admin-nombres" class="text-sm font-semibold text-gray-600"></span>
+          <span id="header-admin-rol" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 mt-0.5"></span>
         </div>
         <button id="btn-logout" class="text-sm text-gray-500 hover:text-red-600 transition-colors flex items-center gap-1 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -375,10 +376,6 @@
 
     <!-- ── TAB CONTROLADORES ── -->
     <div id="tab-controllers" class="tab-content hidden">
-      <p class="text-sm text-gray-500 mb-5">
-        Estado de conexión con los controladores de puntos de acceso.
-        Las credenciales se configuran en el archivo <code class="bg-gray-100 px-1 rounded">.env</code> del servidor.
-      </p>
 
       <div class="space-y-4" id="controllers-cards">
         <!-- Cards generadas por JS -->
@@ -725,6 +722,7 @@
               <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold">
                 <th class="py-3 px-4">Usuario</th>
                 <th class="py-3 px-4">Nombre Completo</th>
+                <th class="py-3 px-4">Rol</th>
                 <th class="py-3 px-4">Fecha Creación</th>
                 <th class="py-3 px-4">Estado</th>
                 <th class="py-3 px-4 text-right">Acciones</th>
@@ -805,11 +803,18 @@
 <script>
 // ── Estado ────────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('admin_token') || '';
+let adminRol = localStorage.getItem('admin_rol') || 'operador';
 let currentTab = 'dashboard';
 let usersOffset = 0;
 const PAGE_SIZE = 50;
 let usersTotalCount = 0;
 let usersSearch = '';
+
+// Niveles de rol (mayor = más permisos)
+const ROL_NIVEL = { operador: 1, administrador: 2, superadministrador: 3 };
+function tieneRol(minRol) {
+  return (ROL_NIVEL[adminRol] || 1) >= (ROL_NIVEL[minRol] || 1);
+}
 
 // ── API helper ────────────────────────────────────────────────────────────────
 async function api(method, path, body) {
@@ -844,7 +849,9 @@ document.getElementById('btn-login').addEventListener('click', async () => {
       throw new Error(data.error || 'Credenciales incorrectas');
     }
     token = data.token;
+    adminRol = data.adminUser.rol || 'operador';
     localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_rol', adminRol);
     localStorage.setItem('admin_username', data.adminUser.username);
     localStorage.setItem('admin_nombres', data.adminUser.nombres);
     document.getElementById('password-input').value = '';
@@ -870,8 +877,10 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
     });
   } catch (e) {}
   localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_rol');
   localStorage.removeItem('admin_username');
   localStorage.removeItem('admin_nombres');
+  adminRol = 'operador';
   token = '';
   document.getElementById('admin-panel').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
@@ -888,7 +897,58 @@ function showPanel() {
   fetch('/auth/config').then(r => r.json()).then(cfg => {
     document.getElementById('header-portal-name').textContent = cfg.name || '';
   }).catch(() => {});
-  switchTab('controllers');
+
+  applyRBAC();
+  switchTab('dashboard');
+}
+
+/**
+ * Aplica las restricciones de visibilidad según el rol del administrador actual.
+ */
+function applyRBAC() {
+  adminRol = localStorage.getItem('admin_rol') || 'operador';
+
+  // Mostrar badge de rol en header
+  const rolBadge = document.getElementById('header-admin-rol');
+  if (rolBadge) {
+    const labels = { operador: 'Operador', administrador: 'Administrador', superadministrador: 'Superadmin' };
+    const colors = { operador: 'bg-gray-100 text-gray-600', administrador: 'bg-blue-100 text-blue-700', superadministrador: 'bg-purple-100 text-purple-700' };
+    rolBadge.textContent = labels[adminRol] || adminRol;
+    rolBadge.className = `text-xs font-semibold px-2 py-0.5 rounded-full ${colors[adminRol] || 'bg-gray-100 text-gray-600'}`;
+  }
+
+  // Ocultar/mostrar tabs de navegación según rol
+  // Operador: solo dashboard y users
+  // Administrador: + reports, admins
+  // Superadministrador: todo
+  const tabRules = {
+    'dashboard': 'operador',
+    'users':     'operador',
+    'reports':   'administrador',
+    'admins':    'administrador',
+    'audit':     'administrador',
+    'groups':    'superadministrador',
+    'controllers': 'superadministrador',
+    'branding':  'superadministrador',
+    'ssl':       'superadministrador',
+    'external-db': 'superadministrador',
+  };
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const tab = btn.dataset.tab;
+    if (!tab) return;
+    const minRol = tabRules[tab] || 'superadministrador';
+    const visible = tieneRol(minRol);
+    btn.closest('li') ? btn.closest('li').classList.toggle('hidden', !visible)
+                      : btn.classList.toggle('hidden', !visible);
+  });
+
+  // Ocultar dropdown triggers vacíos (monitoreo, configuración) si todos sus items están ocultos
+  document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+    const visibleItems = [...dropdown.querySelectorAll('.tab-btn')].filter(b => !b.closest('li')?.classList.contains('hidden') && !b.classList.contains('hidden'));
+    const trigger = dropdown.querySelector('.dropdown-trigger');
+    if (trigger) trigger.classList.toggle('hidden', visibleItems.length === 0);
+  });
 }
 
 // Auto-login si hay token guardado
@@ -1120,8 +1180,8 @@ async function loadUsers() {
         <td class="px-4 py-3 text-right whitespace-nowrap">
           <button onclick="viewUser('${u.cedula}')"
             class="text-blue-600 hover:text-blue-800 text-xs mr-3 font-medium">Ver</button>
-          <button onclick="confirmDelete('${u.cedula}', '${esc(u.nombres)} ${esc(u.apellidos)}')"
-            class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
+          ${tieneRol('administrador') ? `<button onclick="confirmDelete('${u.cedula}', '${esc(u.nombres)} ${esc(u.apellidos)}')"
+            class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>` : ''}
         </td>
       </tr>`).join('') || `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No hay usuarios</td></tr>`;
   } catch (err) {
@@ -1559,7 +1619,7 @@ function renderControllerCard(vendor, cfg) {
     : '<span class="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>Desactivado</span>';
 
   const fromEnvNote = cfg.fromEnv
-    ? '<span class="ml-2 text-xs text-gray-400 italic">valores del .env</span>'
+    ? '<span class="ml-2 text-xs text-gray-400 italic"></span>'
     : '';
 
   // Resumen de config visible (campos no secretos)
@@ -2793,14 +2853,32 @@ async function loadAdmins() {
       return;
     }
     
+    const ROL_LABELS = { operador: 'Operador', administrador: 'Administrador', superadministrador: 'Superadmin' };
+    const ROL_COLORS = {
+      operador: 'bg-gray-100 text-gray-600',
+      administrador: 'bg-blue-100 text-blue-700',
+      superadministrador: 'bg-purple-100 text-purple-700'
+    };
+
     admins.forEach(adm => {
       const isRoot = adm.username === 'admin';
+      const rolLabel = ROL_LABELS[adm.rol] || adm.rol || 'Operador';
+      const rolColor = ROL_COLORS[adm.rol] || ROL_COLORS.operador;
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-gray-50 border-b border-gray-50';
       
       tr.innerHTML = `
         <td class="py-3.5 px-4 font-semibold text-gray-800">${esc(adm.username)}</td>
         <td class="py-3.5 px-4">${esc(adm.nombres)}</td>
+        <td class="py-3.5 px-4">
+          <span class="px-2 py-0.5 text-xs font-semibold rounded-full ${rolColor}">${rolLabel}</span>
+          ${!isRoot && tieneRol('superadministrador') ? `
+            <select class="ml-2 text-xs border border-gray-200 rounded px-1 py-0.5 text-gray-600 btn-change-rol" data-username="${adm.username}">
+              <option value="operador" ${adm.rol === 'operador' ? 'selected' : ''}>Operador</option>
+              <option value="administrador" ${adm.rol === 'administrador' ? 'selected' : ''}>Administrador</option>
+              <option value="superadministrador" ${adm.rol === 'superadministrador' ? 'selected' : ''}>Superadmin</option>
+            </select>` : ''}
+        </td>
         <td class="py-3.5 px-4 text-xs text-gray-400">${new Date(adm.created_at).toLocaleString('es-EC')}</td>
         <td class="py-3.5 px-4">
           ${isRoot ? 
@@ -2815,10 +2893,10 @@ async function loadAdmins() {
           <button class="btn-change-pass px-2.5 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 font-medium transition-colors" data-username="${adm.username}">
             Contraseña
           </button>
-          ${isRoot ? '' : 
+          ${!isRoot && tieneRol('superadministrador') ? 
             `<button class="btn-delete-admin px-2.5 py-1 text-xs border border-red-100 text-red-600 rounded-lg hover:bg-red-50 font-medium transition-colors" data-username="${adm.username}">
               Eliminar
-            </button>`
+            </button>` : ''
           }
         </td>
       `;
@@ -2836,6 +2914,19 @@ async function loadAdmins() {
         } catch (err) {
           alert('Error al cambiar estado: ' + err.message);
           e.target.checked = !active;
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.btn-change-rol').forEach(el => {
+      el.addEventListener('change', async (e) => {
+        const username = el.dataset.username;
+        const rol = el.value;
+        try {
+          await api('PUT', `/admins/${username}/rol`, { rol });
+        } catch (err) {
+          alert('Error al cambiar rol: ' + err.message);
+          loadAdmins();
         }
       });
     });
@@ -2877,6 +2968,7 @@ function openCreateAdminModal() {
     <div id="create-admin-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
     <form id="form-create-admin" class="space-y-4">
       <div>
+      <div>
         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre de Usuario</label>
         <input type="text" id="admin-user-input" placeholder="ej: jperez" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
       </div>
@@ -2887,6 +2979,14 @@ function openCreateAdminModal() {
       <div>
         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Contraseña</label>
         <input type="password" id="admin-pass-input" placeholder="Min. 6 caracteres" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nivel de Acceso</label>
+        <select id="admin-rol-input" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800">
+          <option value="operador">Operador — Dashboard y usuarios (sin eliminar)</option>
+          <option value="administrador">Administrador — + eliminar usuarios, editar admins, reportes</option>
+          <option value="superadministrador">Superadministrador — Acceso total a toda la configuración</option>
+        </select>
       </div>
       <div class="flex justify-end gap-2 pt-4 border-t">
         <button type="button" id="btn-cancel-create-admin" class="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
@@ -2908,9 +3008,10 @@ function openCreateAdminModal() {
     const username = document.getElementById('admin-user-input').value.trim();
     const nombres = document.getElementById('admin-nombres-input').value.trim();
     const password = document.getElementById('admin-pass-input').value;
+    const rol = document.getElementById('admin-rol-input').value;
     
     try {
-      await api('POST', '/admins', { username, nombres, password });
+      await api('POST', '/admins', { username, nombres, password, rol });
       modal.classList.add('hidden');
       modal.classList.remove('flex');
       loadAdmins();

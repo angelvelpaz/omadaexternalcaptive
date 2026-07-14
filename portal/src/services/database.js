@@ -691,13 +691,13 @@ function verifyAdminPassword(password, storedHash) {
 
 async function verifyAdminLogin(username, password) {
   const res = await pool.query(
-    'SELECT username, password_hash, nombres, activo FROM administradores WHERE username = $1 LIMIT 1',
+    'SELECT username, password_hash, nombres, activo, rol FROM administradores WHERE username = $1 LIMIT 1',
     [username.trim().toLowerCase()]
   );
   const admin = res.rows[0];
   if (!admin || !admin.activo) return null;
   if (verifyAdminPassword(password, admin.password_hash)) {
-    return { username: admin.username, nombres: admin.nombres };
+    return { username: admin.username, nombres: admin.nombres, rol: admin.rol || 'operador' };
   }
   return null;
 }
@@ -715,8 +715,10 @@ async function createAdminSession(username) {
 
 async function getAdminBySessionToken(token) {
   const res = await pool.query(
-    `SELECT username FROM admin_sessions
-     WHERE token = $1 AND expires_at > NOW() LIMIT 1`,
+    `SELECT s.username, a.rol, a.nombres
+     FROM admin_sessions s
+     JOIN administradores a ON a.username = s.username
+     WHERE s.token = $1 AND s.expires_at > NOW() LIMIT 1`,
     [token]
   );
   const session = res.rows[0];
@@ -729,7 +731,7 @@ async function getAdminBySessionToken(token) {
     [newExpiresAt, token]
   );
   
-  return session.username;
+  return { username: session.username, rol: session.rol || 'operador', nombres: session.nombres };
 }
 
 async function deleteAdminSession(token) {
@@ -746,20 +748,32 @@ async function logAdminAudit({ username, ipAddress, accion, detalles }) {
 
 async function listAdmins() {
   const res = await pool.query(
-    'SELECT id, username, nombres, activo, created_at FROM administradores ORDER BY username ASC'
+    'SELECT id, username, nombres, activo, rol, created_at FROM administradores ORDER BY username ASC'
   );
   return res.rows;
 }
 
-async function createAdmin({ username, password, nombres }) {
+async function createAdmin({ username, password, nombres, rol = 'operador' }) {
+  const validRoles = ['operador', 'administrador', 'superadministrador'];
+  const rolFinal = validRoles.includes(rol) ? rol : 'operador';
   const hash = hashAdminPassword(password);
   const res = await pool.query(
-    `INSERT INTO administradores (username, password_hash, nombres, activo)
-     VALUES ($1, $2, $3, TRUE)
-     RETURNING id, username, nombres`,
-    [username.trim().toLowerCase(), hash, nombres.trim()]
+    `INSERT INTO administradores (username, password_hash, nombres, activo, rol)
+     VALUES ($1, $2, $3, TRUE, $4)
+     RETURNING id, username, nombres, rol`,
+    [username.trim().toLowerCase(), hash, nombres.trim(), rolFinal]
   );
   return res.rows[0];
+}
+
+async function updateAdminRol(username, rol) {
+  const validRoles = ['operador', 'administrador', 'superadministrador'];
+  if (!validRoles.includes(rol)) throw new Error('Rol no válido.');
+  if (username.trim().toLowerCase() === 'admin') throw new Error('No se puede cambiar el rol del administrador principal.');
+  await pool.query(
+    'UPDATE administradores SET rol = $1 WHERE username = $2',
+    [rol, username.trim().toLowerCase()]
+  );
 }
 
 async function updateAdminStatus(username, activo) {
@@ -923,5 +937,5 @@ module.exports = {
   // administradores y auditoría
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,
-  deleteAdmin, getAdminAuditLogs,
+  deleteAdmin, getAdminAuditLogs, updateAdminRol,
 };

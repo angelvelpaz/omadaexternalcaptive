@@ -142,23 +142,41 @@ async function requireAdmin(req, res, next) {
   }
 
   try {
-    // 1. Verificar si es el token del administrador legacy (para compatibilidad)
+    // 1. Verificar si es el token del administrador legacy (compatibilidad)
     if (token === ADMIN_SECRET) {
       req.adminUser = 'admin';
+      req.adminRol = 'superadministrador';
       return next();
     }
 
     // 2. Verificar sesión multiusuario en base de datos
-    const username = await db.getAdminBySessionToken(token);
-    if (!username) {
+    const session = await db.getAdminBySessionToken(token);
+    if (!session) {
       return res.status(401).json({ error: 'Sesión no válida o expirada.' });
     }
 
-    req.adminUser = username;
+    req.adminUser = session.username;
+    req.adminRol  = session.rol || 'operador';
     next();
   } catch (err) {
     next(err);
   }
+}
+
+/**
+ * Middleware factory: exige que el admin tenga al menos el rol indicado.
+ * Jerarquía: operador < administrador < superadministrador
+ */
+function requireRol(...roles) {
+  const NIVEL = { operador: 1, administrador: 2, superadministrador: 3 };
+  const minNivel = Math.min(...roles.map(r => NIVEL[r] || 1));
+  return (req, res, next) => {
+    const nivelActual = NIVEL[req.adminRol] || 1;
+    if (nivelActual < minNivel) {
+      return res.status(403).json({ error: 'No tienes permisos suficientes para esta acción.' });
+    }
+    next();
+  };
 }
 
 // ─── Página HTML ──────────────────────────────────────────────────────────────
@@ -317,7 +335,7 @@ router.put('/api/users/:cedula/groups', requireAdmin,
   }
 );
 
-router.delete('/api/users/:cedula', requireAdmin,
+router.delete('/api/users/:cedula', requireAdmin, requireRol('administrador', 'superadministrador'),
   param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
   async (req, res, next) => {
     try {
@@ -988,7 +1006,8 @@ router.post('/api/login',
         expiresAt,
         adminUser: {
           username: admin.username,
-          nombres: admin.nombres
+          nombres: admin.nombres,
+          rol: admin.rol || 'operador'
         }
       });
     } catch (err) {
@@ -1021,7 +1040,7 @@ router.post('/api/logout', requireAdmin, async (req, res, next) => {
 
 // ─── Administradores (Múltiples Usuarios) ───
 
-router.get('/api/admins', requireAdmin, async (req, res, next) => {
+router.get('/api/admins', requireAdmin, requireRol('administrador', 'superadministrador'), async (req, res, next) => {
   try {
     const admins = await db.listAdmins();
     res.json(admins);
@@ -1030,7 +1049,7 @@ router.get('/api/admins', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.post('/api/admins', requireAdmin,
+router.post('/api/admins', requireAdmin, requireRol('superadministrador'),
   body('username').isString().trim().isLength({ min: 3, max: 50 }).matches(/^[a-zA-Z0-9_.-]+$/),
   body('password').isString().isLength({ min: 6 }),
   body('nombres').isString().trim().isLength({ min: 2, max: 100 }),
@@ -1041,16 +1060,16 @@ router.post('/api/admins', requireAdmin,
         return res.status(400).json({ error: 'Datos de administrador inválidos (el nombre de usuario debe ser alfanumérico, y la contraseña debe tener al menos 6 caracteres).' });
       }
       
-      const { username, password, nombres } = req.body;
+      const { username, password, nombres, rol } = req.body;
       const clientIp = getClientIp(req);
       
-      const newAdmin = await db.createAdmin({ username, password, nombres });
+      const newAdmin = await db.createAdmin({ username, password, nombres, rol });
       
       await db.logAdminAudit({
         username: req.adminUser,
         ipAddress: clientIp,
         accion: 'CREAR_ADMINISTRADOR',
-        detalles: `Creó el administrador: ${newAdmin.username} (${newAdmin.nombres})`
+        detalles: `Creó el administrador: ${newAdmin.username} (${newAdmin.nombres}) con rol: ${newAdmin.rol}`
       });
       
       res.status(201).json(newAdmin);
@@ -1063,7 +1082,7 @@ router.post('/api/admins', requireAdmin,
   }
 );
 
-router.put('/api/admins/:username/status', requireAdmin,
+router.put('/api/admins/:username/status', requireAdmin, requireRol('administrador', 'superadministrador'),
   param('username').isString().trim().notEmpty(),
   body('active').isBoolean(),
   async (req, res, next) => {
@@ -1123,7 +1142,7 @@ router.put('/api/admins/:username/password', requireAdmin,
   }
 );
 
-router.delete('/api/admins/:username', requireAdmin,
+router.delete('/api/admins/:username', requireAdmin, requireRol('superadministrador'),
   param('username').isString().trim().notEmpty(),
   async (req, res, next) => {
     try {
@@ -1139,6 +1158,35 @@ router.delete('/api/admins/:username', requireAdmin,
         detalles: `Eliminó el administrador: ${username}`
       });
       
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+// ─── Cambiar rol de administrador ───
+
+router.put('/api/admins/:username/rol', requireAdmin, requireRol('superadministrador'),
+  param('username').isString().trim().notEmpty(),
+  body('rol').isString().isIn(['operador', 'administrador', 'superadministrador']),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Rol inválido.' });
+      const username = req.params.username;
+      const { rol } = req.body;
+      const clientIp = getClientIp(req);
+
+      await db.updateAdminRol(username, rol);
+
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'CAMBIAR_ROL_ADMINISTRADOR',
+        detalles: `Cambió rol de ${username} a: ${rol}`
+      });
+
       res.json({ ok: true });
     } catch (err) {
       res.status(400).json({ error: err.message });

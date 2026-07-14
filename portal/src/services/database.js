@@ -529,7 +529,11 @@ async function getConnectionsReport({ search = '', startDate, endDate, limit = 5
   let query = `
     SELECT r.radacctid, r.username, u.nombres, u.apellidos, r.callingstationid AS mac_address,
            r.framedipaddress AS ip_address, r.acctstarttime AS start_time, r.acctstoptime AS stop_time,
-           r.acctsessiontime AS duration, r.acctinputoctets AS upload, r.acctoutputoctets AS download
+           CASE 
+             WHEN r.acctstoptime IS NULL THEN EXTRACT(EPOCH FROM (NOW() - r.acctstarttime))::bigint
+             ELSE r.acctsessiontime
+           END AS duration,
+           r.acctinputoctets AS upload, r.acctoutputoctets AS download
     FROM radacct r
     LEFT JOIN usuarios_portal u ON r.username = u.cedula
     WHERE 1=1
@@ -821,20 +825,45 @@ async function startAcctSession({ username, macAddress, ipAddress, vendor }) {
   const mac = macAddress.toUpperCase().replace(/:/g, '-');
   
   try {
-    // 1. Cerrar cualquier sesión activa previa para esta MAC
+    // Comprobar si ya existe una sesión activa reciente para esta MAC+usuario (ventana de 5 minutos)
+    // Esto evita cerrar sesiones legítimas durante el ciclo de kick-reconexión de Omada
+    const existing = await pool.query(
+      `SELECT radacctid, username, acctstarttime FROM radacct
+       WHERE callingstationid = $1
+         AND acctstoptime IS NULL
+         AND username = $2
+         AND acctstarttime > NOW() - INTERVAL '5 minutes'
+       ORDER BY acctstarttime DESC LIMIT 1`,
+      [mac, username]
+    );
+
+    if (existing.rows.length > 0) {
+      // Sesión activa reciente encontrada — solo actualizamos la IP si cambió
+      if (ipAddress) {
+        await pool.query(
+          `UPDATE radacct SET framedipaddress = $1, acctupdatetime = NOW()
+           WHERE radacctid = $2`,
+          [ipAddress, existing.rows[0].radacctid]
+        );
+      }
+      console.log(`[STATS] Sesión activa reutilizada para MAC: ${mac} y usuario: ${username}`);
+      return;
+    }
+
+    // No hay sesión activa reciente — cerrar cualquier sesión anterior de esta MAC y abrir una nueva
     await pool.query(
       `UPDATE radacct 
        SET acctstoptime = NOW(), 
-           acctsessiontime = EXTRACT(EPOCH FROM (NOW() - acctstarttime))::bigint
+           acctsessiontime = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - acctstarttime))::bigint)
        WHERE callingstationid = $1 AND acctstoptime IS NULL`,
       [mac]
     );
 
-    // 2. Generar IDs únicos
+    // Generar IDs únicos
     const sessionId = `${vendor || 'portal'}-${mac}-${Date.now()}`;
     const uniqueId = crypto.createHash('md5').update(sessionId).digest('hex');
 
-    // 3. Crear la nueva sesión activa
+    // Crear la nueva sesión activa
     await pool.query(
       `INSERT INTO radacct (
          acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,

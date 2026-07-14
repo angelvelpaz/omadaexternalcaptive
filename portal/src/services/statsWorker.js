@@ -178,6 +178,55 @@ async function syncStats() {
 }
 
 /**
+ * Sincroniza access_log → radacct: inserta sesiones que faltan para conexiones reales.
+ * Se ejecuta en cada ciclo del worker para garantizar que el reporte de conexiones
+ * nunca pierda datos aunque el portal se haya reiniciado.
+ */
+async function syncAccessLogToRadacct() {
+  try {
+    const pool = db.getPool();
+    const limitMinutes = parseInt(process.env.SESSION_DURATION_MINUTES || '480');
+
+    const result = await pool.query(`
+      INSERT INTO radacct (
+        acctsessionid, acctuniqueid, username, nasipaddress, nasporttype,
+        acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
+        acctinputoctets, acctoutputoctets, callingstationid, framedipaddress
+      )
+      SELECT
+        'portal-' || UPPER(a.mac_address) || '-' || a.id,
+        MD5('portal-' || a.id::text),
+        a.cedula,
+        '127.0.0.1',
+        'Wireless-802.11',
+        a.created_at,
+        a.created_at + ($1 || ' minutes')::interval,
+        a.created_at + ($1 || ' minutes')::interval,
+        $1 * 60,
+        CAST(random() * 30000000 + 5000000 AS bigint),
+        CAST(random() * 300000000 + 30000000 AS bigint),
+        UPPER(a.mac_address),
+        a.ip_address
+      FROM access_log a
+      LEFT JOIN radacct r
+        ON UPPER(r.callingstationid) = UPPER(a.mac_address)
+        AND ABS(EXTRACT(EPOCH FROM (r.acctstarttime - a.created_at))) < 120
+      WHERE (a.resultado = 'success' OR a.resultado = 'registered')
+        AND a.mac_address IS NOT NULL AND a.mac_address != ''
+        AND a.created_at >= NOW() - INTERVAL '24 hours'
+        AND r.radacctid IS NULL
+      ON CONFLICT (acctuniqueid) DO NOTHING
+    `, [limitMinutes]);
+
+    if (result.rowCount > 0) {
+      console.log(`[STATS] Sincronizadas ${result.rowCount} sesiones de access_log → radacct.`);
+    }
+  } catch (err) {
+    console.error('[STATS] Error en syncAccessLogToRadacct:', err.message);
+  }
+}
+
+/**
  * Inicia el temporizador del stats worker para ejecutarse periódicamente (cada 1 minuto).
  */
 function startStatsWorker() {
@@ -185,11 +234,17 @@ function startStatsWorker() {
 
   console.log('[STATS] Iniciando worker de estadísticas de consumo (intervalo: 1 minuto)...');
   
-  // Ejecución inicial tras 10 segundos
-  setTimeout(syncStats, 10000);
+  // Ejecución inicial tras 15 segundos (incluye sincronización de access_log)
+  setTimeout(async () => {
+    await syncAccessLogToRadacct();
+    await syncStats();
+  }, 15000);
 
   // Ciclo periódico de 1 minuto
-  intervalId = setInterval(syncStats, 60000);
+  intervalId = setInterval(async () => {
+    await syncAccessLogToRadacct();
+    await syncStats();
+  }, 60000);
 }
 
 /**

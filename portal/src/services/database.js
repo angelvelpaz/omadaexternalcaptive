@@ -901,14 +901,14 @@ async function closeExpiredSessions() {
     const limitMinutes = parseInt(process.env.SESSION_DURATION_MINUTES || '480');
     const result = await pool.query(
       `UPDATE radacct
-       SET acctstoptime = acctstarttime + ($1 || ' minutes')::interval,
-           acctsessiontime = $1 * 60,
+       SET acctstoptime = acctstarttime + ($1::int || ' minutes')::interval,
+           acctsessiontime = $1::int * 60,
            acctinputoctets = CAST(random() * 50000000 + 10000000 AS bigint),
            acctoutputoctets = CAST(random() * 500000000 + 50000000 AS bigint),
            acctupdatetime = NOW()
        WHERE acctstoptime IS NULL
          AND (acctsessionid LIKE 'omada-%' OR acctsessionid LIKE 'unifi-%')
-         AND acctstarttime < NOW() - ($1 || ' minutes')::interval`,
+         AND acctstarttime < NOW() - ($1::int || ' minutes')::interval`,
       [limitMinutes]
     );
     if (result.rowCount > 0) {

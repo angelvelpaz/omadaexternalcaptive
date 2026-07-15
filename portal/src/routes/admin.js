@@ -906,6 +906,7 @@ router.put('/api/external-db/config', requireAdmin, async (req, res, next) => {
       colNombres:   (input.colNombres || '').trim(),
       colApellidos: (input.colApellidos || '').trim(),
       colEmail:     (input.colEmail || '').trim(),
+      allowManualRegistration: input.allowManualRegistration !== false && input.allowManualRegistration !== 'false',
     };
     await db.saveControllerConfig('external_db_config', newCfg);
     res.json({ ok: true });
@@ -1048,6 +1049,43 @@ router.get('/api/admins', requireAdmin, requireRol('administrador', 'superadmini
     next(err);
   }
 });
+
+router.post('/api/users', requireAdmin,
+  body('cedula').isString().trim().isLength({ min: 10, max: 10 }).isNumeric(),
+  body('nombres').isString().trim().isLength({ min: 2, max: 100 }),
+  body('apellidos').isString().trim().isLength({ min: 2, max: 100 }),
+  body('email').isEmail().normalizeEmail(),
+  body('activo').optional().isBoolean(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
+      }
+
+      const { cedula, nombres, apellidos, email, activo = true } = req.body;
+
+      const exists = await db.userExists(cedula);
+      if (exists) {
+        return res.status(400).json({ error: 'La cédula ya se encuentra registrada.' });
+      }
+
+      await db.createUser({
+        cedula,
+        nombres,
+        apellidos,
+        email,
+        activo,
+        acepta_terminos: true,
+        fecha_acepta_terminos: new Date()
+      });
+
+      res.status(201).json({ success: true, message: 'Usuario creado exitosamente.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 router.post('/api/admins', requireAdmin, requireRol('superadministrador'),
   body('username').isString().trim().isLength({ min: 3, max: 50 }).matches(/^[a-zA-Z0-9_.-]+$/),

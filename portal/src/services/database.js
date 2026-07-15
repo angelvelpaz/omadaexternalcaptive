@@ -2,6 +2,7 @@
 
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
+const { getVendor } = require('mac-oui-lookup');
 
 let pool;
 
@@ -423,8 +424,36 @@ async function deleteGroup(groupname) {
 
 // ─── Admin: Estadísticas ──────────────────────────────────────────────────────
 
+function cleanVendorName(rawName) {
+  if (!rawName) return 'Genérico / Privado';
+  const name = rawName.toLowerCase();
+  if (name.includes('apple')) return 'Apple';
+  if (name.includes('samsung')) return 'Samsung';
+  if (name.includes('huawei')) return 'Huawei';
+  if (name.includes('xiaomi') || name.includes('chongqing chimi') || name.includes('beijing xiaomi')) return 'Xiaomi';
+  if (name.includes('motorola') || name.includes('lenovo')) return 'Motorola/Lenovo';
+  if (name.includes('tp-link') || name.includes('shenzhen tp-link')) return 'TP-Link';
+  if (name.includes('intel')) return 'Intel';
+  if (name.includes('lg electronics') || name.includes('lg ')) return 'LG';
+  if (name.includes('oppo') || name.includes('guangdong oppo')) return 'Oppo';
+  if (name.includes('vivo mobile')) return 'Vivo';
+  if (name.includes('realme')) return 'Realme';
+  if (name.includes('oneplus')) return 'OnePlus';
+  if (name.includes('zte')) return 'ZTE';
+  if (name.includes('nokia')) return 'Nokia';
+  if (name.includes('sony')) return 'Sony';
+  if (name.includes('google')) return 'Google';
+  if (name.includes('amazon')) return 'Amazon';
+  if (name.includes('hmd global')) return 'Nokia';
+  if (name.includes('asus')) return 'Asus';
+  if (name.includes('hp ') || name.includes('hewlett-packard')) return 'HP';
+  if (name.includes('dell')) return 'Dell';
+  
+  return rawName.split(',')[0].split(';')[0].trim();
+}
+
 async function getStats() {
-  const [totals, today, byVendor, byResult, recentLogs] = await Promise.all([
+  const [totals, today, byVendor, byResult, recentLogs, topUsers, allMacs] = await Promise.all([
     pool.query(`
       SELECT
         COUNT(*) FILTER (WHERE activo = TRUE)  AS active_users,
@@ -455,7 +484,36 @@ async function getStats() {
       LEFT JOIN usuarios_portal u ON u.cedula = a.cedula
       ORDER BY a.created_at DESC LIMIT 10
     `),
+    pool.query(`
+      SELECT
+        COALESCE(u.cedula, r.username) AS username,
+        COALESCE(u.nombres || ' ' || u.apellidos, 'Desconocido') AS nombre_completo,
+        SUM(r.acctinputoctets + r.acctoutputoctets) AS total_bytes
+      FROM radacct r
+      LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+      LEFT JOIN usuarios_portal u ON (r.username = u.cedula OR d.cedula = u.cedula)
+      GROUP BY COALESCE(u.cedula, r.username), nombre_completo
+      ORDER BY total_bytes DESC
+      LIMIT 10
+    `),
+    pool.query(`
+      SELECT DISTINCT callingstationid
+      FROM radacct
+      WHERE callingstationid IS NOT NULL AND callingstationid <> ''
+    `),
   ]);
+
+  const brandCounts = {};
+  for (const row of allMacs.rows) {
+    const rawVendor = getVendor(row.callingstationid);
+    const brand = cleanVendorName(rawVendor);
+    brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+  }
+
+  const topBrands = Object.entries(brandCounts)
+    .map(([brand, count]) => ({ brand, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 
   return {
     ...totals.rows[0],
@@ -463,6 +521,12 @@ async function getStats() {
     byVendor: byVendor.rows,
     byResult: byResult.rows,
     recentLogs: recentLogs.rows,
+    topUsers: topUsers.rows.map(row => ({
+      username: row.username,
+      nombre_completo: row.nombre_completo,
+      total_bytes: parseFloat(row.total_bytes || 0)
+    })),
+    topBrands
   };
 }
 
@@ -536,7 +600,12 @@ async function getConnectionsReport({ search = '', startDate, endDate, limit = 5
            r.acctinputoctets AS upload, r.acctoutputoctets AS download
     FROM radacct r
     LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
-    LEFT JOIN usuarios_portal u ON (r.username = u.cedula OR d.cedula = u.cedula)
+    LEFT JOIN usuarios_portal u ON u.cedula = (
+      CASE 
+        WHEN r.username ~ '^[0-9]+$' THEN r.username 
+        ELSE d.cedula 
+      END
+    )
     WHERE 1=1
   `;
   const params = [];

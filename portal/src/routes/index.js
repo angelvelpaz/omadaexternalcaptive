@@ -195,6 +195,34 @@ router.post('/auth/check',
             };
           }
 
+          if (extConfig.allowManualRegistration === false || extConfig.allowManualRegistration === 'false') {
+            if (foundExternally) {
+              // Auto-registrar al usuario localmente
+              await db.createUser({
+                cedula: ced,
+                nombres: userObj.nombres || 'Auto',
+                apellidos: userObj.apellidos || 'Registrado',
+                email: userObj.email || 'auto@registro.com',
+                activo: true,
+                acepta_terminos: true,
+                fecha_acepta_terminos: new Date()
+              });
+              
+              // Responder que ya existe (para login directo)
+              return res.json({
+                valid: true,
+                exists: true
+              });
+            } else {
+              // Denegar acceso
+              return res.json({
+                valid: false,
+                exists: false,
+                error: 'Acceso denegado. La cédula ingresada no consta en los registros institucionales.'
+              });
+            }
+          }
+
           return res.json({
             valid: true,
             exists: false,
@@ -204,6 +232,13 @@ router.post('/auth/check',
         } catch (extErr) {
           console.error('[EXT-DB] Error de validación en check:', extErr.message);
           // Si falla la conexión externa, por seguridad asumimos que no existe (fail-closed)
+          if (extConfig.allowManualRegistration === false || extConfig.allowManualRegistration === 'false') {
+            return res.json({
+              valid: false,
+              exists: false,
+              error: 'Error de validación institucional. Intente más tarde.'
+            });
+          }
           return res.json({ valid: true, exists: false, external: false });
         }
       }

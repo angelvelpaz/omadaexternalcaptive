@@ -207,23 +207,34 @@ async function updateTermsAcceptance(cedula, terminosAceptados) {
  */
 async function listUsers({ search = '', limit = 50, offset = 0 } = {}) {
   const trimmed = (search || '').trim();
-  const where = trimmed
-    ? `WHERE cedula ILIKE $1 OR nombres ILIKE $1 OR apellidos ILIKE $1 OR email ILIKE $1`
-    : '';
   const searchParam = `%${trimmed}%`;
+  const cleanSearch = trimmed.replace(/[:\-]/g, '');
+  const macSearchParam = `%${cleanSearch}%`;
+
+  const where = trimmed
+    ? `WHERE u.cedula ILIKE $1 
+          OR u.nombres ILIKE $1 
+          OR u.apellidos ILIKE $1 
+          OR u.email ILIKE $1 
+          OR EXISTS (
+            SELECT 1 FROM dispositivos_usuario d 
+            WHERE d.cedula = u.cedula 
+              AND (d.mac_address ILIKE $1 OR REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') ILIKE $2)
+          )`
+    : '';
 
   const [result, total] = await Promise.all([
     pool.query(
-      `SELECT id, cedula, nombres, apellidos, email, activo, fecha_registro
-       FROM usuarios_portal
+      `SELECT u.id, u.cedula, u.nombres, u.apellidos, u.email, u.activo, u.fecha_registro
+       FROM usuarios_portal u
        ${where}
-       ORDER BY fecha_registro DESC
-       LIMIT $${trimmed ? 2 : 1} OFFSET $${trimmed ? 3 : 2}`,
-      trimmed ? [searchParam, parseInt(limit), parseInt(offset)] : [parseInt(limit), parseInt(offset)]
+       ORDER BY u.fecha_registro DESC
+       LIMIT $${trimmed ? 3 : 1} OFFSET $${trimmed ? 4 : 2}`,
+      trimmed ? [searchParam, macSearchParam, parseInt(limit), parseInt(offset)] : [parseInt(limit), parseInt(offset)]
     ),
     pool.query(
-      `SELECT COUNT(*) FROM usuarios_portal ${where}`,
-      trimmed ? [searchParam] : []
+      `SELECT COUNT(*) FROM usuarios_portal u ${where}`,
+      trimmed ? [searchParam, macSearchParam] : []
     ),
   ]);
 

@@ -1345,6 +1345,39 @@ router.get('/api/audit-logs', requireAdmin,
   }
 );
 
+// ─── Tareas de Mantenimiento ──────────────────────────────────────────────────
+
+router.get('/api/maintenance/stats', requireAdmin, async (req, res, next) => {
+  try {
+    const stats = await db.getRandomMacStats();
+    res.json(stats);
+  } catch (err) { next(err); }
+});
+
+router.post('/api/maintenance/purge', requireAdmin,
+  body('purgeDevices').isBoolean(),
+  body('purgeAcct').isBoolean(),
+  body('purgeLogs').isBoolean(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Parámetros inválidos.' });
+      }
+      const { purgeDevices, purgeAcct, purgeLogs } = req.body;
+      const result = await db.purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs });
+      
+      await db.logAdminAudit(
+        req.adminUser, 
+        'DEPURAR_MAC_ALEATORIAS', 
+        `Depuración ejecutada. Disp: ${result.deletedDevices}, Acct: ${result.deletedAcct}, Logs: ${result.deletedLogs}`
+      );
+
+      res.json({ success: true, result });
+    } catch (err) { next(err); }
+  }
+);
+
 // ─── Error handler para admin ─────────────────────────────────────────────────
 
 router.use((err, req, res, next) => { // eslint-disable-line no-unused-vars

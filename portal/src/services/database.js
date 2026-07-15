@@ -820,6 +820,64 @@ async function updateUserDevice(oldCedula, oldMac, newCedula, newMac) {
   );
 }
 
+async function getRandomMacStats() {
+  const [devices, acct, logs] = await Promise.all([
+    pool.query(`
+      SELECT COUNT(*) AS count 
+      FROM dispositivos_usuario 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+    `),
+    pool.query(`
+      SELECT COUNT(*) AS count 
+      FROM radacct 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+    `),
+    pool.query(`
+      SELECT COUNT(*) AS count 
+      FROM access_log 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+    `)
+  ]);
+
+  return {
+    devices: parseInt(devices.rows[0].count),
+    acct: parseInt(acct.rows[0].count),
+    logs: parseInt(logs.rows[0].count)
+  };
+}
+
+async function purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs }) {
+  let deletedDevices = 0;
+  let deletedAcct = 0;
+  let deletedLogs = 0;
+
+  if (purgeDevices) {
+    const res = await pool.query(`
+      DELETE FROM dispositivos_usuario 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+    `);
+    deletedDevices = res.rowCount;
+  }
+
+  if (purgeAcct) {
+    const res = await pool.query(`
+      DELETE FROM radacct 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+    `);
+    deletedAcct = res.rowCount;
+  }
+
+  if (purgeLogs) {
+    const res = await pool.query(`
+      DELETE FROM access_log 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+    `);
+    deletedLogs = res.rowCount;
+  }
+
+  return { deletedDevices, deletedAcct, deletedLogs };
+}
+
 // ─── Gestión de administradores y auditoría ────────────────────────────────────
 const crypto = require('crypto');
 
@@ -1080,6 +1138,7 @@ module.exports = {
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,
+  getRandomMacStats, purgeRandomMacs,
   // administradores y auditoría
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,

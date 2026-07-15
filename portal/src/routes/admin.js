@@ -906,6 +906,7 @@ router.put('/api/external-db/config', requireAdmin, async (req, res, next) => {
       colNombres:   (input.colNombres || '').trim(),
       colApellidos: (input.colApellidos || '').trim(),
       colEmail:     (input.colEmail || '').trim(),
+      colStatus:    (input.colStatus || '').trim(),
       allowManualRegistration: input.allowManualRegistration !== false && input.allowManualRegistration !== 'false',
     };
     await db.saveControllerConfig('external_db_config', newCfg);

@@ -723,6 +723,13 @@
                 <option value="">-- Seleccione una tabla primero --</option>
               </select>
             </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Columna Estado (Activo/Inactivo)</label>
+              <select id="cfg-db-col-status" disabled class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 disabled:opacity-60 cursor-pointer">
+                <option value="">-- Seleccione una tabla primero --</option>
+              </select>
+            </div>
           </div>
 
           <!-- Botón de Guardar -->
@@ -2647,7 +2654,7 @@ async function loadExternalDb() {
     tableSelect.innerHTML = '<option value="">-- Pruebe la conexión primero --</option>';
     tableSelect.disabled = true;
 
-    ['cfg-db-col-cedula', 'cfg-db-col-nombres', 'cfg-db-col-apellidos', 'cfg-db-col-email'].forEach(id => {
+    ['cfg-db-col-cedula', 'cfg-db-col-nombres', 'cfg-db-col-apellidos', 'cfg-db-col-email', 'cfg-db-col-status'].forEach(id => {
       const el = document.getElementById(id);
       el.innerHTML = '<option value="">-- Seleccione una tabla primero --</option>';
       el.disabled = true;
@@ -2662,7 +2669,7 @@ async function loadExternalDb() {
         user: config.user,
         password: config.password,
         ssl: config.ssl
-      }, config.tableName, config.colCedula, config.colNombres, config.colApellidos, config.colEmail);
+      }, config.tableName, config.colCedula, config.colNombres, config.colApellidos, config.colEmail, config.colStatus);
     }
   } catch (err) {
     errEl.textContent = 'Error al cargar configuración: ' + err.message;
@@ -2670,7 +2677,7 @@ async function loadExternalDb() {
   }
 }
 
-async function testDbConnection(creds, selectedTable = '', selectedCed = '', selectedNom = '', selectedApe = '', selectedMail = '') {
+async function testDbConnection(creds, selectedTable = '', selectedCed = '', selectedNom = '', selectedApe = '', selectedMail = '', selectedStatus = '') {
   const btn = document.getElementById('btn-test-db');
   const spinner = document.getElementById('btn-test-db-spinner');
   const btnText = document.getElementById('btn-test-db-text');
@@ -2704,7 +2711,7 @@ async function testDbConnection(creds, selectedTable = '', selectedCed = '', sel
 
     if (selectedTable && cachedDbSchema[selectedTable]) {
       tableSelect.value = selectedTable;
-      updateColDropdowns(selectedTable, selectedCed, selectedNom, selectedApe, selectedMail);
+      updateColDropdowns(selectedTable, selectedCed, selectedNom, selectedApe, selectedMail, selectedStatus);
     }
 
     successEl.textContent = '✓ Conexión exitosa. Catálogo de tablas cargado.';
@@ -2716,7 +2723,7 @@ async function testDbConnection(creds, selectedTable = '', selectedCed = '', sel
     
     // Deshabilitar selects
     document.getElementById('cfg-db-table').disabled = true;
-    ['cfg-db-col-cedula', 'cfg-db-col-nombres', 'cfg-db-col-apellidos', 'cfg-db-col-email'].forEach(id => {
+    ['cfg-db-col-cedula', 'cfg-db-col-nombres', 'cfg-db-col-apellidos', 'cfg-db-col-email', 'cfg-db-col-status'].forEach(id => {
       document.getElementById(id).disabled = true;
     });
   } finally {
@@ -2726,12 +2733,13 @@ async function testDbConnection(creds, selectedTable = '', selectedCed = '', sel
   }
 }
 
-function updateColDropdowns(table, selectedCed = '', selectedNom = '', selectedApe = '', selectedMail = '') {
+function updateColDropdowns(table, selectedCed = '', selectedNom = '', selectedApe = '', selectedMail = '', selectedStatus = '') {
   const selects = {
     'cfg-db-col-cedula': { label: 'Cédula (Identificador)', value: selectedCed },
     'cfg-db-col-nombres': { label: 'Nombres (Opcional)', value: selectedNom, isOptional: true },
     'cfg-db-col-apellidos': { label: 'Apellidos (Opcional)', value: selectedApe, isOptional: true },
-    'cfg-db-col-email': { label: 'Correo Electrónico (Opcional)', value: selectedMail, isOptional: true }
+    'cfg-db-col-email': { label: 'Correo Electrónico (Opcional)', value: selectedMail, isOptional: true },
+    'cfg-db-col-status': { label: 'Estado Activo (Opcional)', value: selectedStatus, isOptional: true }
   };
 
   const columns = cachedDbSchema[table] || [];
@@ -2800,6 +2808,7 @@ document.getElementById('form-db').addEventListener('submit', async (e) => {
   const colNombres   = document.getElementById('cfg-db-col-nombres').value;
   const colApellidos = document.getElementById('cfg-db-col-apellidos').value;
   const colEmail     = document.getElementById('cfg-db-col-email').value;
+  const colStatus    = document.getElementById('cfg-db-col-status').value;
 
   if (enabled && (!host || !database || !user || !tableName || !colCedula)) {
     errEl.textContent = 'Por favor complete todos los campos de conexión y mapeo si activa la validación.';
@@ -2812,7 +2821,7 @@ document.getElementById('form-db').addEventListener('submit', async (e) => {
 
   try {
     await api('PUT', '/external-db/config', {
-      enabled, allowManualRegistration, host, port, database, user, password, ssl, tableName, colCedula, colNombres, colApellidos, colEmail
+      enabled, allowManualRegistration, host, port, database, user, password, ssl, tableName, colCedula, colNombres, colApellidos, colEmail, colStatus
     });
     successEl.textContent = '✓ Configuración guardada con éxito.';
     successEl.classList.remove('hidden');

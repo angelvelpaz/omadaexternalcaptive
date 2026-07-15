@@ -1148,6 +1148,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // Auto-actualizar dashboard si está activo (cada 30 segundos)
+  setInterval(() => {
+    if (typeof currentTab !== 'undefined' && currentTab === 'dashboard') {
+      loadDashboard();
+    }
+  }, 30000);
 });
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────

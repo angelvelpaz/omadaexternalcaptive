@@ -502,7 +502,12 @@ async function getStats() {
         SUM(r.acctinputoctets + r.acctoutputoctets) AS total_bytes
       FROM radacct r
       LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
-      LEFT JOIN usuarios_portal u ON (r.username = u.cedula OR d.cedula = u.cedula)
+      LEFT JOIN usuarios_portal u ON u.cedula = (
+        CASE 
+          WHEN r.username ~ '^[0-9]+$' THEN r.username 
+          ELSE d.cedula 
+        END
+      )
       GROUP BY COALESCE(u.cedula, r.username), nombre_completo
       ORDER BY total_bytes DESC
       LIMIT 10

@@ -101,6 +101,7 @@
             </button>
             <div class="dropdown-menu absolute left-0 mt-0.5 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-20" role="menu">
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="users" role="menuitem">Usuarios</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="devices" role="menuitem">Dispositivos</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="admins" role="menuitem">Administradores</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="groups" role="menuitem">Grupos RADIUS</button>
             </div>
@@ -190,6 +191,7 @@
             </div>
             <div class="pl-5 space-y-1">
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="users">Usuarios</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="devices">Dispositivos</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="admins">Administradores</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="groups">Grupos RADIUS</button>
             </div>
@@ -357,6 +359,52 @@
           <div class="flex gap-2">
             <button id="btn-prev" class="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Ant</button>
             <button id="btn-next" class="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Sig →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB DISPOSITIVOS ── -->
+    <div id="tab-devices" class="tab-content hidden">
+      <!-- Búsqueda y controles -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
+        <input type="text" id="device-search" placeholder="Buscar por MAC, cédula o nombre..."
+          class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+        <button id="btn-search-devices"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+          Buscar
+        </button>
+        <button onclick="openCreateDeviceModal()"
+          class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Registrar Dispositivo
+        </button>
+      </div>
+
+      <!-- Tabla de dispositivos -->
+      <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b">
+              <tr class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th class="px-6 py-3">Dirección MAC</th>
+                <th class="px-6 py-3">Marca / Vendor</th>
+                <th class="px-6 py-3">Cédula Dueño</th>
+                <th class="px-6 py-3">Nombre Dueño</th>
+                <th class="px-6 py-3">Fecha Registro</th>
+                <th class="px-6 py-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="devices-tbody" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
+          <span id="devices-count">— dispositivos</span>
+          <div class="flex gap-2">
+            <button id="btn-devices-prev" class="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Ant</button>
+            <button id="btn-devices-next" class="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Sig →</button>
           </div>
         </div>
       </div>
@@ -852,6 +900,10 @@ const PAGE_SIZE = 50;
 let usersTotalCount = 0;
 let usersSearch = '';
 
+let devicesOffset = 0;
+const DEVICES_PAGE_SIZE = 50;
+let devicesSearch = '';
+
 // Niveles de rol (mayor = más permisos)
 const ROL_NIVEL = { operador: 1, administrador: 2, superadministrador: 3 };
 function tieneRol(minRol) {
@@ -1079,6 +1131,7 @@ function switchTab(tab) {
 
   if (tab === 'dashboard') loadDashboard();
   else if (tab === 'users') loadUsers();
+  else if (tab === 'devices') loadDevices(0);
   else if (tab === 'groups') loadGroups();
   else if (tab === 'controllers') loadControllers();
   else if (tab === 'reports') loadReports();
@@ -1381,6 +1434,193 @@ async function toggleActive(cedula, active) {
     await api('PATCH', `/users/${cedula}/active`, { active });
     loadUsers();
   } catch (err) { alert(err.message); }
+}
+
+// ── Dispositivos ──────────────────────────────────────────────────────────────
+async function loadDevices(offset = 0) {
+  devicesOffset = offset;
+  const tbody = document.getElementById('devices-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-400">Cargando dispositivos...</td></tr>';
+  
+  try {
+    const query = new URLSearchParams({
+      search: devicesSearch,
+      limit: DEVICES_PAGE_SIZE,
+      offset: devicesOffset
+    });
+    const data = await api('GET', '/devices?' + query.toString());
+    
+    tbody.innerHTML = '';
+    if (data.devices.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-400">No se encontraron dispositivos.</td></tr>';
+      document.getElementById('devices-count').textContent = '0 dispositivos';
+      document.getElementById('btn-devices-prev').disabled = true;
+      document.getElementById('btn-devices-next').disabled = true;
+      return;
+    }
+
+    data.devices.forEach(d => {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-gray-50/50 transition-colors';
+      
+      tr.innerHTML = `
+        <td class="px-6 py-4 font-mono text-sm font-semibold text-gray-700">${esc(d.mac_address)}</td>
+        <td class="px-6 py-4 text-gray-500 text-xs font-medium">${esc(d.vendor)}</td>
+        <td class="px-6 py-4 font-mono text-sm text-gray-600">${esc(d.cedula)}</td>
+        <td class="px-6 py-4 text-gray-700 font-medium">${esc(d.nombre_completo)}</td>
+        <td class="px-6 py-4 text-gray-400 text-xs">${new Date(d.created_at).toLocaleString('es-EC')}</td>
+        <td class="px-6 py-4 text-right space-x-2">
+          <button onclick="openEditDeviceModal('${esc(d.cedula)}', '${esc(d.mac_address)}')" class="text-blue-600 hover:text-blue-800 text-xs mr-2 font-medium">Editar</button>
+          <button onclick="deleteDevice('${esc(d.cedula)}', '${esc(d.mac_address)}')" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    const fromIdx = devicesOffset + 1;
+    const toIdx = devicesOffset + data.devices.length;
+    document.getElementById('devices-count').textContent = `Mostrando ${fromIdx} - ${toIdx} de ${data.total} dispositivos`;
+    
+    document.getElementById('btn-devices-prev').disabled = (devicesOffset === 0);
+    document.getElementById('btn-devices-next').disabled = (toIdx >= data.total);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-red-500 font-medium">Error: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.id === 'btn-search-devices') {
+    devicesSearch = document.getElementById('device-search').value.trim();
+    devicesOffset = 0;
+    loadDevices(0);
+  }
+  if (e.target.id === 'btn-devices-prev') {
+    if (devicesOffset >= DEVICES_PAGE_SIZE) loadDevices(devicesOffset - DEVICES_PAGE_SIZE);
+  }
+  if (e.target.id === 'btn-devices-next') {
+    loadDevices(devicesOffset + DEVICES_PAGE_SIZE);
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.id === 'device-search' && e.key === 'Enter') {
+    document.getElementById('btn-search-devices').click();
+  }
+});
+
+function openCreateDeviceModal() {
+  const modal = document.getElementById('user-modal');
+  const body = document.getElementById('modal-body');
+  document.querySelector('#user-modal h2').textContent = 'Registrar Nuevo Dispositivo (MAC)';
+
+  body.innerHTML = `
+    <div id="create-device-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+    <form id="form-create-device" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Cédula del Propietario</label>
+        <input type="text" id="dev-cedula-input" placeholder="ej: 1600617300" required pattern="[0-9]{10}" title="Debe tener exactamente 10 dígitos numéricos" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Dirección MAC</label>
+        <input type="text" id="dev-mac-input" placeholder="ej: AA:BB:CC:DD:EE:FF" required pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$" title="Formato esperado: XX:XX:XX:XX:XX:XX o XX-XX-XX-XX-XX-XX" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-medium text-gray-800">
+      </div>
+      <div class="flex justify-end gap-2 pt-4 border-t">
+        <button type="button" id="btn-cancel-create-dev" class="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
+        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">Registrar</button>
+      </div>
+    </form>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  document.getElementById('btn-cancel-create-dev').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  });
+
+  document.getElementById('form-create-device').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const cedula = document.getElementById('dev-cedula-input').value.trim();
+    const mac_address = document.getElementById('dev-mac-input').value.trim().toUpperCase().replace(/:/g, '-');
+
+    try {
+      await api('POST', '/devices', { cedula, mac_address });
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      loadDevices(0);
+    } catch (err) {
+      const errEl = document.getElementById('create-device-error');
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    }
+  });
+}
+
+function openEditDeviceModal(cedula, mac) {
+  const modal = document.getElementById('user-modal');
+  const body = document.getElementById('modal-body');
+  document.querySelector('#user-modal h2').textContent = 'Editar Dispositivo';
+
+  body.innerHTML = `
+    <div id="edit-device-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+    <form id="form-edit-device" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Cédula del Propietario</label>
+        <input type="text" id="dev-cedula-edit" value="${esc(cedula)}" required pattern="[0-9]{10}" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Dirección MAC</label>
+        <input type="text" id="dev-mac-edit" value="${esc(mac)}" required pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-medium text-gray-800">
+      </div>
+      <div class="flex justify-end gap-2 pt-4 border-t">
+        <button type="button" id="btn-cancel-edit-dev" class="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
+        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">Guardar Cambios</button>
+      </div>
+    </form>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  document.getElementById('btn-cancel-edit-dev').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  });
+
+  document.getElementById('form-edit-device').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const new_cedula = document.getElementById('dev-cedula-edit').value.trim();
+    const new_mac_address = document.getElementById('dev-mac-edit').value.trim().toUpperCase().replace(/:/g, '-');
+
+    try {
+      await api('PUT', '/devices', {
+        old_cedula: cedula,
+        old_mac_address: mac,
+        new_cedula,
+        new_mac_address
+      });
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      loadDevices(devicesOffset);
+    } catch (err) {
+      const errEl = document.getElementById('edit-device-error');
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    }
+  });
+}
+
+async function deleteDevice(cedula, mac) {
+  if (!confirm(`¿Está seguro de que desea eliminar el dispositivo con MAC ${mac}?`)) {
+    return;
+  }
+  try {
+    await api('DELETE', '/devices', { cedula, mac_address: mac });
+    loadDevices(devicesOffset);
+  } catch (err) {
+    alert('Error al eliminar dispositivo: ' + err.message);
+  }
 }
 
 async function toggleActiveModal(cedula, active) {

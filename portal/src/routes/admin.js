@@ -225,6 +225,102 @@ router.get('/api/reports', requireAdmin,
   }
 );
 
+// ─── Dispositivos (CRUD) ───────────────────────────────────────────────────────
+
+router.get('/api/devices', requireAdmin,
+  query('search').optional().isString().trim(),
+  query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+  query('offset').optional().isInt({ min: 0 }).toInt(),
+  async (req, res, next) => {
+    try {
+      const matched = matchedData(req, { includeOptionals: true, locations: ['query'] });
+      const search = matched.search || '';
+      const limit  = matched.limit  ?? 50;
+      const offset = matched.offset ?? 0;
+      res.json(await db.listAllDevices({ search, limit, offset }));
+    } catch (err) { next(err); }
+  }
+);
+
+router.post('/api/devices', requireAdmin,
+  body('cedula').isString().trim().isLength({ min: 10, max: 10 }).isNumeric(),
+  body('mac_address').isString().trim().matches(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Dirección MAC inválida (formato esperado: XX-XX-XX-XX-XX-XX o XX:XX:XX:XX:XX:XX).' });
+      }
+      const { cedula, mac_address } = req.body;
+      
+      const userExists = await db.userExists(cedula);
+      if (!userExists) {
+        return res.status(404).json({ error: 'El usuario con la cédula indicada no existe.' });
+      }
+
+      const count = await db.getUserDevicesCount(cedula);
+      const user = await db.getUserByCedula(cedula);
+      if (count >= (user.max_dispositivos || 1)) {
+        return res.status(400).json({ error: `El usuario ya ha alcanzado su límite de dispositivos (${user.max_dispositivos || 1}).` });
+      }
+
+      await db.registerUserDevice(cedula, mac_address);
+      await db.logAdminAudit(req.adminUser, 'REGISTRAR_DISPOSITIVO', `Dispositivo ${mac_address} registrado para el usuario ${cedula}`);
+      res.status(201).json({ success: true, message: 'Dispositivo registrado con éxito.' });
+    } catch (err) { next(err); }
+  }
+);
+
+router.put('/api/devices', requireAdmin,
+  body('old_cedula').isString().trim().isLength({ min: 10, max: 10 }).isNumeric(),
+  body('old_mac_address').isString().trim().matches(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/),
+  body('new_cedula').isString().trim().isLength({ min: 10, max: 10 }).isNumeric(),
+  body('new_mac_address').isString().trim().matches(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Datos de dispositivo inválidos.' });
+      }
+      const { old_cedula, old_mac_address, new_cedula, new_mac_address } = req.body;
+
+      const newExists = await db.userExists(new_cedula);
+      if (!newExists) {
+        return res.status(404).json({ error: 'El nuevo usuario no existe.' });
+      }
+
+      if (old_cedula !== new_cedula) {
+        const count = await db.getUserDevicesCount(new_cedula);
+        const user = await db.getUserByCedula(new_cedula);
+        if (count >= (user.max_dispositivos || 1)) {
+          return res.status(400).json({ error: `El nuevo usuario ya alcanzó su límite de dispositivos (${user.max_dispositivos || 1}).` });
+        }
+      }
+
+      await db.updateUserDevice(old_cedula, old_mac_address, new_cedula, new_mac_address);
+      await db.logAdminAudit(req.adminUser, 'MODIFICAR_DISPOSITIVO', `Dispositivo ${old_mac_address} de ${old_cedula} modificado a ${new_mac_address} de ${new_cedula}`);
+      res.json({ success: true, message: 'Dispositivo actualizado con éxito.' });
+    } catch (err) { next(err); }
+  }
+);
+
+router.delete('/api/devices', requireAdmin,
+  body('cedula').isString().trim().isLength({ min: 10, max: 10 }).isNumeric(),
+  body('mac_address').isString().trim().matches(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Datos de dispositivo inválidos.' });
+      }
+      const { cedula, mac_address } = req.body;
+      await db.deleteUserDevice(cedula, mac_address);
+      await db.logAdminAudit(req.adminUser, 'ELIMINAR_DISPOSITIVO', `Dispositivo ${mac_address} eliminado del usuario ${cedula}`);
+      res.json({ success: true, message: 'Dispositivo eliminado con éxito.' });
+    } catch (err) { next(err); }
+  }
+);
+
 // ─── Usuarios ─────────────────────────────────────────────────────────────────
 
 router.get('/api/users', requireAdmin,

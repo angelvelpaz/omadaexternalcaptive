@@ -755,6 +755,66 @@ async function getUserByDeviceMac(macAddress) {
   return res.rows[0] || null;
 }
 
+async function listAllDevices({ search = '', limit = 50, offset = 0 } = {}) {
+  const trimmed = (search || '').trim();
+  const searchParam = `%${trimmed}%`;
+  const cleanSearch = trimmed.replace(/[:\-]/g, '');
+  const macSearchParam = `%${cleanSearch}%`;
+
+  const where = trimmed
+    ? `WHERE d.mac_address ILIKE $1 
+          OR REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') ILIKE $2
+          OR d.cedula ILIKE $1 
+          OR u.nombres ILIKE $1 
+          OR u.apellidos ILIKE $1`
+    : '';
+
+  const [result, total] = await Promise.all([
+    pool.query(
+      `SELECT d.id, d.mac_address, d.created_at, d.cedula, u.nombres, u.apellidos
+       FROM dispositivos_usuario d
+       JOIN usuarios_portal u ON d.cedula = u.cedula
+       ${where}
+       ORDER BY d.created_at DESC
+       LIMIT $${trimmed ? 3 : 1} OFFSET $${trimmed ? 4 : 2}`,
+      trimmed ? [searchParam, macSearchParam, parseInt(limit), parseInt(offset)] : [parseInt(limit), parseInt(offset)]
+    ),
+    pool.query(
+      `SELECT COUNT(*) 
+       FROM dispositivos_usuario d
+       JOIN usuarios_portal u ON d.cedula = u.cedula
+       ${where}`,
+      trimmed ? [searchParam, macSearchParam] : []
+    )
+  ]);
+
+  const devices = result.rows.map(row => {
+    let vendor = 'Genérico / Privado';
+    try {
+      vendor = getVendor(row.mac_address);
+    } catch (e) {}
+    return {
+      id: row.id,
+      mac_address: row.mac_address,
+      created_at: row.created_at,
+      cedula: row.cedula,
+      nombre_completo: `${row.nombres || ''} ${row.apellidos || ''}`.trim(),
+      vendor
+    };
+  });
+
+  return { devices, total: parseInt(total.rows[0].count) };
+}
+
+async function updateUserDevice(oldCedula, oldMac, newCedula, newMac) {
+  await pool.query(
+    `UPDATE dispositivos_usuario 
+     SET cedula = $1, mac_address = $2 
+     WHERE cedula = $3 AND UPPER(mac_address) = UPPER($4)`,
+    [newCedula, newMac.trim().toUpperCase(), oldCedula, oldMac.trim().toUpperCase()]
+  );
+}
+
 // ─── Gestión de administradores y auditoría ────────────────────────────────────
 const crypto = require('crypto');
 
@@ -1014,7 +1074,7 @@ module.exports = {
   getUsersReport, getConnectionsReport, getAccessLogReport,
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
-  getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac,
+  getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,
   // administradores y auditoría
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,

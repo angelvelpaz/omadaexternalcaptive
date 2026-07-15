@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS radacct (
     acctoutputoctets    BIGINT       DEFAULT NULL,
     calledstationid     VARCHAR(50)  NOT NULL DEFAULT '',
     callingstationid    VARCHAR(50)  NOT NULL DEFAULT '',
-    acctterminatecause  VARCHAR(32)  NOT NULL DEFAULT '',
+    acctterminatecause  VARCHAR(32)  DEFAULT '',
     servicetype         VARCHAR(32)  DEFAULT NULL,
     framedprotocol      VARCHAR(32)  DEFAULT NULL,
     framedipaddress     INET         DEFAULT NULL,

@@ -824,6 +824,68 @@ async function updateUserDevice(oldCedula, oldMac, newCedula, newMac) {
   );
 }
 
+async function getRandomMacPreview() {
+  const [devices, acct, logs] = await Promise.all([
+    pool.query(`
+      SELECT d.mac_address, d.cedula, u.nombres, u.apellidos, d.created_at
+      FROM dispositivos_usuario d
+      JOIN usuarios_portal u ON d.cedula = u.cedula
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(d.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+      ORDER BY d.created_at DESC LIMIT 50
+    `),
+    pool.query(`
+      SELECT r.callingstationid AS mac_address, r.username, r.acctstarttime, r.acctinputoctets, r.acctoutputoctets
+      FROM radacct r
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(r.callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+      ORDER BY r.acctstarttime DESC LIMIT 50
+    `),
+    pool.query(`
+      SELECT a.mac_address, a.cedula, u.nombres, u.apellidos, a.resultado, a.created_at
+      FROM access_log a
+      LEFT JOIN usuarios_portal u ON a.cedula = u.cedula
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(a.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+      ORDER BY a.created_at DESC LIMIT 50
+    `)
+  ]);
+
+  return {
+    devices: devices.rows.map(r => {
+      let vendor = 'Genérico';
+      try { vendor = getVendor(r.mac_address); } catch (e) {}
+      return {
+        mac_address: r.mac_address,
+        cedula: r.cedula,
+        nombre_completo: `${r.nombres || ''} ${r.apellidos || ''}`.trim(),
+        created_at: r.created_at,
+        vendor
+      };
+    }),
+    acct: acct.rows.map(r => {
+      let vendor = 'Genérico';
+      try { vendor = getVendor(r.mac_address); } catch (e) {}
+      return {
+        mac_address: r.mac_address,
+        username: r.username,
+        acctstarttime: r.acctstarttime,
+        total_bytes: parseInt(r.acctinputoctets || 0) + parseInt(r.acctoutputoctets || 0),
+        vendor
+      };
+    }),
+    logs: logs.rows.map(r => {
+      let vendor = 'Genérico';
+      try { vendor = getVendor(r.mac_address); } catch (e) {}
+      return {
+        mac_address: r.mac_address,
+        cedula: r.cedula,
+        nombre_completo: r.nombres ? `${r.nombres} ${r.apellidos}`.trim() : 'Desconocido',
+        resultado: r.resultado,
+        created_at: r.created_at,
+        vendor
+      };
+    })
+  };
+}
+
 async function getRandomMacStats() {
   const [devices, acct, logs] = await Promise.all([
     pool.query(`
@@ -1142,7 +1204,7 @@ module.exports = {
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,
-  getRandomMacStats, purgeRandomMacs,
+  getRandomMacStats, getRandomMacPreview, purgeRandomMacs,
   // administradores y auditoría
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,

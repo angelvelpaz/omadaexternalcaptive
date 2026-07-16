@@ -824,15 +824,24 @@
             <div class="divide-y">
               <div class="p-3 flex justify-between items-center">
                 <span class="text-gray-600">Dispositivos registrados (<span class="font-mono text-xs">dispositivos_usuario</span>)</span>
-                <span id="maint-count-devices" class="font-semibold text-gray-800">—</span>
+                <div class="flex items-center gap-3">
+                  <span id="maint-count-devices" class="font-semibold text-gray-800">—</span>
+                  <button type="button" onclick="showMaintPreview('devices')" class="text-xs text-blue-600 hover:underline font-medium hidden" id="btn-maint-prev-devices">Previsualizar</button>
+                </div>
               </div>
               <div class="p-3 flex justify-between items-center">
                 <span class="text-gray-600">Sesiones de contabilidad (<span class="font-mono text-xs">radacct</span>)</span>
-                <span id="maint-count-acct" class="font-semibold text-gray-800">—</span>
+                <div class="flex items-center gap-3">
+                  <span id="maint-count-acct" class="font-semibold text-gray-800">—</span>
+                  <button type="button" onclick="showMaintPreview('acct')" class="text-xs text-blue-600 hover:underline font-medium hidden" id="btn-maint-prev-acct">Previsualizar</button>
+                </div>
               </div>
               <div class="p-3 flex justify-between items-center">
                 <span class="text-gray-600">Historial de accesos (<span class="font-mono text-xs">access_log</span>)</span>
-                <span id="maint-count-logs" class="font-semibold text-gray-800">—</span>
+                <div class="flex items-center gap-3">
+                  <span id="maint-count-logs" class="font-semibold text-gray-800">—</span>
+                  <button type="button" onclick="showMaintPreview('logs')" class="text-xs text-blue-600 hover:underline font-medium hidden" id="btn-maint-prev-logs">Previsualizar</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1710,6 +1719,7 @@ async function deleteDeviceFromList(cedula, mac) {
 }
 
 // ── Mantenimiento ─────────────────────────────────────────────────────────────
+// ── Mantenimiento ─────────────────────────────────────────────────────────────
 async function loadMaintenanceStats() {
   const btn = document.getElementById('btn-maint-analyze');
   const errEl = document.getElementById('maint-error');
@@ -1726,6 +1736,11 @@ async function loadMaintenanceStats() {
     document.getElementById('maint-count-devices').textContent = stats.devices;
     document.getElementById('maint-count-acct').textContent = stats.acct;
     document.getElementById('maint-count-logs').textContent = stats.logs;
+
+    // Mostrar u ocultar botones de previsualización
+    toggleMaintPrevBtn('btn-maint-prev-devices', stats.devices > 0);
+    toggleMaintPrevBtn('btn-maint-prev-acct', stats.acct > 0);
+    toggleMaintPrevBtn('btn-maint-prev-logs', stats.logs > 0);
   } catch (err) {
     errEl.textContent = 'Error al analizar base de datos: ' + err.message;
     errEl.classList.remove('hidden');
@@ -1734,6 +1749,120 @@ async function loadMaintenanceStats() {
       btn.disabled = false;
       btn.textContent = 'Analizar BD';
     }
+  }
+}
+
+function toggleMaintPrevBtn(id, show) {
+  const el = document.getElementById(id);
+  if (el) {
+    if (show) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  }
+}
+
+async function showMaintPreview(type) {
+  const modal = document.getElementById('user-modal');
+  const body = document.getElementById('modal-body');
+  document.querySelector('#user-modal h2').textContent = `Previsualización de registros a depurar (${type === 'devices' ? 'Dispositivos' : type === 'acct' ? 'Contabilidad' : 'Historial'})`;
+
+  body.innerHTML = '<div class="py-8 text-center text-gray-400">Cargando previsualización...</div>';
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  try {
+    const preview = await api('GET', '/maintenance/preview');
+    const list = preview[type] || [];
+    
+    if (list.length === 0) {
+      body.innerHTML = '<div class="py-8 text-center text-gray-400">No hay registros para mostrar.</div>';
+      return;
+    }
+
+    let html = '<div class="max-h-96 overflow-y-auto border border-gray-100 rounded-lg shadow-sm"><table class="w-full text-xs text-left text-gray-600">';
+    
+    if (type === 'devices') {
+      html += `
+        <thead class="bg-gray-50 border-b sticky top-0 text-gray-500 uppercase font-semibold text-[10px] tracking-wider">
+          <tr>
+            <th class="p-3">MAC Address</th>
+            <th class="p-3">Marca</th>
+            <th class="p-3">Cédula</th>
+            <th class="p-3">Propietario</th>
+            <th class="p-3">Fecha Registro</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${list.map(r => `
+            <tr class="hover:bg-gray-50">
+              <td class="p-3 font-mono font-semibold text-gray-700">${esc(r.mac_address)}</td>
+              <td class="p-3 text-xs text-gray-500 font-medium">${esc(r.vendor)}</td>
+              <td class="p-3 font-mono">${esc(r.cedula)}</td>
+              <td class="p-3 font-medium text-gray-700">${esc(r.nombre_completo)}</td>
+              <td class="p-3 text-gray-400 text-[11px]">${new Date(r.created_at).toLocaleString('es-EC')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      `;
+    } else if (type === 'acct') {
+      html += `
+        <thead class="bg-gray-50 border-b sticky top-0 text-gray-500 uppercase font-semibold text-[10px] tracking-wider">
+          <tr>
+            <th class="p-3">MAC Address</th>
+            <th class="p-3">Marca</th>
+            <th class="p-3">Usuario (Cédula/MAC)</th>
+            <th class="p-3">Hora Inicio</th>
+            <th class="p-3">Consumo</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${list.map(r => `
+            <tr class="hover:bg-gray-50">
+              <td class="p-3 font-mono font-semibold text-gray-700">${esc(r.mac_address)}</td>
+              <td class="p-3 text-xs text-gray-500 font-medium">${esc(r.vendor)}</td>
+              <td class="p-3 font-mono">${esc(r.username)}</td>
+              <td class="p-3 text-gray-400 text-[11px]">${new Date(r.acctstarttime).toLocaleString('es-EC')}</td>
+              <td class="p-3 font-semibold text-blue-600">${(r.total_bytes / (1024 * 1024)).toFixed(2)} MB</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      `;
+    } else if (type === 'logs') {
+      html += `
+        <thead class="bg-gray-50 border-b sticky top-0 text-gray-500 uppercase font-semibold text-[10px] tracking-wider">
+          <tr>
+            <th class="p-3">MAC Address</th>
+            <th class="p-3">Marca</th>
+            <th class="p-3">Cédula</th>
+            <th class="p-3">Nombre</th>
+            <th class="p-3">Resultado</th>
+            <th class="p-3">Fecha</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${list.map(r => `
+            <tr class="hover:bg-gray-50">
+              <td class="p-3 font-mono font-semibold text-gray-700">${esc(r.mac_address)}</td>
+              <td class="p-3 text-xs text-gray-500 font-medium">${esc(r.vendor)}</td>
+              <td class="p-3 font-mono">${esc(r.cedula)}</td>
+              <td class="p-3 text-gray-700">${esc(r.nombre_completo)}</td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.resultado === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${esc(r.resultado)}</span></td>
+              <td class="p-3 text-gray-400 text-[11px]">${new Date(r.created_at).toLocaleString('es-EC')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      `;
+    }
+
+    html += '</table></div>';
+    html += `
+      <div class="mt-4 flex items-center justify-between border-t pt-3">
+        <span class="text-xs text-gray-400 font-medium">* Se muestran los últimos 50 registros a modo de ejemplo</span>
+        <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold transition-colors">Cerrar Previsualización</button>
+      </div>
+    `;
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = `<div class="py-8 text-center text-red-500 font-medium">Error al cargar previsualización: ${esc(err.message)}</div>`;
   }
 }
 

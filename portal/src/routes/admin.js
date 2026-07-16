@@ -1354,6 +1354,13 @@ router.get('/api/maintenance/stats', requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/api/maintenance/preview', requireAdmin, async (req, res, next) => {
+  try {
+    const preview = await db.getRandomMacPreview();
+    res.json(preview);
+  } catch (err) { next(err); }
+});
+
 router.post('/api/maintenance/purge', requireAdmin,
   body('purgeDevices').isBoolean(),
   body('purgeAcct').isBoolean(),

@@ -347,12 +347,19 @@
           </svg>
           <span class="font-semibold text-blue-800" id="bulk-selected-count">0 usuarios seleccionados</span>
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <button onclick="applyBulkUserType('institucional')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
-            Cambiar a Institucional
+            Tipo: Institucional
           </button>
-          <button onclick="applyBulkUserType('externo')" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
-            Cambiar a Externo
+          <button onclick="applyBulkUserType('externo')" class="bg-indigo-400 hover:bg-indigo-500 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
+            Tipo: Externo
+          </button>
+          <span class="h-6 w-px bg-blue-200 self-center hidden sm:inline"></span>
+          <button onclick="applyBulkUserActive(true)" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
+            Activar Estado
+          </button>
+          <button onclick="applyBulkUserActive(false)" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
+            Desactivar Estado
           </button>
           <button onclick="clearUserSelection()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
             Cancelar
@@ -1650,6 +1657,29 @@ async function applyBulkUserType(tipo_usuario) {
     loadUsers();
   } catch (err) {
     alert('Error al aplicar cambios en lote: ' + err.message);
+  }
+}
+
+async function applyBulkUserActive(active) {
+  const checkboxes = document.querySelectorAll('input[name="select-user"]');
+  const selected = [];
+  for (const cb of checkboxes) {
+    if (cb.checked) selected.push(cb.value);
+  }
+
+  if (selected.length === 0) return;
+
+  const actionText = active ? 'Activar' : 'Desactivar';
+  if (!confirm(`¿Está seguro de que desea ${actionText} a los ${selected.length} usuarios seleccionados?`)) {
+    return;
+  }
+
+  try {
+    await api('POST', '/users/bulk-active', { cedulas: selected, active });
+    clearUserSelection();
+    loadUsers();
+  } catch (err) {
+    alert(`Error al ${actionText.toLowerCase()} usuarios en lote: ` + err.message);
   }
 }
 

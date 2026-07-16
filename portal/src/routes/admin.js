@@ -402,6 +402,56 @@ router.post('/api/users/bulk-type', requireAdmin,
   }
 );
 
+router.post('/api/users/bulk-active', requireAdmin,
+  body('cedulas').isArray({ min: 1 }),
+  body('active').isBoolean(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Parámetros inválidos.' });
+
+      const { cedulas, active } = req.body;
+
+      await db.bulkUpdateUserActive(cedulas, active);
+
+      // Auditoría
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: active ? 'ACTIVAR_USUARIO_LOTE' : 'DESACTIVAR_USUARIO_LOTE',
+        detalles: `Modificó estado activo a ${active} en lote para ${cedulas.length} usuarios`
+      });
+
+      // Aplicar acciones en controladores de red en segundo plano (bloquear/desbloquear MACs)
+      for (const ced of cedulas) {
+        db.getUserDevices(ced).then(devices => {
+          for (const d of devices) {
+            const mac = d.mac_address;
+            if (active) {
+              if (process.env.OMADA_CONTROLLER_URL) {
+                omadaSvc.unblockClient({ clientMac: mac }).catch(err => {
+                  console.error(`[OMADA] Error al desbloquear MAC ${mac} en activación en lote:`, err.message);
+                });
+              }
+            } else {
+              if (process.env.OMADA_CONTROLLER_URL) {
+                omadaSvc.blockClient({ clientMac: mac }).catch(err => {
+                  console.error(`[OMADA] Error al bloquear MAC ${mac} en desactivación en lote:`, err.message);
+                });
+              }
+            }
+          }
+        }).catch(err => {
+          console.error(`[DB] Error al buscar dispositivos del usuario ${ced} para bloqueo/desbloqueo en lote:`, err.message);
+        });
+      }
+
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  }
+);
+
 router.patch('/api/users/:cedula/active', requireAdmin,
   param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
   body('active').isBoolean(),

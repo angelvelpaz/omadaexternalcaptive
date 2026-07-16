@@ -408,6 +408,47 @@ async function setUserActive(cedula, active) {
   }
 }
 
+async function bulkUpdateUserActive(cedulas, active) {
+  if (!Array.isArray(cedulas) || cedulas.length === 0) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE usuarios_portal SET activo = $1 WHERE cedula = ANY($2)`,
+      [active, cedulas]
+    );
+
+    if (active) {
+      // Re-insertar radcheck para cada usuario de la lista
+      const users = await client.query(
+        `SELECT cedula, radius_password FROM usuarios_portal WHERE cedula = ANY($1)`,
+        [cedulas]
+      );
+      for (const u of users.rows) {
+        await client.query(
+          `INSERT INTO radcheck (username, attribute, op, value)
+           VALUES ($1, 'Cleartext-Password', ':=', $2)
+           ON CONFLICT DO NOTHING`,
+          [u.cedula, u.radius_password]
+        );
+      }
+    } else {
+      // Eliminar de radcheck
+      await client.query(
+        `DELETE FROM radcheck WHERE username = ANY($1) AND attribute = 'Cleartext-Password'`,
+        [cedulas]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * Elimina un usuario y todos sus registros RADIUS.
  */
@@ -1349,7 +1390,7 @@ module.exports = {
   closeExpiredSessions,
   userExists, getUserByCedula, createUser, logAccess, updateTermsAcceptance,
   // admin
-  listUsers, getUserDetail, setUserActive, deleteUser, setUserGroups, updateUserType, bulkUpdateUserType,
+  listUsers, getUserDetail, setUserActive, bulkUpdateUserActive, deleteUser, setUserGroups, updateUserType, bulkUpdateUserType,
   listGroups, addGroupAttribute, deleteGroupAttribute, deleteGroup,
   getStats,
   getControllerConfig, saveControllerConfig,

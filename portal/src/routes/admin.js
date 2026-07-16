@@ -349,6 +349,59 @@ router.get('/api/users/:cedula', requireAdmin,
   }
 );
 
+router.patch('/api/users/:cedula/type', requireAdmin,
+  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  body('tipo_usuario').isIn(['institucional', 'externo']),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Parámetros inválidos.' });
+
+      const cedula = req.params.cedula;
+      const tipo_usuario = req.body.tipo_usuario;
+
+      await db.updateUserType(cedula, tipo_usuario);
+
+      // Auditoría
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'CAMBIAR_TIPO_USUARIO',
+        detalles: `Modificó tipo de usuario cédula: ${cedula} a ${tipo_usuario}`
+      });
+
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  }
+);
+
+router.post('/api/users/bulk-type', requireAdmin,
+  body('cedulas').isArray({ min: 1 }),
+  body('tipo_usuario').isIn(['institucional', 'externo']),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Parámetros inválidos.' });
+
+      const { cedulas, tipo_usuario } = req.body;
+
+      await db.bulkUpdateUserType(cedulas, tipo_usuario);
+
+      // Auditoría
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'CAMBIAR_TIPO_USUARIO_LOTE',
+        detalles: `Modificó tipo de usuario en lote a ${tipo_usuario} para ${cedulas.length} usuarios`
+      });
+
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  }
+);
+
 router.patch('/api/users/:cedula/active', requireAdmin,
   param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
   body('active').isBoolean(),
@@ -1383,11 +1436,13 @@ router.post('/api/maintenance/purge', requireAdmin,
       const { purgeDevices, purgeAcct, purgeLogs, cedula = '' } = req.body;
       const result = await db.purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs, cedula });
       
-      await db.logAdminAudit(
-        req.adminUser, 
-        'DEPURAR_MAC_ALEATORIAS', 
-        `Depuración ejecutada. Filtro Cédula: ${cedula || 'Ninguno'}, Disp: ${result.deletedDevices}, Acct: ${result.deletedAcct}, Logs: ${result.deletedLogs}`
-      );
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'DEPURAR_MAC_ALEATORIAS',
+        detalles: `Depuración ejecutada. Filtro Cédula: ${cedula || 'Ninguno'}, Disp: ${result.deletedDevices}, Acct: ${result.deletedAcct}, Logs: ${result.deletedLogs}`
+      });
 
       res.json({ success: true, result });
     } catch (err) { next(err); }

@@ -229,6 +229,68 @@ async function updateTermsAcceptance(cedula, terminosAceptados) {
   }
 }
 
+async function updateUserType(cedula, tipoUsuario) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE usuarios_portal SET tipo_usuario = $1 WHERE cedula = $2`,
+      [tipoUsuario, cedula]
+    );
+    const groupName = tipoUsuario === 'institucional' ? 'captive-portal-users-institucional' : 'captive-portal-users-externo';
+    
+    // Delete previous groups
+    await client.query(
+      `DELETE FROM radusergroup WHERE username = $1`,
+      [cedula]
+    );
+    // Insert new group
+    await client.query(
+      `INSERT INTO radusergroup (username, groupname, priority) VALUES ($1, $2, 1)`,
+      [cedula, groupName]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function bulkUpdateUserType(cedulas, tipoUsuario) {
+  if (!Array.isArray(cedulas) || cedulas.length === 0) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE usuarios_portal SET tipo_usuario = $1 WHERE cedula = ANY($2)`,
+      [tipoUsuario, cedulas]
+    );
+    const groupName = tipoUsuario === 'institucional' ? 'captive-portal-users-institucional' : 'captive-portal-users-externo';
+    
+    // Delete old groups
+    await client.query(
+      `DELETE FROM radusergroup WHERE username = ANY($1)`,
+      [cedulas]
+    );
+    
+    // Insert new groups
+    for (const ced of cedulas) {
+      await client.query(
+        `INSERT INTO radusergroup (username, groupname, priority) VALUES ($1, $2, 1) ON CONFLICT DO NOTHING`,
+        [ced, groupName]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ─── Admin: Usuarios ─────────────────────────────────────────────────────────
 
 /**
@@ -1287,7 +1349,7 @@ module.exports = {
   closeExpiredSessions,
   userExists, getUserByCedula, createUser, logAccess, updateTermsAcceptance,
   // admin
-  listUsers, getUserDetail, setUserActive, deleteUser, setUserGroups,
+  listUsers, getUserDetail, setUserActive, deleteUser, setUserGroups, updateUserType, bulkUpdateUserType,
   listGroups, addGroupAttribute, deleteGroupAttribute, deleteGroup,
   getStats,
   getControllerConfig, saveControllerConfig,

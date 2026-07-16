@@ -339,12 +339,36 @@
         </button>
       </div>
 
+      <!-- Barra de Acciones en Lote (bulk actions) -->
+      <div id="bulk-actions-bar" class="hidden bg-blue-50 border border-blue-100 rounded-lg p-3.5 mb-4 items-center justify-between gap-3 text-sm text-blue-805">
+        <div class="flex items-center gap-2">
+          <svg class="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+          </svg>
+          <span class="font-semibold text-blue-800" id="bulk-selected-count">0 usuarios seleccionados</span>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="applyBulkUserType('institucional')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
+            Cambiar a Institucional
+          </button>
+          <button onclick="applyBulkUserType('externo')" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
+            Cambiar a Externo
+          </button>
+          <button onclick="clearUserSelection()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+
       <!-- Tabla de usuarios -->
       <div class="bg-white rounded-xl shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead class="bg-gray-50 border-b">
               <tr class="text-left text-xs text-gray-500 uppercase tracking-wide">
+                <th class="px-4 py-3 w-10 text-center">
+                  <input type="checkbox" id="check-all-users" onclick="toggleSelectAllUsers(this.checked)" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer">
+                </th>
                 <th class="px-4 py-3">Cédula</th>
                 <th class="px-4 py-3">Nombre completo</th>
                 <th class="px-4 py-3 hidden md:table-cell">Email</th>
@@ -1480,6 +1504,14 @@ async function loadDashboard() {
 // ── Usuarios ──────────────────────────────────────────────────────────────────
 async function loadUsers() {
   try {
+    const checkAll = document.getElementById('check-all-users');
+    if (checkAll) checkAll.checked = false;
+    const bar = document.getElementById('bulk-actions-bar');
+    if (bar) {
+      bar.classList.remove('flex');
+      bar.classList.add('hidden');
+    }
+
     const data = await api('GET', `/users?search=${encodeURIComponent(usersSearch)}&limit=${PAGE_SIZE}&offset=${usersOffset}`);
     usersTotalCount = data.total;
     document.getElementById('users-count').textContent = `${data.total} usuario${data.total !== 1 ? 's' : ''}`;
@@ -1488,12 +1520,15 @@ async function loadUsers() {
 
     document.getElementById('users-tbody').innerHTML = data.users.map(u => `
       <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 text-center">
+          <input type="checkbox" value="${u.cedula}" name="select-user" onclick="onUserSelectChange()" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer">
+        </td>
         <td class="px-4 py-3 font-mono text-xs text-gray-700">${u.cedula}</td>
         <td class="px-4 py-3 text-gray-800">${esc(u.nombres)} ${esc(u.apellidos)}</td>
         <td class="px-4 py-3 text-gray-500 hidden md:table-cell text-xs">${esc(u.email)}</td>
         <td class="px-4 py-3 hidden md:table-cell text-xs">
           <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-            u.tipo_usuario === 'institucional' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'
+            u.tipo_usuario === 'indigo' || u.tipo_usuario === 'institucional' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'
           }">
             ${u.tipo_usuario === 'institucional' ? 'Institucional' : 'Externo'}
           </span>
@@ -1513,7 +1548,7 @@ async function loadUsers() {
           ${tieneRol('administrador') ? `<button onclick="confirmDelete('${u.cedula}', '${esc(u.nombres)} ${esc(u.apellidos)}')"
             class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>` : ''}
         </td>
-      </tr>`).join('') || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">No hay usuarios</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No hay usuarios</td></tr>`;
   } catch (err) {
     console.error(err);
   }
@@ -1544,6 +1579,78 @@ async function toggleActive(cedula, active) {
     await api('PATCH', `/users/${cedula}/active`, { active });
     loadUsers();
   } catch (err) { alert(err.message); }
+}
+
+async function changeUserType(cedula, tipo_usuario) {
+  try {
+    await api('PATCH', `/users/${cedula}/type`, { tipo_usuario });
+    loadUsers();
+  } catch (err) {
+    alert('Error al cambiar tipo de usuario: ' + err.message);
+  }
+}
+
+function toggleSelectAllUsers(checked) {
+  const checkboxes = document.querySelectorAll('input[name="select-user"]');
+  for (const cb of checkboxes) {
+    cb.checked = checked;
+  }
+  onUserSelectChange();
+}
+
+function onUserSelectChange() {
+  const checkboxes = document.querySelectorAll('input[name="select-user"]');
+  const selected = [];
+  for (const cb of checkboxes) {
+    if (cb.checked) selected.push(cb.value);
+  }
+
+  const bar = document.getElementById('bulk-actions-bar');
+  const countEl = document.getElementById('bulk-selected-count');
+
+  if (selected.length > 0) {
+    bar.classList.remove('hidden');
+    bar.classList.add('flex');
+    countEl.textContent = `${selected.length} usuario${selected.length !== 1 ? 's' : ''} seleccionado${selected.length !== 1 ? 's' : ''}`;
+  } else {
+    bar.classList.remove('flex');
+    bar.classList.add('hidden');
+  }
+
+  // Sincronizar el checkbox principal
+  const checkAll = document.getElementById('check-all-users');
+  if (checkAll) {
+    const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+    checkAll.checked = allChecked;
+  }
+}
+
+function clearUserSelection() {
+  const checkAll = document.getElementById('check-all-users');
+  if (checkAll) checkAll.checked = false;
+  toggleSelectAllUsers(false);
+}
+
+async function applyBulkUserType(tipo_usuario) {
+  const checkboxes = document.querySelectorAll('input[name="select-user"]');
+  const selected = [];
+  for (const cb of checkboxes) {
+    if (cb.checked) selected.push(cb.value);
+  }
+
+  if (selected.length === 0) return;
+
+  if (!confirm(`¿Está seguro de que desea cambiar el tipo de usuario a "${tipo_usuario === 'institucional' ? 'Institucional' : 'Externo'}" para los ${selected.length} usuarios seleccionados?`)) {
+    return;
+  }
+
+  try {
+    await api('POST', '/users/bulk-type', { cedulas: selected, tipo_usuario });
+    clearUserSelection();
+    loadUsers();
+  } catch (err) {
+    alert('Error al aplicar cambios en lote: ' + err.message);
+  }
 }
 
 // ── Dispositivos ──────────────────────────────────────────────────────────────
@@ -1997,12 +2104,12 @@ async function viewUser(cedula) {
           <p class="text-gray-600 text-sm">${new Date(user.fecha_registro).toLocaleString('es-EC')}</p>
         </div>
         <div>
-          <p class="text-xs text-gray-500 mb-1">Tipo de Usuario</p>
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-            user.tipo_usuario === 'institucional' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'
-          }">
-            ${user.tipo_usuario === 'institucional' ? 'Institucional' : 'Externo'}
-          </span>
+          <p class="text-xs text-gray-500 mb-1">Tipo de Usuario (Click para cambiar)</p>
+          <select id="user-detail-tipo-select" onchange="changeUserType('${user.cedula}', this.value)"
+            class="text-xs font-semibold rounded-lg border border-gray-300 bg-white px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-750 cursor-pointer">
+            <option value="institucional" ${user.tipo_usuario === 'institucional' ? 'selected' : ''}>Institucional</option>
+            <option value="externo" ${user.tipo_usuario === 'externo' ? 'selected' : ''}>Externo</option>
+          </select>
         </div>
         <div>
           <p class="text-xs text-gray-500 mb-1">Aceptación de Términos</p>

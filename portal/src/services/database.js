@@ -452,10 +452,44 @@ async function bulkUpdateUserActive(cedulas, active) {
 /**
  * Elimina un usuario y todos sus registros RADIUS.
  */
-async function deleteUser(cedula) {
+async function deleteUser(cedula, purgeHistory = false) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    if (purgeHistory) {
+      // 1. Obtener todas las MACs de dispositivos del usuario
+      const macsRes = await client.query(
+        'SELECT mac_address FROM dispositivos_usuario WHERE cedula = $1',
+        [cedula]
+      );
+      const macs = [];
+      for (const r of macsRes.rows) {
+        const clean = r.mac_address.trim().toUpperCase();
+        macs.push(clean.replace(/:/g, '-'));
+        macs.push(clean.replace(/-/g, ':'));
+      }
+
+      // 2. Eliminar de radacct (tanto por cédula como por MAC de sus dispositivos)
+      await client.query(
+        `DELETE FROM radacct WHERE username = $1 OR UPPER(callingstationid) = ANY($2)`,
+        [cedula, macs]
+      );
+
+      // 3. Eliminar dispositivos registrados
+      await client.query(
+        `DELETE FROM dispositivos_usuario WHERE cedula = $1`,
+        [cedula]
+      );
+
+      // 4. Eliminar historial de accesos
+      await client.query(
+        `DELETE FROM access_log WHERE cedula = $1`,
+        [cedula]
+      );
+    }
+
+    // 5. Eliminar credenciales y perfil (siempre se ejecuta)
     await client.query(`DELETE FROM radcheck    WHERE username = $1`, [cedula]);
     await client.query(`DELETE FROM radreply    WHERE username = $1`, [cedula]);
     await client.query(`DELETE FROM radusergroup WHERE username = $1`, [cedula]);

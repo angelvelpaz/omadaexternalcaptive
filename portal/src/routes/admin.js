@@ -539,11 +539,12 @@ router.delete('/api/users/:cedula', requireAdmin, requireRol('administrador', 's
   async (req, res, next) => {
     try {
       const cedula = req.params.cedula;
+      const purgeHistory = req.query.purgeHistory === 'true';
       // 1. Obtener dispositivos registrados del usuario antes de borrarlo
       const devices = await db.getUserDevices(cedula);
 
       // 2. Borrar de la base de datos y de FreeRADIUS
-      await db.deleteUser(cedula);
+      await db.deleteUser(cedula, purgeHistory);
 
       // Auditoría
       const clientIp = getClientIp(req);
@@ -551,7 +552,7 @@ router.delete('/api/users/:cedula', requireAdmin, requireRol('administrador', 's
         username: req.adminUser,
         ipAddress: clientIp,
         accion: 'ELIMINAR_USUARIO',
-        detalles: `Eliminó usuario cédula: ${cedula}`
+        detalles: `Eliminó usuario cédula: ${cedula}. ¿Historial purgado?: ${purgeHistory}`
       });
 
       // 3. Desautorizar cada uno de sus dispositivos en segundo plano

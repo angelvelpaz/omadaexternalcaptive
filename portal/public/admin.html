@@ -2267,12 +2267,58 @@ async function toggleActiveModal(cedula, active) {
   } catch (err) { alert(err.message); }
 }
 
-async function confirmDelete(cedula, nombre) {
-  if (!confirm(`¿Eliminar a ${nombre} (${cedula})?\n\nEsto eliminará también sus registros RADIUS.`)) return;
+function confirmDelete(cedula, nombre) {
+  const modal = document.getElementById('user-modal');
+  const body = document.getElementById('modal-body');
+  document.querySelector('#user-modal h2').textContent = 'Confirmar Eliminación';
+
+  body.innerHTML = `
+    <div class="space-y-4 text-sm">
+      <div class="flex items-start gap-3">
+        <div class="bg-red-50 p-2.5 rounded-full text-red-600 shrink-0">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-800 text-sm">¿Eliminar usuario?</h3>
+          <p class="text-xs text-gray-500 mt-1">¿Está seguro de que desea eliminar a <strong>${esc(nombre)}</strong> (${cedula})?</p>
+          <p class="text-[11px] text-gray-400 mt-1">Se borrarán sus credenciales y perfiles de RADIUS permanentemente.</p>
+        </div>
+      </div>
+
+      <div class="bg-red-50/50 border border-red-100 rounded-lg p-3 space-y-1.5 mt-2">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="delete-purge-history" class="h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500">
+          <span class="text-xs font-semibold text-red-800">Eliminar historial completo de conexiones</span>
+        </label>
+        <p class="text-[10px] text-red-700/80 ml-6 leading-tight">Marque esta casilla para borrar también todo el historial de sesiones (radacct), bitácoras de acceso y dispositivos de este usuario. Esta acción es irreversible.</p>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t">
+        <button onclick="closeModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg text-xs transition-colors">
+          Cancelar
+        </button>
+        <button onclick="executeDelete('${cedula}')" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg text-xs transition-colors">
+          Eliminar Usuario
+        </button>
+      </div>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+async function executeDelete(cedula) {
+  const purgeHistory = document.getElementById('delete-purge-history').checked;
   try {
-    await api('DELETE', `/users/${cedula}`);
+    await api('DELETE', `/users/${cedula}?purgeHistory=${purgeHistory}`);
+    closeModal();
     loadUsers();
-  } catch (err) { alert(err.message); }
+  } catch (err) {
+    alert('Error al eliminar usuario: ' + err.message);
+  }
 }
 
 // ── Modal detalle de usuario ──────────────────────────────────────────────────

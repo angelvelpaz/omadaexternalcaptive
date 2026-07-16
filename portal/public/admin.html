@@ -877,7 +877,11 @@
               <div class="p-3 flex justify-between items-center">
                 <span class="text-gray-600">Sesiones de contabilidad (<span class="font-mono text-xs">radacct</span>)</span>
                 <div class="flex items-center gap-3">
-                  <span id="maint-count-acct" class="font-se              <div class="p-3 flex justify-between items-center">
+                  <span id="maint-count-acct" class="font-semibold text-gray-800">—</span>
+                  <button type="button" onclick="showMaintPreview('acct')" class="text-xs text-blue-600 hover:underline font-medium hidden" id="btn-maint-prev-acct">Previsualizar</button>
+                </div>
+              </div>
+              <div class="p-3 flex justify-between items-center">
                 <span class="text-gray-600">Historial de accesos (<span class="font-mono text-xs">access_log</span>)</span>
                 <div class="flex items-center gap-3">
                   <span id="maint-count-logs" class="font-semibold text-gray-800">—</span>

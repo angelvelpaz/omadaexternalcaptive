@@ -1347,37 +1347,46 @@ router.get('/api/audit-logs', requireAdmin,
 
 // ─── Tareas de Mantenimiento ──────────────────────────────────────────────────
 
-router.get('/api/maintenance/stats', requireAdmin, async (req, res, next) => {
-  try {
-    const stats = await db.getRandomMacStats();
-    res.json(stats);
-  } catch (err) { next(err); }
-});
+router.get('/api/maintenance/stats', requireAdmin,
+  query('cedula').optional().isString().trim(),
+  async (req, res, next) => {
+    try {
+      const cedula = req.query.cedula || '';
+      const stats = await db.getRandomMacStats({ cedula });
+      res.json(stats);
+    } catch (err) { next(err); }
+  }
+);
 
-router.get('/api/maintenance/preview', requireAdmin, async (req, res, next) => {
-  try {
-    const preview = await db.getRandomMacPreview();
-    res.json(preview);
-  } catch (err) { next(err); }
-});
+router.get('/api/maintenance/preview', requireAdmin,
+  query('cedula').optional().isString().trim(),
+  async (req, res, next) => {
+    try {
+      const cedula = req.query.cedula || '';
+      const preview = await db.getRandomMacPreview({ cedula });
+      res.json(preview);
+    } catch (err) { next(err); }
+  }
+);
 
 router.post('/api/maintenance/purge', requireAdmin,
   body('purgeDevices').isBoolean(),
   body('purgeAcct').isBoolean(),
   body('purgeLogs').isBoolean(),
+  body('cedula').optional().isString().trim(),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: 'Parámetros inválidos.' });
       }
-      const { purgeDevices, purgeAcct, purgeLogs } = req.body;
-      const result = await db.purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs });
+      const { purgeDevices, purgeAcct, purgeLogs, cedula = '' } = req.body;
+      const result = await db.purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs, cedula });
       
       await db.logAdminAudit(
         req.adminUser, 
         'DEPURAR_MAC_ALEATORIAS', 
-        `Depuración ejecutada. Disp: ${result.deletedDevices}, Acct: ${result.deletedAcct}, Logs: ${result.deletedLogs}`
+        `Depuración ejecutada. Filtro Cédula: ${cedula || 'Ninguno'}, Disp: ${result.deletedDevices}, Acct: ${result.deletedAcct}, Logs: ${result.deletedLogs}`
       );
 
       res.json({ success: true, result });

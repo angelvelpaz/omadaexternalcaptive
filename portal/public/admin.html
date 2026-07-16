@@ -815,6 +815,19 @@
             </div>
           </div>
 
+          <!-- Filtro por Cédula -->
+          <div class="bg-white border border-gray-200 rounded-lg p-3.5 space-y-2">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Filtrar por Cédula (Opcional)</label>
+            <div class="flex gap-2">
+              <input type="text" id="maint-filter-cedula" placeholder="ej: 1600617300 (deja vacío para analizar/depurar todo)" 
+                class="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+              <button type="button" onclick="loadMaintenanceStats()" 
+                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition-colors">
+                Aplicar Filtro
+              </button>
+            </div>
+          </div>
+
           <!-- Tabla de Resultados del Análisis -->
           <div class="bg-white border rounded-lg overflow-hidden text-sm">
             <div class="p-3 border-b bg-gray-50 font-semibold text-gray-600 flex justify-between items-center">
@@ -1719,7 +1732,6 @@ async function deleteDeviceFromList(cedula, mac) {
 }
 
 // ── Mantenimiento ─────────────────────────────────────────────────────────────
-// ── Mantenimiento ─────────────────────────────────────────────────────────────
 async function loadMaintenanceStats() {
   const btn = document.getElementById('btn-maint-analyze');
   const errEl = document.getElementById('maint-error');
@@ -1732,7 +1744,8 @@ async function loadMaintenanceStats() {
   }
 
   try {
-    const stats = await api('GET', '/maintenance/stats');
+    const cedula = document.getElementById('maint-filter-cedula').value.trim();
+    const stats = await api('GET', '/maintenance/stats?cedula=' + encodeURIComponent(cedula));
     document.getElementById('maint-count-devices').textContent = stats.devices;
     document.getElementById('maint-count-acct').textContent = stats.acct;
     document.getElementById('maint-count-logs').textContent = stats.logs;
@@ -1770,7 +1783,8 @@ async function showMaintPreview(type) {
   modal.classList.add('flex');
 
   try {
-    const preview = await api('GET', '/maintenance/preview');
+    const cedula = document.getElementById('maint-filter-cedula').value.trim();
+    const preview = await api('GET', '/maintenance/preview?cedula=' + encodeURIComponent(cedula));
     const list = preview[type] || [];
     
     if (list.length === 0) {
@@ -1891,7 +1905,8 @@ async function executePurge() {
   }
 
   try {
-    const res = await api('POST', '/maintenance/purge', { purgeDevices, purgeAcct, purgeLogs });
+    const cedula = document.getElementById('maint-filter-cedula').value.trim();
+    const res = await api('POST', '/maintenance/purge', { purgeDevices, purgeAcct, purgeLogs, cedula });
     if (res.success) {
       successEl.innerHTML = `✓ Depuración finalizada con éxito. <br/>` +
         `• Dispositivos eliminados: <strong>${res.result.deletedDevices}</strong><br/>` +

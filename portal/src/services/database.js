@@ -824,28 +824,53 @@ async function updateUserDevice(oldCedula, oldMac, newCedula, newMac) {
   );
 }
 
-async function getRandomMacPreview() {
+async function getRandomMacPreview({ cedula = '' } = {}) {
+  const isFiltered = !!cedula.trim();
+  const filterVal = isFiltered ? cedula.trim() : null;
+
+  const devicesQuery = isFiltered
+    ? `SELECT d.mac_address, d.cedula, u.nombres, u.apellidos, d.created_at
+       FROM dispositivos_usuario d
+       JOIN usuarios_portal u ON d.cedula = u.cedula
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(d.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+         AND d.cedula = $1
+       ORDER BY d.created_at DESC LIMIT 50`
+    : `SELECT d.mac_address, d.cedula, u.nombres, u.apellidos, d.created_at
+       FROM dispositivos_usuario d
+       JOIN usuarios_portal u ON d.cedula = u.cedula
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(d.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+       ORDER BY d.created_at DESC LIMIT 50`;
+
+  const acctQuery = isFiltered
+    ? `SELECT r.callingstationid AS mac_address, r.username, r.acctstarttime, r.acctinputoctets, r.acctoutputoctets
+       FROM radacct r
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(r.callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+         AND (r.username = $1 OR REPLACE(UPPER(r.callingstationid), ':', '-') IN (
+           SELECT REPLACE(UPPER(mac_address), ':', '-') FROM dispositivos_usuario WHERE cedula = $1
+         ))
+       ORDER BY r.acctstarttime DESC LIMIT 50`
+    : `SELECT r.callingstationid AS mac_address, r.username, r.acctstarttime, r.acctinputoctets, r.acctoutputoctets
+       FROM radacct r
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(r.callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+       ORDER BY r.acctstarttime DESC LIMIT 50`;
+
+  const logsQuery = isFiltered
+    ? `SELECT a.mac_address, a.cedula, u.nombres, u.apellidos, a.resultado, a.created_at
+       FROM access_log a
+       LEFT JOIN usuarios_portal u ON a.cedula = u.cedula
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(a.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+         AND a.cedula = $1
+       ORDER BY a.created_at DESC LIMIT 50`
+    : `SELECT a.mac_address, a.cedula, u.nombres, u.apellidos, a.resultado, a.created_at
+       FROM access_log a
+       LEFT JOIN usuarios_portal u ON a.cedula = u.cedula
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(a.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+       ORDER BY a.created_at DESC LIMIT 50`;
+
   const [devices, acct, logs] = await Promise.all([
-    pool.query(`
-      SELECT d.mac_address, d.cedula, u.nombres, u.apellidos, d.created_at
-      FROM dispositivos_usuario d
-      JOIN usuarios_portal u ON d.cedula = u.cedula
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(d.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-      ORDER BY d.created_at DESC LIMIT 50
-    `),
-    pool.query(`
-      SELECT r.callingstationid AS mac_address, r.username, r.acctstarttime, r.acctinputoctets, r.acctoutputoctets
-      FROM radacct r
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(r.callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-      ORDER BY r.acctstarttime DESC LIMIT 50
-    `),
-    pool.query(`
-      SELECT a.mac_address, a.cedula, u.nombres, u.apellidos, a.resultado, a.created_at
-      FROM access_log a
-      LEFT JOIN usuarios_portal u ON a.cedula = u.cedula
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(a.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-      ORDER BY a.created_at DESC LIMIT 50
-    `)
+    pool.query(devicesQuery, isFiltered ? [filterVal] : []),
+    pool.query(acctQuery, isFiltered ? [filterVal] : []),
+    pool.query(logsQuery, isFiltered ? [filterVal] : [])
   ]);
 
   return {
@@ -886,23 +911,43 @@ async function getRandomMacPreview() {
   };
 }
 
-async function getRandomMacStats() {
+async function getRandomMacStats({ cedula = '' } = {}) {
+  const isFiltered = !!cedula.trim();
+  const filterVal = isFiltered ? cedula.trim() : null;
+
+  const devicesQuery = isFiltered
+    ? `SELECT COUNT(*) AS count 
+       FROM dispositivos_usuario 
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+         AND cedula = $1`
+    : `SELECT COUNT(*) AS count 
+       FROM dispositivos_usuario 
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')`;
+
+  const acctQuery = isFiltered
+    ? `SELECT COUNT(*) AS count 
+       FROM radacct 
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+         AND (username = $1 OR REPLACE(UPPER(callingstationid), ':', '-') IN (
+           SELECT REPLACE(UPPER(mac_address), ':', '-') FROM dispositivos_usuario WHERE cedula = $1
+         ))`
+    : `SELECT COUNT(*) AS count 
+       FROM radacct 
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')`;
+
+  const logsQuery = isFiltered
+    ? `SELECT COUNT(*) AS count 
+       FROM access_log 
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+         AND cedula = $1`
+    : `SELECT COUNT(*) AS count 
+       FROM access_log 
+       WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')`;
+
   const [devices, acct, logs] = await Promise.all([
-    pool.query(`
-      SELECT COUNT(*) AS count 
-      FROM dispositivos_usuario 
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-    `),
-    pool.query(`
-      SELECT COUNT(*) AS count 
-      FROM radacct 
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-    `),
-    pool.query(`
-      SELECT COUNT(*) AS count 
-      FROM access_log 
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-    `)
+    pool.query(devicesQuery, isFiltered ? [filterVal] : []),
+    pool.query(acctQuery, isFiltered ? [filterVal] : []),
+    pool.query(logsQuery, isFiltered ? [filterVal] : [])
   ]);
 
   return {
@@ -912,32 +957,49 @@ async function getRandomMacStats() {
   };
 }
 
-async function purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs }) {
+async function purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs, cedula = '' } = {}) {
   let deletedDevices = 0;
   let deletedAcct = 0;
   let deletedLogs = 0;
 
+  const isFiltered = !!cedula.trim();
+  const filterVal = isFiltered ? cedula.trim() : null;
+
   if (purgeDevices) {
-    const res = await pool.query(`
-      DELETE FROM dispositivos_usuario 
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-    `);
+    const query = isFiltered
+      ? `DELETE FROM dispositivos_usuario 
+         WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+           AND cedula = $1`
+      : `DELETE FROM dispositivos_usuario 
+         WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')`;
+    
+    const res = await pool.query(query, isFiltered ? [filterVal] : []);
     deletedDevices = res.rowCount;
   }
 
   if (purgeAcct) {
-    const res = await pool.query(`
-      DELETE FROM radacct 
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-    `);
+    const query = isFiltered
+      ? `DELETE FROM radacct 
+         WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+           AND (username = $1 OR REPLACE(UPPER(callingstationid), ':', '-') IN (
+             SELECT REPLACE(UPPER(mac_address), ':', '-') FROM dispositivos_usuario WHERE cedula = $1
+           ))`
+      : `DELETE FROM radacct 
+         WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')`;
+         
+    const res = await pool.query(query, isFiltered ? [filterVal] : []);
     deletedAcct = res.rowCount;
   }
 
   if (purgeLogs) {
-    const res = await pool.query(`
-      DELETE FROM access_log 
-      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
-    `);
+    const query = isFiltered
+      ? `DELETE FROM access_log 
+         WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+           AND cedula = $1`
+      : `DELETE FROM access_log 
+         WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')`;
+         
+    const res = await pool.query(query, isFiltered ? [filterVal] : []);
     deletedLogs = res.rowCount;
   }
 

@@ -1476,6 +1476,7 @@ router.post('/api/maintenance/purge', requireAdmin,
   body('purgeDevices').isBoolean(),
   body('purgeAcct').isBoolean(),
   body('purgeLogs').isBoolean(),
+  body('purgeTempSessions').isBoolean(),
   body('cedula').optional().isString().trim(),
   async (req, res, next) => {
     try {
@@ -1483,18 +1484,74 @@ router.post('/api/maintenance/purge', requireAdmin,
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: 'Parámetros inválidos.' });
       }
-      const { purgeDevices, purgeAcct, purgeLogs, cedula = '' } = req.body;
-      const result = await db.purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs, cedula });
+      const { purgeDevices, purgeAcct, purgeLogs, purgeTempSessions, cedula = '' } = req.body;
+      const result = await db.purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs, purgeTempSessions, cedula });
       
       const clientIp = getClientIp(req);
       await db.logAdminAudit({
         username: req.adminUser,
         ipAddress: clientIp,
         accion: 'DEPURAR_MAC_ALEATORIAS',
-        detalles: `Depuración ejecutada. Filtro Cédula: ${cedula || 'Ninguno'}, Disp: ${result.deletedDevices}, Acct: ${result.deletedAcct}, Logs: ${result.deletedLogs}`
+        detalles: `Depuración ejecutada. Filtro Cédula: ${cedula || 'Ninguno'}, Disp: ${result.deletedDevices}, Acct: ${result.deletedAcct}, Logs: ${result.deletedLogs}, TempSessions: ${result.deletedTempSessions}`
       });
 
       res.json({ success: true, result });
+    } catch (err) { next(err); }
+  }
+);
+
+router.get('/api/maintenance/schedule', requireAdmin, async (req, res, next) => {
+  try {
+    const config = await db.getControllerConfig('maintenance_schedule');
+    const defaultConfig = {
+      enabled: false,
+      frequency: 'weekly',
+      ageDays: 30,
+      purgeDevices: true,
+      purgeAcct: true,
+      purgeLogs: true,
+      purgeTempSessions: true,
+      lastRun: null
+    };
+    res.json(config || defaultConfig);
+  } catch (err) { next(err); }
+});
+
+router.post('/api/maintenance/schedule', requireAdmin,
+  body('enabled').isBoolean(),
+  body('frequency').isIn(['daily', 'weekly', 'monthly']),
+  body('ageDays').isInt({ min: 1, max: 365 }),
+  body('purgeDevices').isBoolean(),
+  body('purgeAcct').isBoolean(),
+  body('purgeLogs').isBoolean(),
+  body('purgeTempSessions').isBoolean(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Parámetros inválidos.' });
+
+      const config = {
+        enabled: req.body.enabled,
+        frequency: req.body.frequency,
+        ageDays: parseInt(req.body.ageDays),
+        purgeDevices: req.body.purgeDevices,
+        purgeAcct: req.body.purgeAcct,
+        purgeLogs: req.body.purgeLogs,
+        purgeTempSessions: req.body.purgeTempSessions,
+        lastRun: req.body.lastRun || null
+      };
+
+      await db.saveControllerConfig('maintenance_schedule', config);
+
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'CONFIGURAR_DEPURACION_PROGRAMADA',
+        detalles: `Configuró depuración programada: Habilitado=${config.enabled}, Frecuencia=${config.frequency}, Edad=${config.ageDays} días`
+      });
+
+      res.json({ success: true });
     } catch (err) { next(err); }
   }
 );

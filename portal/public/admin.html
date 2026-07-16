@@ -877,15 +877,18 @@
               <div class="p-3 flex justify-between items-center">
                 <span class="text-gray-600">Sesiones de contabilidad (<span class="font-mono text-xs">radacct</span>)</span>
                 <div class="flex items-center gap-3">
-                  <span id="maint-count-acct" class="font-semibold text-gray-800">—</span>
-                  <button type="button" onclick="showMaintPreview('acct')" class="text-xs text-blue-600 hover:underline font-medium hidden" id="btn-maint-prev-acct">Previsualizar</button>
-                </div>
-              </div>
-              <div class="p-3 flex justify-between items-center">
+                  <span id="maint-count-acct" class="font-se              <div class="p-3 flex justify-between items-center">
                 <span class="text-gray-600">Historial de accesos (<span class="font-mono text-xs">access_log</span>)</span>
                 <div class="flex items-center gap-3">
                   <span id="maint-count-logs" class="font-semibold text-gray-800">—</span>
                   <button type="button" onclick="showMaintPreview('logs')" class="text-xs text-blue-600 hover:underline font-medium hidden" id="btn-maint-prev-logs">Previsualizar</button>
+                </div>
+              </div>
+              <div class="p-3 flex justify-between items-center bg-amber-50/50">
+                <span class="text-gray-750 font-medium">Sesiones temporales (MAC como username en <span class="font-mono text-xs">radacct</span>)</span>
+                <div class="flex items-center gap-3">
+                  <span id="maint-count-temp" class="font-semibold text-gray-800">—</span>
+                  <button type="button" onclick="showMaintPreview('temp_sessions')" class="text-xs text-blue-600 hover:underline font-medium hidden" id="btn-maint-prev-temp">Previsualizar</button>
                 </div>
               </div>
             </div>
@@ -894,7 +897,7 @@
           <!-- Opciones de Depuración -->
           <div class="space-y-2 pt-2">
             <span class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Tablas a limpiar</span>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <label class="flex items-center gap-2 bg-white p-3 border rounded-lg cursor-pointer hover:bg-gray-50 text-sm">
                 <input type="checkbox" id="maint-opt-devices" checked class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                 <span class="text-gray-700 font-medium">Dispositivos</span>
@@ -907,12 +910,16 @@
                 <input type="checkbox" id="maint-opt-logs" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                 <span class="text-gray-700 font-medium">Historial</span>
               </label>
+              <label class="flex items-center gap-2 bg-white p-3 border rounded-lg cursor-pointer hover:bg-gray-50 text-sm">
+                <input type="checkbox" id="maint-opt-temp" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                <span class="text-gray-700 font-medium text-amber-800">Sesiones Temp</span>
+              </label>
             </div>
           </div>
 
           <!-- Botón de Ejecutar -->
           <div class="pt-4 flex justify-end">
-            <button type="button" id="btn-maint-purge" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-5 rounded-lg text-sm transition-colors flex items-center gap-2">
+            <button type="button" id="btn-maint-purge" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-colors flex items-center gap-2">
               <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
@@ -920,6 +927,91 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- ── CONFIGURACION DE DEPURACION PROGRAMADA ── -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
+        <div class="flex items-center gap-2 mb-4 pb-3 border-b">
+          <svg class="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <h3 class="font-bold text-gray-800">Depuración Programada (Automática)</h3>
+            <p class="text-xs text-gray-500">Configure la depuración periódica en segundo plano para evitar la acumulación excesiva de registros.</p>
+          </div>
+        </div>
+
+        <form id="form-maint-schedule" onsubmit="saveMaintSchedule(event)" class="space-y-4 text-sm">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Habilitado -->
+            <div class="space-y-1">
+              <label class="block text-xs font-semibold text-gray-500 uppercase">Estado del servicio</label>
+              <select id="sched-enabled" class="w-full border rounded-lg p-2.5 bg-white text-gray-850 font-medium cursor-pointer">
+                <option value="false">Deshabilitado</option>
+                <option value="true">Habilitado (Automático)</option>
+              </select>
+            </div>
+
+            <!-- Frecuencia -->
+            <div class="space-y-1">
+              <label class="block text-xs font-semibold text-gray-500 uppercase">Frecuencia de ejecución</label>
+              <select id="sched-frequency" class="w-full border rounded-lg p-2.5 bg-white text-gray-850 font-medium cursor-pointer">
+                <option value="daily">Diaria (Medianoche)</option>
+                <option value="weekly">Semanal (Domingos)</option>
+                <option value="monthly">Mensual (Día 1)</option>
+              </select>
+            </div>
+
+            <!-- Antigüedad de registros -->
+            <div class="space-y-1">
+              <label class="block text-xs font-semibold text-gray-500 uppercase">Antigüedad mínima de registros</label>
+              <select id="sched-age" class="w-full border rounded-lg p-2.5 bg-white text-gray-850 font-medium cursor-pointer">
+                <option value="1">Registros de más de 1 día</option>
+                <option value="3">Registros de más de 3 días</option>
+                <option value="7">Registros de más de 7 días</option>
+                <option value="15">Registros de más de 15 días</option>
+                <option value="30">Registros de más de 30 días</option>
+                <option value="90">Registros de más de 90 días</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Opciones a Limpiar -->
+          <div class="space-y-2 pt-2">
+            <label class="block text-xs font-semibold text-gray-500 uppercase">Objetivos de la depuración automática</label>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <label class="flex items-center gap-2 bg-gray-50 p-2.5 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100">
+                <input type="checkbox" id="sched-opt-devices" checked class="h-4 w-4 text-indigo-650 border-gray-300 rounded focus:ring-blue-500">
+                <span class="text-gray-700">Dispositivos</span>
+              </label>
+              <label class="flex items-center gap-2 bg-gray-50 p-2.5 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100">
+                <input type="checkbox" id="sched-opt-acct" class="h-4 w-4 text-indigo-650 border-gray-300 rounded focus:ring-blue-500">
+                <span class="text-gray-700">Contabilidad</span>
+              </label>
+              <label class="flex items-center gap-2 bg-gray-50 p-2.5 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100">
+                <input type="checkbox" id="sched-opt-logs" class="h-4 w-4 text-indigo-650 border-gray-300 rounded focus:ring-blue-500">
+                <span class="text-gray-700">Historial</span>
+              </label>
+              <label class="flex items-center gap-2 bg-gray-50 p-2.5 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100">
+                <input type="checkbox" id="sched-opt-temp" class="h-4 w-4 text-indigo-650 border-gray-300 rounded focus:ring-blue-500">
+                <span class="text-gray-700">Sesiones Temp</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Ultima ejecución info -->
+          <div id="sched-last-run-info" class="hidden text-xs bg-indigo-50 text-indigo-850 p-3 rounded-lg border border-indigo-150">
+            <span class="font-bold">Última ejecución automática:</span> <span id="sched-last-run-date">Nunca</span> | 
+            <span class="font-bold">Resultados:</span> <span id="sched-last-run-results">Ninguno</span>
+          </div>
+
+          <!-- Botón de guardar -->
+          <div class="pt-3 flex justify-end">
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-colors">
+              Guardar Configuración Programada
+            </button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -1269,7 +1361,10 @@ function switchTab(tab) {
   else if (tab === 'controllers') loadControllers();
   else if (tab === 'reports') loadReports();
   else if (tab === 'branding') loadBranding();
-  else if (tab === 'maintenance') loadMaintenanceStats();
+  else if (tab === 'maintenance') {
+    loadMaintenanceStats();
+    loadMaintSchedule();
+  }
   else if (tab === 'external-db') loadExternalDb();
   else if (tab === 'admins') loadAdmins();
   else if (tab === 'audit') loadAuditLogs(0);
@@ -1894,11 +1989,13 @@ async function loadMaintenanceStats() {
     document.getElementById('maint-count-devices').textContent = stats.devices;
     document.getElementById('maint-count-acct').textContent = stats.acct;
     document.getElementById('maint-count-logs').textContent = stats.logs;
+    document.getElementById('maint-count-temp').textContent = stats.tempSessions;
 
     // Mostrar u ocultar botones de previsualización
     toggleMaintPrevBtn('btn-maint-prev-devices', stats.devices > 0);
     toggleMaintPrevBtn('btn-maint-prev-acct', stats.acct > 0);
     toggleMaintPrevBtn('btn-maint-prev-logs', stats.logs > 0);
+    toggleMaintPrevBtn('btn-maint-prev-temp', stats.tempSessions > 0);
   } catch (err) {
     errEl.textContent = 'Error al analizar base de datos: ' + err.message;
     errEl.classList.remove('hidden');
@@ -1921,7 +2018,7 @@ function toggleMaintPrevBtn(id, show) {
 async function showMaintPreview(type) {
   const modal = document.getElementById('user-modal');
   const body = document.getElementById('modal-body');
-  document.querySelector('#user-modal h2').textContent = `Previsualización de registros a depurar (${type === 'devices' ? 'Dispositivos' : type === 'acct' ? 'Contabilidad' : 'Historial'})`;
+  document.querySelector('#user-modal h2').textContent = `Previsualización de registros a depurar (${type === 'devices' ? 'Dispositivos' : type === 'acct' ? 'Contabilidad' : type === 'logs' ? 'Historial' : 'Sesiones Temporales'})`;
 
   body.innerHTML = '<div class="py-8 text-center text-gray-400">Cargando previsualización...</div>';
   modal.classList.remove('hidden');
@@ -2010,6 +2107,33 @@ async function showMaintPreview(type) {
           `).join('')}
         </tbody>
       `;
+    } else if (type === 'temp_sessions') {
+      html += `
+        <thead class="bg-gray-50 border-b sticky top-0 text-gray-500 uppercase font-semibold text-[10px] tracking-wider">
+          <tr>
+            <th class="p-3">MAC Address</th>
+            <th class="p-3">Marca</th>
+            <th class="p-3">Username (Temp)</th>
+            <th class="p-3">Hora Inicio</th>
+            <th class="p-3">Hora Fin</th>
+            <th class="p-3">Consumo</th>
+            <th class="p-3">Causa Cierre</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${list.map(r => `
+            <tr class="hover:bg-gray-50">
+              <td class="p-3 font-mono font-semibold text-gray-700">${esc(r.mac_address)}</td>
+              <td class="p-3 text-xs text-gray-500 font-medium">${esc(r.vendor)}</td>
+              <td class="p-3 font-mono">${esc(r.username)}</td>
+              <td class="p-3 text-gray-400 text-[11px]">${new Date(r.acctstarttime).toLocaleString('es-EC')}</td>
+              <td class="p-3 text-gray-400 text-[11px]">${r.acctstoptime ? new Date(r.acctstoptime).toLocaleString('es-EC') : 'Activa'}</td>
+              <td class="p-3 font-semibold text-blue-600">${(r.total_bytes / (1024 * 1024)).toFixed(2)} MB</td>
+              <td class="p-3 font-medium text-gray-500">${esc(r.terminate_cause)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      `;
     }
 
     html += '</table></div>';
@@ -2029,13 +2153,14 @@ async function executePurge() {
   const purgeDevices = document.getElementById('maint-opt-devices').checked;
   const purgeAcct = document.getElementById('maint-opt-acct').checked;
   const purgeLogs = document.getElementById('maint-opt-logs').checked;
+  const purgeTempSessions = document.getElementById('maint-opt-temp').checked;
 
-  if (!purgeDevices && !purgeAcct && !purgeLogs) {
+  if (!purgeDevices && !purgeAcct && !purgeLogs && !purgeTempSessions) {
     alert('Por favor seleccione al menos una tabla para depurar.');
     return;
   }
 
-  if (!confirm('¿Está seguro de que desea eliminar permanentemente los registros de las tablas seleccionadas con MAC aleatoria? Esta operación es irreversible.')) {
+  if (!confirm('¿Está seguro de que desea eliminar permanentemente los registros de las tablas seleccionadas? Esta operación es irreversible.')) {
     return;
   }
 
@@ -2051,12 +2176,13 @@ async function executePurge() {
 
   try {
     const cedula = document.getElementById('maint-filter-cedula').value.trim();
-    const res = await api('POST', '/maintenance/purge', { purgeDevices, purgeAcct, purgeLogs, cedula });
+    const res = await api('POST', '/maintenance/purge', { purgeDevices, purgeAcct, purgeLogs, purgeTempSessions, cedula });
     if (res.success) {
       successEl.innerHTML = `✓ Depuración finalizada con éxito. <br/>` +
         `• Dispositivos eliminados: <strong>${res.result.deletedDevices}</strong><br/>` +
         `• Sesiones de contabilidad eliminadas: <strong>${res.result.deletedAcct}</strong><br/>` +
-        `• Historial de accesos eliminado: <strong>${res.result.deletedLogs}</strong>`;
+        `• Historial de accesos eliminado: <strong>${res.result.deletedLogs}</strong><br/>` +
+        `• Sesiones temporales (pre-auth) eliminadas: <strong>${res.result.deletedTempSessions}</strong>`;
       successEl.classList.remove('hidden');
       
       await loadMaintenanceStats();
@@ -2067,12 +2193,65 @@ async function executePurge() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = `
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-        <span>Ejecutar Depuración</span>`;
+      btn.textContent = 'Ejecutar Depuración';
     }
+  }
+}
+
+async function loadMaintSchedule() {
+  try {
+    const config = await api('GET', '/maintenance/schedule');
+    document.getElementById('sched-enabled').value = String(config.enabled);
+    document.getElementById('sched-frequency').value = config.frequency;
+    document.getElementById('sched-age').value = String(config.ageDays);
+
+    document.getElementById('sched-opt-devices').checked = !!config.purgeDevices;
+    document.getElementById('sched-opt-acct').checked = !!config.purgeAcct;
+    document.getElementById('sched-opt-logs').checked = !!config.purgeLogs;
+    document.getElementById('sched-opt-temp').checked = !!config.purgeTempSessions;
+
+    const infoEl = document.getElementById('sched-last-run-info');
+    if (config.lastRun) {
+      infoEl.classList.remove('hidden');
+      document.getElementById('sched-last-run-date').textContent = new Date(config.lastRun).toLocaleString('es-EC');
+      if (config.lastResults) {
+        document.getElementById('sched-last-run-results').textContent = 
+          `Disp: ${config.lastResults.deletedDevices || 0}, ` +
+          `Acct: ${config.lastResults.deletedAcct || 0}, ` +
+          `Logs: ${config.lastResults.deletedLogs || 0}, ` +
+          `Temp: ${config.lastResults.deletedTempSessions || 0}`;
+      } else {
+        document.getElementById('sched-last-run-results').textContent = 'Éxito';
+      }
+    } else {
+      infoEl.classList.add('hidden');
+    }
+  } catch (err) {
+    console.error('Error al cargar configuración de depuración programada:', err.message);
+  }
+}
+
+async function saveMaintSchedule(event) {
+  event.preventDefault();
+  const enabled = document.getElementById('sched-enabled').value === 'true';
+  const frequency = document.getElementById('sched-frequency').value;
+  const ageDays = parseInt(document.getElementById('sched-age').value);
+
+  const purgeDevices = document.getElementById('sched-opt-devices').checked;
+  const purgeAcct = document.getElementById('sched-opt-acct').checked;
+  const purgeLogs = document.getElementById('sched-opt-logs').checked;
+  const purgeTempSessions = document.getElementById('sched-opt-temp').checked;
+
+  try {
+    const res = await api('POST', '/maintenance/schedule', {
+      enabled, frequency, ageDays, purgeDevices, purgeAcct, purgeLogs, purgeTempSessions
+    });
+    if (res.success) {
+      alert('✓ Configuración de depuración programada guardada con éxito.');
+      await loadMaintSchedule();
+    }
+  } catch (err) {
+    alert('Error al guardar configuración: ' + err.message);
   }
 }
 

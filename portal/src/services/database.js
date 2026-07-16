@@ -999,10 +999,32 @@ async function getRandomMacPreview({ cedula = '' } = {}) {
        WHERE SUBSTRING(UPPER(REPLACE(REPLACE(a.mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
        ORDER BY a.created_at DESC LIMIT 50`;
 
-  const [devices, acct, logs] = await Promise.all([
+  const tempQuery = isFiltered
+    ? `SELECT r.callingstationid AS mac_address, r.username, r.acctstarttime, r.acctstoptime, r.acctinputoctets, r.acctoutputoctets, r.acctterminatecause
+       FROM radacct r
+       WHERE REPLACE(REPLACE(r.username, ':', ''), '-', '') ~* '^[0-9a-f]{12}$'
+         AND NOT EXISTS (
+           SELECT 1 FROM dispositivos_usuario d
+           WHERE REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') = REPLACE(REPLACE(r.username, ':', ''), '-', '')
+         )
+         AND REPLACE(REPLACE(r.callingstationid, ':', ''), '-', '') IN (
+           SELECT REPLACE(REPLACE(UPPER(mac_address), ':', ''), '-', '') FROM access_log WHERE cedula = $1
+         )
+       ORDER BY r.acctstarttime DESC LIMIT 50`
+    : `SELECT r.callingstationid AS mac_address, r.username, r.acctstarttime, r.acctstoptime, r.acctinputoctets, r.acctoutputoctets, r.acctterminatecause
+       FROM radacct r
+       WHERE REPLACE(REPLACE(r.username, ':', ''), '-', '') ~* '^[0-9a-f]{12}$'
+         AND NOT EXISTS (
+           SELECT 1 FROM dispositivos_usuario d
+           WHERE REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') = REPLACE(REPLACE(r.username, ':', ''), '-', '')
+         )
+       ORDER BY r.acctstarttime DESC LIMIT 50`;
+
+  const [devices, acct, logs, tempSessions] = await Promise.all([
     pool.query(devicesQuery, isFiltered ? [filterVal] : []),
     pool.query(acctQuery, isFiltered ? [filterVal] : []),
-    pool.query(logsQuery, isFiltered ? [filterVal] : [])
+    pool.query(logsQuery, isFiltered ? [filterVal] : []),
+    pool.query(tempQuery, isFiltered ? [filterVal] : [])
   ]);
 
   return {
@@ -1037,6 +1059,19 @@ async function getRandomMacPreview({ cedula = '' } = {}) {
         nombre_completo: r.nombres ? `${r.nombres} ${r.apellidos}`.trim() : 'Desconocido',
         resultado: r.resultado,
         created_at: r.created_at,
+        vendor
+      };
+    }),
+    temp_sessions: tempSessions.rows.map(r => {
+      let vendor = 'Genérico';
+      try { vendor = getVendor(r.mac_address); } catch (e) {}
+      return {
+        mac_address: r.mac_address,
+        username: r.username,
+        acctstarttime: r.acctstarttime,
+        acctstoptime: r.acctstoptime,
+        total_bytes: parseInt(r.acctinputoctets || 0) + parseInt(r.acctoutputoctets || 0),
+        terminate_cause: r.acctterminatecause || 'Desconocido',
         vendor
       };
     })
@@ -1076,23 +1111,45 @@ async function getRandomMacStats({ cedula = '' } = {}) {
        FROM access_log 
        WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')`;
 
-  const [devices, acct, logs] = await Promise.all([
+  const tempQuery = isFiltered
+    ? `SELECT COUNT(*) AS count
+       FROM radacct r
+       WHERE REPLACE(REPLACE(r.username, ':', ''), '-', '') ~* '^[0-9a-f]{12}$'
+         AND NOT EXISTS (
+           SELECT 1 FROM dispositivos_usuario d
+           WHERE REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') = REPLACE(REPLACE(r.username, ':', ''), '-', '')
+         )
+         AND REPLACE(REPLACE(r.callingstationid, ':', ''), '-', '') IN (
+           SELECT REPLACE(REPLACE(UPPER(mac_address), ':', ''), '-', '') FROM access_log WHERE cedula = $1
+         )`
+    : `SELECT COUNT(*) AS count
+       FROM radacct r
+       WHERE REPLACE(REPLACE(r.username, ':', ''), '-', '') ~* '^[0-9a-f]{12}$'
+         AND NOT EXISTS (
+           SELECT 1 FROM dispositivos_usuario d
+           WHERE REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') = REPLACE(REPLACE(r.username, ':', ''), '-', '')
+         )`;
+
+  const [devices, acct, logs, tempSessions] = await Promise.all([
     pool.query(devicesQuery, isFiltered ? [filterVal] : []),
     pool.query(acctQuery, isFiltered ? [filterVal] : []),
-    pool.query(logsQuery, isFiltered ? [filterVal] : [])
+    pool.query(logsQuery, isFiltered ? [filterVal] : []),
+    pool.query(tempQuery, isFiltered ? [filterVal] : [])
   ]);
 
   return {
     devices: parseInt(devices.rows[0].count),
     acct: parseInt(acct.rows[0].count),
-    logs: parseInt(logs.rows[0].count)
+    logs: parseInt(logs.rows[0].count),
+    tempSessions: parseInt(tempSessions.rows[0].count)
   };
 }
 
-async function purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs, cedula = '' } = {}) {
+async function purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs, purgeTempSessions, cedula = '' } = {}) {
   let deletedDevices = 0;
   let deletedAcct = 0;
   let deletedLogs = 0;
+  let deletedTempSessions = 0;
 
   const isFiltered = !!cedula.trim();
   const filterVal = isFiltered ? cedula.trim() : null;
@@ -1135,7 +1192,79 @@ async function purgeRandomMacs({ purgeDevices, purgeAcct, purgeLogs, cedula = ''
     deletedLogs = res.rowCount;
   }
 
-  return { deletedDevices, deletedAcct, deletedLogs };
+  if (purgeTempSessions) {
+    const query = isFiltered
+      ? `DELETE FROM radacct r
+         WHERE REPLACE(REPLACE(r.username, ':', ''), '-', '') ~* '^[0-9a-f]{12}$'
+           AND NOT EXISTS (
+             SELECT 1 FROM dispositivos_usuario d
+             WHERE REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') = REPLACE(REPLACE(r.username, ':', ''), '-', '')
+           )
+           AND REPLACE(REPLACE(r.callingstationid, ':', ''), '-', '') IN (
+             SELECT REPLACE(REPLACE(UPPER(mac_address), ':', ''), '-', '') FROM access_log WHERE cedula = $1
+           )`
+      : `DELETE FROM radacct r
+         WHERE REPLACE(REPLACE(r.username, ':', ''), '-', '') ~* '^[0-9a-f]{12}$'
+           AND NOT EXISTS (
+             SELECT 1 FROM dispositivos_usuario d
+             WHERE REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') = REPLACE(REPLACE(r.username, ':', ''), '-', '')
+           )`;
+    const res = await pool.query(query, isFiltered ? [filterVal] : []);
+    deletedTempSessions = res.rowCount;
+  }
+
+  return { deletedDevices, deletedAcct, deletedLogs, deletedTempSessions };
+}
+
+async function runScheduledMaintenance({ ageDays, purgeDevices, purgeAcct, purgeLogs, purgeTempSessions }) {
+  let deletedDevices = 0;
+  let deletedAcct = 0;
+  let deletedLogs = 0;
+  let deletedTempSessions = 0;
+
+  const intervalStr = `${parseInt(ageDays)} days`;
+
+  if (purgeDevices) {
+    const res = await pool.query(`
+      DELETE FROM dispositivos_usuario 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+        AND created_at < NOW() - CAST($1 AS INTERVAL)
+    `, [intervalStr]);
+    deletedDevices = res.rowCount;
+  }
+
+  if (purgeAcct) {
+    const res = await pool.query(`
+      DELETE FROM radacct 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(callingstationid, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+        AND acctstarttime < NOW() - CAST($1 AS INTERVAL)
+    `, [intervalStr]);
+    deletedAcct = res.rowCount;
+  }
+
+  if (purgeLogs) {
+    const res = await pool.query(`
+      DELETE FROM access_log 
+      WHERE SUBSTRING(UPPER(REPLACE(REPLACE(mac_address, ':', ''), '-', '')), 2, 1) IN ('2', '6', 'A', 'E')
+        AND created_at < NOW() - CAST($1 AS INTERVAL)
+    `, [intervalStr]);
+    deletedLogs = res.rowCount;
+  }
+
+  if (purgeTempSessions) {
+    const res = await pool.query(`
+      DELETE FROM radacct r
+      WHERE REPLACE(REPLACE(r.username, ':', ''), '-', '') ~* '^[0-9a-f]{12}$'
+        AND NOT EXISTS (
+          SELECT 1 FROM dispositivos_usuario d
+          WHERE REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') = REPLACE(REPLACE(r.username, ':', ''), '-', '')
+        )
+        AND r.acctstarttime < NOW() - CAST($1 AS INTERVAL)
+    `, [intervalStr]);
+    deletedTempSessions = res.rowCount;
+  }
+
+  return { deletedDevices, deletedAcct, deletedLogs, deletedTempSessions };
 }
 
 // ─── Gestión de administradores y auditoría ────────────────────────────────────
@@ -1398,7 +1527,7 @@ module.exports = {
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,
-  getRandomMacStats, getRandomMacPreview, purgeRandomMacs,
+  getRandomMacStats, getRandomMacPreview, purgeRandomMacs, runScheduledMaintenance,
   // administradores y auditoría
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,

@@ -9,6 +9,7 @@ const routes = require('./routes/index');
 const adminRoutes = require('./routes/admin');
 const db = require('./services/database');
 const statsWorker = require('./services/statsWorker');
+const maintenanceWorker = require('./services/maintenanceWorker');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -62,6 +63,9 @@ async function start() {
     
     // Iniciar el recolector de estadísticas de consumo en background
     statsWorker.startStatsWorker();
+
+    // Iniciar el programador de depuración automática en background
+    maintenanceWorker.startMaintenanceWorker();
   });
 }
 

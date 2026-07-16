@@ -474,48 +474,52 @@ async function getStats() {
     `),
     pool.query(`
       SELECT COUNT(*) AS today_logins
-      FROM access_log
-      WHERE created_at >= CURRENT_DATE AND resultado = 'success'
+      FROM access_log a
+      JOIN usuarios_portal u ON u.cedula = a.cedula
+      JOIN dispositivos_usuario d ON (d.cedula = u.cedula AND REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-'))
+      WHERE a.created_at >= CURRENT_DATE AND a.resultado = 'success'
     `),
     pool.query(`
-      SELECT vendor, COUNT(*) AS total
-      FROM access_log
-      WHERE created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY vendor ORDER BY total DESC
+      SELECT a.vendor, COUNT(*) AS total
+      FROM access_log a
+      JOIN usuarios_portal u ON u.cedula = a.cedula
+      JOIN dispositivos_usuario d ON (d.cedula = u.cedula AND REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-'))
+      WHERE a.created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY a.vendor ORDER BY total DESC
     `),
     pool.query(`
-      SELECT resultado, COUNT(*) AS total
-      FROM access_log
-      WHERE created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY resultado
+      SELECT a.resultado, COUNT(*) AS total
+      FROM access_log a
+      JOIN usuarios_portal u ON u.cedula = a.cedula
+      JOIN dispositivos_usuario d ON (d.cedula = u.cedula AND REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-'))
+      WHERE a.created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY a.resultado
     `),
     pool.query(`
       SELECT a.cedula, u.nombres, u.apellidos, a.vendor, a.resultado, a.created_at
       FROM access_log a
-      LEFT JOIN usuarios_portal u ON u.cedula = a.cedula
+      JOIN usuarios_portal u ON u.cedula = a.cedula
+      JOIN dispositivos_usuario d ON (d.cedula = u.cedula AND REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-'))
       ORDER BY a.created_at DESC LIMIT 10
     `),
     pool.query(`
       SELECT
-        COALESCE(u.cedula, r.username) AS username,
-        COALESCE(u.nombres || ' ' || u.apellidos, 'Desconocido') AS nombre_completo,
+        u.cedula AS username,
+        u.nombres || ' ' || u.apellidos AS nombre_completo,
         SUM(r.acctinputoctets + r.acctoutputoctets) AS total_bytes
       FROM radacct r
-      LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
-      LEFT JOIN usuarios_portal u ON u.cedula = (
-        CASE 
-          WHEN r.username ~ '^[0-9]+$' THEN r.username 
-          ELSE d.cedula 
-        END
-      )
-      GROUP BY COALESCE(u.cedula, r.username), nombre_completo
+      JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+      JOIN usuarios_portal u ON u.cedula = d.cedula
+      GROUP BY u.cedula, nombre_completo
       ORDER BY total_bytes DESC
       LIMIT 10
     `),
     pool.query(`
-      SELECT DISTINCT callingstationid
-      FROM radacct
-      WHERE callingstationid IS NOT NULL AND callingstationid <> ''
+      SELECT DISTINCT r.callingstationid
+      FROM radacct r
+      JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+      JOIN usuarios_portal u ON u.cedula = d.cedula
+      WHERE r.callingstationid IS NOT NULL AND r.callingstationid <> ''
     `),
   ]);
 

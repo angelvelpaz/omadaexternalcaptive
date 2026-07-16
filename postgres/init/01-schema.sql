@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS usuarios_portal (
     acepta_terminos        BOOLEAN NOT NULL DEFAULT TRUE,
     fecha_acepta_terminos  TIMESTAMPTZ DEFAULT NOW(),
     max_dispositivos       INTEGER DEFAULT 1,
+    tipo_usuario           VARCHAR(20) DEFAULT 'externo',
     terminos_aceptados     TEXT
 );
 

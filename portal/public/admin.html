@@ -348,6 +348,7 @@
                 <th class="px-4 py-3">Cédula</th>
                 <th class="px-4 py-3">Nombre completo</th>
                 <th class="px-4 py-3 hidden md:table-cell">Email</th>
+                <th class="px-4 py-3 hidden md:table-cell">Tipo</th>
                 <th class="px-4 py-3 hidden lg:table-cell">Registro</th>
                 <th class="px-4 py-3 text-center">Estado</th>
                 <th class="px-4 py-3 text-right">Acciones</th>
@@ -1490,6 +1491,13 @@ async function loadUsers() {
         <td class="px-4 py-3 font-mono text-xs text-gray-700">${u.cedula}</td>
         <td class="px-4 py-3 text-gray-800">${esc(u.nombres)} ${esc(u.apellidos)}</td>
         <td class="px-4 py-3 text-gray-500 hidden md:table-cell text-xs">${esc(u.email)}</td>
+        <td class="px-4 py-3 hidden md:table-cell text-xs">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+            u.tipo_usuario === 'institucional' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'
+          }">
+            ${u.tipo_usuario === 'institucional' ? 'Institucional' : 'Externo'}
+          </span>
+        </td>
         <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">${new Date(u.fecha_registro).toLocaleDateString('es-EC')}</td>
         <td class="px-4 py-3 text-center">
           <button onclick="toggleActive('${u.cedula}', ${!u.activo})"
@@ -1505,7 +1513,7 @@ async function loadUsers() {
           ${tieneRol('administrador') ? `<button onclick="confirmDelete('${u.cedula}', '${esc(u.nombres)} ${esc(u.apellidos)}')"
             class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>` : ''}
         </td>
-      </tr>`).join('') || `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No hay usuarios</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">No hay usuarios</td></tr>`;
   } catch (err) {
     console.error(err);
   }
@@ -1987,6 +1995,14 @@ async function viewUser(cedula) {
         <div>
           <p class="text-xs text-gray-500 mb-1">Registro</p>
           <p class="text-gray-600 text-sm">${new Date(user.fecha_registro).toLocaleString('es-EC')}</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1">Tipo de Usuario</p>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+            user.tipo_usuario === 'institucional' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'
+          }">
+            ${user.tipo_usuario === 'institucional' ? 'Institucional' : 'Externo'}
+          </span>
         </div>
         <div>
           <p class="text-xs text-gray-500 mb-1">Aceptación de Términos</p>

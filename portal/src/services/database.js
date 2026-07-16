@@ -82,14 +82,42 @@ async function connect() {
     console.log('[DB] Administrador principal ("admin") creado por defecto.');
   }
 
-  // Asegurar que la columna terminos_aceptados exista en usuarios_portal
+  // Asegurar que las columnas terminos_aceptados y tipo_usuario existan en usuarios_portal
   try {
     await client.query(`
       ALTER TABLE usuarios_portal 
       ADD COLUMN IF NOT EXISTS terminos_aceptados TEXT;
     `);
+    await client.query(`
+      ALTER TABLE usuarios_portal 
+      ADD COLUMN IF NOT EXISTS tipo_usuario VARCHAR(20) DEFAULT 'externo';
+    `);
   } catch (colErr) {
-    console.error('[DB] Advertencia al validar columna terminos_aceptados:', colErr.message);
+    console.error('[DB] Advertencia al validar columnas adicionales en usuarios_portal:', colErr.message);
+  }
+
+  // Inicializar grupos RADIUS por defecto si no existen
+  try {
+    await client.query(`
+      INSERT INTO radgroupreply (groupname, attribute, op, value)
+      SELECT groupname, attribute, op, value FROM (
+        VALUES
+          ('captive-portal-users-institucional', 'Session-Timeout', ':=', '43200'),
+          ('captive-portal-users-institucional', 'Idle-Timeout', ':=', '3600'),
+          ('captive-portal-users-institucional', 'WISPr-Bandwidth-Max-Up', ':=', '10240000'),
+          ('captive-portal-users-institucional', 'WISPr-Bandwidth-Max-Down', ':=', '20480000'),
+          ('captive-portal-users-externo', 'Session-Timeout', ':=', '7200'),
+          ('captive-portal-users-externo', 'Idle-Timeout', ':=', '900'),
+          ('captive-portal-users-externo', 'WISPr-Bandwidth-Max-Up', ':=', '3145728'),
+          ('captive-portal-users-externo', 'WISPr-Bandwidth-Max-Down', ':=', '5242880')
+      ) AS t(groupname, attribute, op, value)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM radgroupreply r 
+        WHERE r.groupname = t.groupname AND r.attribute = t.attribute
+      );
+    `);
+  } catch (grpErr) {
+    console.error('[DB] Advertencia al sembrar grupos RADIUS:', grpErr.message);
   }
 
   client.release();
@@ -125,7 +153,7 @@ async function getUserByCedula(cedula) {
  * Usa una transacción para garantizar consistencia.
  * @returns {Object} usuario creado
  */
-async function createUser({ cedula, nombres, apellidos, email, terminosAceptados }) {
+async function createUser({ cedula, nombres, apellidos, email, terminosAceptados, tipo_usuario = 'externo' }) {
   const radiusPassword = uuidv4();
   const client = await pool.connect();
 
@@ -134,10 +162,10 @@ async function createUser({ cedula, nombres, apellidos, email, terminosAceptados
 
     // Insertar en tabla de usuarios del portal
     const userResult = await client.query(
-      `INSERT INTO usuarios_portal (cedula, nombres, apellidos, email, radius_password, acepta_terminos, fecha_acepta_terminos, terminos_aceptados)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), $6)
-       RETURNING id, cedula, nombres, apellidos, email, radius_password`,
-      [cedula, nombres.trim(), apellidos.trim(), email.trim().toLowerCase(), radiusPassword, terminosAceptados || null]
+      `INSERT INTO usuarios_portal (cedula, nombres, apellidos, email, radius_password, acepta_terminos, fecha_acepta_terminos, terminos_aceptados, tipo_usuario)
+       VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), $6, $7)
+       RETURNING id, cedula, nombres, apellidos, email, radius_password, tipo_usuario`,
+      [cedula, nombres.trim(), apellidos.trim(), email.trim().toLowerCase(), radiusPassword, terminosAceptados || null, tipo_usuario]
     );
 
     const user = userResult.rows[0];
@@ -149,16 +177,17 @@ async function createUser({ cedula, nombres, apellidos, email, terminosAceptados
       [cedula, radiusPassword]
     );
 
-    // Asignar al grupo base
+    // Asignar al grupo de RADIUS correcto
+    const groupName = tipo_usuario === 'institucional' ? 'captive-portal-users-institucional' : 'captive-portal-users-externo';
     await client.query(
       `INSERT INTO radusergroup (username, groupname, priority)
-       VALUES ($1, 'captive-portal-users', 1)
+       VALUES ($1, $2, 1)
        ON CONFLICT DO NOTHING`,
-      [cedula]
+      [cedula, groupName]
     );
 
     await client.query('COMMIT');
-    console.log(`[DB] Usuario registrado: ${cedula}`);
+    console.log(`[DB] Usuario registrado (${tipo_usuario}): ${cedula}`);
     return user;
   } catch (err) {
     await client.query('ROLLBACK');
@@ -225,7 +254,7 @@ async function listUsers({ search = '', limit = 50, offset = 0 } = {}) {
 
   const [result, total] = await Promise.all([
     pool.query(
-      `SELECT u.id, u.cedula, u.nombres, u.apellidos, u.email, u.activo, u.fecha_registro
+      `SELECT u.id, u.cedula, u.nombres, u.apellidos, u.email, u.activo, u.fecha_registro, u.tipo_usuario
        FROM usuarios_portal u
        ${where}
        ORDER BY u.fecha_registro DESC
@@ -247,7 +276,7 @@ async function listUsers({ search = '', limit = 50, offset = 0 } = {}) {
 async function getUserDetail(cedula) {
   const [user, groups, logs, devices] = await Promise.all([
     pool.query(
-      `SELECT id, cedula, nombres, apellidos, email, activo, fecha_registro, max_dispositivos, acepta_terminos, fecha_acepta_terminos, terminos_aceptados
+      `SELECT id, cedula, nombres, apellidos, email, activo, fecha_registro, max_dispositivos, acepta_terminos, fecha_acepta_terminos, terminos_aceptados, tipo_usuario
        FROM usuarios_portal WHERE cedula = $1`,
       [cedula]
     ),

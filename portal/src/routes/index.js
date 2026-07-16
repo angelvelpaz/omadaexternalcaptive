@@ -205,7 +205,8 @@ router.post('/auth/check',
                 email: userObj.email || 'auto@registro.com',
                 activo: true,
                 acepta_terminos: true,
-                fecha_acepta_terminos: new Date()
+                fecha_acepta_terminos: new Date(),
+                tipo_usuario: 'institucional'
               });
               
               // Responder que ya existe (para login directo)
@@ -292,8 +293,36 @@ router.post('/auth/register',
       const DEFAULT_TERMS = `1. Aceptación\nAl conectarse a esta red Wi-Fi pública, usted acepta cumplir con estos términos y condiciones.\n\n2. Uso Permitido\nEsta red está destinada para uso general de navegación, comunicaciones y acceso a información. El uso es personal e intransferible.\n\n3. Uso Prohibido\nEstá prohibido utilizar la red para actividades ilegales, distribución de contenido inapropiado, ataques informáticos o cualquier actividad que viole la ley ecuatoriana.\n\n4. Privacidad\nLos datos de registro son recopilados únicamente para fines de autenticación y no serán compartidos con terceros sin autorización legal.\n\n5. Limitación de Responsabilidad\nEl administrador de la red no se responsabiliza por el contenido accedido por los usuarios ni por interrupciones del servicio.\n\n6. Duración de Sesión\nCada sesión tiene una duración limitada. Al expirar, deberá autenticarse nuevamente.`;
       const terminosAceptados = branding.termsText || DEFAULT_TERMS;
 
+      // Verificar si existe en la base de datos externa para asignarle el tipo
+      let tipo_usuario = 'externo';
+      const extConfig = await db.getControllerConfig('external_db_config');
+      if (extConfig && (extConfig.enabled === true || extConfig.enabled === 'true') && extConfig.host && extConfig.tableName && extConfig.colCedula) {
+        const { Client } = require('pg');
+        const extClient = new Client({
+          host: extConfig.host,
+          port: parseInt(extConfig.port) || 5432,
+          database: extConfig.database,
+          user: extConfig.user,
+          password: extConfig.password,
+          ssl: extConfig.ssl && (extConfig.ssl === true || extConfig.ssl === 'true') ? { rejectUnauthorized: false } : false,
+          connectionTimeoutMillis: 2000,
+        });
+        try {
+          await extClient.connect();
+          const escapedTable = extConfig.tableName.replace(/"/g, '""');
+          const escapedCol = extConfig.colCedula.replace(/"/g, '""');
+          const extRes = await extClient.query(`SELECT 1 FROM "${escapedTable}" WHERE "${escapedCol}" = $1 LIMIT 1`, [ced]);
+          if (extRes.rowCount > 0) {
+            tipo_usuario = 'institucional';
+          }
+          await extClient.end();
+        } catch (e) {
+          console.error('[EXT-DB] Error al consultar tipo de usuario en register:', e.message);
+        }
+      }
+
       // Crear usuario (incluye radcheck insert y guardar los términos aceptados)
-      const user = await db.createUser({ cedula: ced, nombres, apellidos, email, terminosAceptados });
+      const user = await db.createUser({ cedula: ced, nombres, apellidos, email, terminosAceptados, tipo_usuario });
 
       // Registrar dispositivo del usuario si viene la MAC
       const params = typeof vendorParams === 'object' ? vendorParams : {};

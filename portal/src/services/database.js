@@ -296,40 +296,116 @@ async function bulkUpdateUserType(cedulas, tipoUsuario) {
 /**
  * Lista usuarios con búsqueda y paginación.
  */
-async function listUsers({ search = '', limit = 50, offset = 0 } = {}) {
+async function listUsers({ 
+  search = '', 
+  limit = 50, 
+  offset = 0, 
+  orderBy = 'fecha_registro', 
+  orderDir = 'DESC', 
+  filterLastConn = 'all', 
+  filterConsumption = 'all' 
+} = {}) {
   const trimmed = (search || '').trim();
   const searchParam = `%${trimmed}%`;
   const cleanSearch = trimmed.replace(/[:\-]/g, '');
   const macSearchParam = `%${cleanSearch}%`;
 
-  const where = trimmed
-    ? `WHERE u.cedula ILIKE $1 
-          OR u.nombres ILIKE $1 
-          OR u.apellidos ILIKE $1 
-          OR u.email ILIKE $1 
-          OR EXISTS (
-            SELECT 1 FROM dispositivos_usuario d 
-            WHERE d.cedula = u.cedula 
-              AND (d.mac_address ILIKE $1 OR REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') ILIKE $2)
-          )`
-    : '';
+  // Columnas permitidas para ordenación
+  const validSortCols = {
+    fecha_registro: 'fecha_registro',
+    ultima_conexion: 'ultima_conexion',
+    consumo_total: 'consumo_total'
+  };
+  const sortCol = validSortCols[orderBy] || 'fecha_registro';
+  const sortDir = orderDir === 'ASC' ? 'ASC' : 'DESC';
+
+  // Construir consulta base
+  let sql = `
+    SELECT * FROM (
+      SELECT u.id, u.cedula, u.nombres, u.apellidos, u.email, u.activo, u.fecha_registro, u.tipo_usuario,
+             (
+               SELECT MAX(r.acctstarttime) 
+               FROM radacct r 
+               LEFT JOIN dispositivos_usuario d ON d.cedula = u.cedula
+               WHERE r.username = u.cedula OR REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+             ) AS ultima_conexion,
+             (
+               SELECT COALESCE(SUM(r.acctinputoctets + r.acctoutputoctets), 0)
+               FROM radacct r 
+               LEFT JOIN dispositivos_usuario d ON d.cedula = u.cedula
+               WHERE r.username = u.cedula OR REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+             ) AS consumo_total
+      FROM usuarios_portal u
+    ) u_agg
+    WHERE 1=1
+  `;
+
+  const params = [];
+  let paramIdx = 1;
+
+  // Filtro de búsqueda
+  if (trimmed) {
+    sql += ` AND (
+      cedula ILIKE $${paramIdx} 
+      OR nombres ILIKE $${paramIdx} 
+      OR apellidos ILIKE $${paramIdx} 
+      OR email ILIKE $${paramIdx} 
+      OR EXISTS (
+        SELECT 1 FROM dispositivos_usuario d 
+        WHERE d.cedula = u_agg.cedula 
+          AND (d.mac_address ILIKE $${paramIdx} OR REPLACE(REPLACE(d.mac_address, ':', ''), '-', '') ILIKE $${paramIdx + 1})
+      )
+    )`;
+    params.push(searchParam);
+    params.push(macSearchParam);
+    paramIdx += 2;
+  }
+
+  // Filtro última conexión
+  if (filterLastConn === '24h') {
+    sql += ` AND ultima_conexion >= NOW() - INTERVAL '24 hours'`;
+  } else if (filterLastConn === '7d') {
+    sql += ` AND ultima_conexion >= NOW() - INTERVAL '7 days'`;
+  } else if (filterLastConn === '30d') {
+    sql += ` AND ultima_conexion >= NOW() - INTERVAL '30 days'`;
+  } else if (filterLastConn === 'never') {
+    sql += ` AND ultima_conexion IS NULL`;
+  } else if (filterLastConn === 'connected') {
+    sql += ` AND ultima_conexion IS NOT NULL`;
+  }
+
+  // Filtro consumo total
+  if (filterConsumption === 'zero') {
+    sql += ` AND consumo_total = 0`;
+  } else if (filterConsumption === 'low') {
+    sql += ` AND consumo_total > 0 AND consumo_total < 100 * 1024 * 1024`;
+  } else if (filterConsumption === 'medium') {
+    sql += ` AND consumo_total >= 100 * 1024 * 1024 AND consumo_total <= 1024 * 1024 * 1024`;
+  } else if (filterConsumption === 'high') {
+    sql += ` AND consumo_total > 1024 * 1024 * 1024`;
+  }
+
+  // Consulta para obtener el total de registros filtrados
+  let countSql = `SELECT COUNT(*) FROM (${sql}) count_agg`;
+  
+  // Agregar ordenación y límites
+  sql += ` ORDER BY ${sortCol} ${sortDir} NULLS LAST`;
+  sql += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+  params.push(parseInt(limit));
+  params.push(parseInt(offset));
 
   const [result, total] = await Promise.all([
-    pool.query(
-      `SELECT u.id, u.cedula, u.nombres, u.apellidos, u.email, u.activo, u.fecha_registro, u.tipo_usuario
-       FROM usuarios_portal u
-       ${where}
-       ORDER BY u.fecha_registro DESC
-       LIMIT $${trimmed ? 3 : 1} OFFSET $${trimmed ? 4 : 2}`,
-      trimmed ? [searchParam, macSearchParam, parseInt(limit), parseInt(offset)] : [parseInt(limit), parseInt(offset)]
-    ),
-    pool.query(
-      `SELECT COUNT(*) FROM usuarios_portal u ${where}`,
-      trimmed ? [searchParam, macSearchParam] : []
-    ),
+    pool.query(sql, params),
+    pool.query(countSql, params.slice(0, paramIdx - 1))
   ]);
 
-  return { users: result.rows, total: parseInt(total.rows[0].count) };
+  return { 
+    users: result.rows.map(r => ({
+      ...r,
+      consumo_total: parseInt(r.consumo_total || 0)
+    })), 
+    total: parseInt(total.rows[0].count) 
+  };
 }
 
 /**

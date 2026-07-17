@@ -339,6 +339,44 @@
         </button>
       </div>
 
+      <!-- Filtros avanzados y ordenación -->
+      <div class="bg-gray-50 border border-gray-200 rounded-xl p-3.5 mb-4 flex flex-col md:flex-row gap-3.5 text-xs text-gray-700">
+        <!-- Filtro Última Conexión -->
+        <div class="flex-1 flex flex-col gap-1">
+          <span class="font-bold text-gray-500 uppercase tracking-wider text-[10px]">Filtro: Última Conexión</span>
+          <select id="user-filter-last-conn" onchange="applyUserFilters()"
+            class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer">
+            <option value="all">Todos los estados</option>
+            <option value="24h">Conectado hoy (últimas 24h)</option>
+            <option value="7d">Conectado esta semana (últimos 7 días)</option>
+            <option value="30d">Conectado este mes (últimos 30 días)</option>
+            <option value="connected">Conectado alguna vez</option>
+            <option value="never">Nunca conectado</option>
+          </select>
+        </div>
+
+        <!-- Filtro Consumo Total -->
+        <div class="flex-1 flex flex-col gap-1">
+          <span class="font-bold text-gray-500 uppercase tracking-wider text-[10px]">Filtro: Consumo Total</span>
+          <select id="user-filter-consumption" onchange="applyUserFilters()"
+            class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer">
+            <option value="all">Todos los consumos</option>
+            <option value="zero">Sin consumo (0 MB)</option>
+            <option value="low">Bajo consumo (&lt; 100 MB)</option>
+            <option value="medium">Consumo medio (100 MB - 1 GB)</option>
+            <option value="high">Alto consumo (&gt; 1 GB)</option>
+          </select>
+        </div>
+
+        <!-- Limpiar Filtros -->
+        <div class="flex items-end shrink-0">
+          <button onclick="resetUserFilters()"
+            class="w-full md:w-auto bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-4 py-2.5 rounded-lg transition-colors text-center font-medium">
+            Limpiar Filtros
+          </button>
+        </div>
+      </div>
+
       <!-- Barra de Acciones en Lote (bulk actions) -->
       <div id="bulk-actions-bar" class="hidden bg-blue-50 border border-blue-100 rounded-lg p-3.5 mb-4 items-center justify-between gap-3 text-sm text-blue-805">
         <div class="flex items-center gap-2">
@@ -380,7 +418,15 @@
                 <th class="px-4 py-3">Nombre completo</th>
                 <th class="px-4 py-3 hidden md:table-cell">Email</th>
                 <th class="px-4 py-3 hidden md:table-cell">Tipo</th>
-                <th class="px-4 py-3 hidden lg:table-cell">Registro</th>
+                <th onclick="toggleUserSort('fecha_registro')" class="px-4 py-3 cursor-pointer select-none hover:bg-gray-100 hidden lg:table-cell whitespace-nowrap">
+                  Registro <span id="sort-icon-fecha_registro" class="text-gray-400">⇅</span>
+                </th>
+                <th onclick="toggleUserSort('ultima_conexion')" class="px-4 py-3 cursor-pointer select-none hover:bg-gray-100 hidden md:table-cell whitespace-nowrap">
+                  Última Conexión <span id="sort-icon-ultima_conexion" class="text-gray-400">⇅</span>
+                </th>
+                <th onclick="toggleUserSort('consumo_total')" class="px-4 py-3 cursor-pointer select-none hover:bg-gray-100 hidden sm:table-cell whitespace-nowrap">
+                  Consumo <span id="sort-icon-consumo_total" class="text-gray-400">⇅</span>
+                </th>
                 <th class="px-4 py-3 text-center">Estado</th>
                 <th class="px-4 py-3 text-right">Acciones</th>
               </tr>
@@ -1128,6 +1174,19 @@ let usersOffset = 0;
 const PAGE_SIZE = 50;
 let usersTotalCount = 0;
 let usersSearch = '';
+let usersOrderBy = 'fecha_registro';
+let usersOrderDir = 'DESC';
+let filterLastConn = 'all';
+let filterConsumption = 'all';
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1024) {
+    return (mb / 1024).toFixed(1) + ' GB';
+  }
+  return mb.toFixed(1) + ' MB';
+}
 
 let devicesOffset = 0;
 const DEVICES_PAGE_SIZE = 50;
@@ -1618,7 +1677,32 @@ async function loadUsers() {
       bar.classList.add('hidden');
     }
 
-    const data = await api('GET', `/users?search=${encodeURIComponent(usersSearch)}&limit=${PAGE_SIZE}&offset=${usersOffset}`);
+    // Actualizar iconos de ordenación en cabecera
+    const sortCols = ['fecha_registro', 'ultima_conexion', 'consumo_total'];
+    sortCols.forEach(col => {
+      const el = document.getElementById('sort-icon-' + col);
+      if (el) {
+        if (usersOrderBy === col) {
+          el.textContent = usersOrderDir === 'ASC' ? '▲' : '▼';
+          el.className = 'text-blue-600 font-bold ml-1';
+        } else {
+          el.textContent = '⇅';
+          el.className = 'text-gray-400 ml-1';
+        }
+      }
+    });
+
+    const params = new URLSearchParams({
+      search: usersSearch,
+      limit: PAGE_SIZE,
+      offset: usersOffset,
+      orderBy: usersOrderBy,
+      orderDir: usersOrderDir,
+      filterLastConn: filterLastConn,
+      filterConsumption: filterConsumption
+    });
+
+    const data = await api('GET', '/users?' + params.toString());
     usersTotalCount = data.total;
     document.getElementById('users-count').textContent = `${data.total} usuario${data.total !== 1 ? 's' : ''}`;
     document.getElementById('btn-prev').disabled = usersOffset === 0;
@@ -1640,6 +1724,12 @@ async function loadUsers() {
           </span>
         </td>
         <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">${new Date(u.fecha_registro).toLocaleDateString('es-EC')}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
+          ${u.ultima_conexion ? new Date(u.ultima_conexion).toLocaleString('es-EC') : '<span class="text-gray-300">Nunca</span>'}
+        </td>
+        <td class="px-4 py-3 font-semibold text-gray-750 text-xs hidden sm:table-cell whitespace-nowrap">
+          ${formatBytes(u.consumo_total)}
+        </td>
         <td class="px-4 py-3 text-center">
           <button onclick="toggleActive('${u.cedula}', ${!u.activo})"
             class="px-2 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -1654,7 +1744,7 @@ async function loadUsers() {
           ${tieneRol('administrador') ? `<button onclick="confirmDelete('${u.cedula}', '${esc(u.nombres)} ${esc(u.apellidos)}')"
             class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>` : ''}
         </td>
-      </tr>`).join('') || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No hay usuarios</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">No hay usuarios</td></tr>`;
   } catch (err) {
     console.error(err);
   }
@@ -1679,6 +1769,33 @@ document.getElementById('btn-next').addEventListener('click', () => {
   usersOffset += PAGE_SIZE;
   loadUsers();
 });
+
+function toggleUserSort(col) {
+  if (usersOrderBy === col) {
+    usersOrderDir = usersOrderDir === 'ASC' ? 'DESC' : 'ASC';
+  } else {
+    usersOrderBy = col;
+    usersOrderDir = 'DESC';
+  }
+  usersOffset = 0;
+  loadUsers();
+}
+
+function applyUserFilters() {
+  filterLastConn = document.getElementById('user-filter-last-conn').value;
+  filterConsumption = document.getElementById('user-filter-consumption').value;
+  usersOffset = 0;
+  loadUsers();
+}
+
+function resetUserFilters() {
+  document.getElementById('user-filter-last-conn').value = 'all';
+  document.getElementById('user-filter-consumption').value = 'all';
+  filterLastConn = 'all';
+  filterConsumption = 'all';
+  usersOffset = 0;
+  loadUsers();
+}
 
 async function toggleActive(cedula, active) {
   try {

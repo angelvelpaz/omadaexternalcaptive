@@ -327,13 +327,24 @@ router.get('/api/users', requireAdmin,
   query('search').optional().isString().trim(),
   query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
   query('offset').optional().isInt({ min: 0 }).toInt(),
+  query('orderBy').optional().isString().trim(),
+  query('orderDir').optional().isString().trim(),
+  query('filterLastConn').optional().isString().trim(),
+  query('filterConsumption').optional().isString().trim(),
   async (req, res, next) => {
     try {
       const matched = matchedData(req, { includeOptionals: true, locations: ['query'] });
       const search = matched.search || '';
       const limit  = matched.limit  ?? 50;
       const offset = matched.offset ?? 0;
-      res.json(await db.listUsers({ search, limit, offset }));
+      const orderBy = matched.orderBy || 'fecha_registro';
+      const orderDir = matched.orderDir || 'DESC';
+      const filterLastConn = matched.filterLastConn || 'all';
+      const filterConsumption = matched.filterConsumption || 'all';
+      
+      res.json(await db.listUsers({ 
+        search, limit, offset, orderBy, orderDir, filterLastConn, filterConsumption 
+      }));
     } catch (err) { next(err); }
   }
 );

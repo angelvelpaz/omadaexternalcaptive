@@ -20,3 +20,4 @@ postgres_data/
 .claude/
 .system_generated/
 *.log
+backups/

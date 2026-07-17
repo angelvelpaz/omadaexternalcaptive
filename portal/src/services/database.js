@@ -770,22 +770,19 @@ async function getStats() {
       SELECT COUNT(*) AS today_logins
       FROM access_log a
       JOIN usuarios_portal u ON u.cedula = a.cedula
-      JOIN dispositivos_usuario d ON (d.cedula = u.cedula AND REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-'))
-      WHERE a.created_at >= CURRENT_DATE AND a.resultado = 'success'
+      WHERE a.created_at >= CURRENT_DATE AND a.resultado IN ('success', 'registered')
     `),
     pool.query(`
       SELECT a.vendor, COUNT(*) AS total
       FROM access_log a
       JOIN usuarios_portal u ON u.cedula = a.cedula
-      JOIN dispositivos_usuario d ON (d.cedula = u.cedula AND REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-'))
-      WHERE a.created_at >= NOW() - INTERVAL '7 days'
+      WHERE a.created_at >= NOW() - INTERVAL '7 days' AND a.resultado IN ('success', 'registered')
       GROUP BY a.vendor ORDER BY total DESC
     `),
     pool.query(`
       SELECT a.resultado, COUNT(*) AS total
       FROM access_log a
       JOIN usuarios_portal u ON u.cedula = a.cedula
-      JOIN dispositivos_usuario d ON (d.cedula = u.cedula AND REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-'))
       WHERE a.created_at >= NOW() - INTERVAL '7 days'
       GROUP BY a.resultado
     `),
@@ -793,7 +790,6 @@ async function getStats() {
       SELECT a.cedula, u.nombres, u.apellidos, a.vendor, a.resultado, a.created_at
       FROM access_log a
       JOIN usuarios_portal u ON u.cedula = a.cedula
-      JOIN dispositivos_usuario d ON (d.cedula = u.cedula AND REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-'))
       ORDER BY a.created_at DESC LIMIT 10
     `),
     pool.query(`

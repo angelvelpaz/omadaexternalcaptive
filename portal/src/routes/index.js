@@ -3,6 +3,7 @@
 const express = require('express');
 const path = require('path');
 const { body, validationResult } = require('express-validator');
+const axios = require('axios');
 const router = express.Router();
 
 const cedula   = require('../services/cedula');
@@ -68,6 +69,7 @@ function extractVendorParams(vendor, query) {
 router.get('/auth/config', async (req, res, next) => {
   try {
     const branding = await db.getControllerConfig('branding') || {};
+    const secap = await db.getControllerConfig('secap') || {};
     res.json({
       name: branding.portalName || process.env.PORTAL_NAME || 'Portal Wi-Fi',
       logo: branding.logoUrl || process.env.PORTAL_LOGO_URL || '/static/logo.svg',
@@ -77,6 +79,8 @@ router.get('/auth/config', async (req, res, next) => {
       termsText: branding.termsText || '',
       termsUpdatedAt: branding.termsUpdatedAt || '2026-07-09T14:50:00.000Z',
       sessionMinutes: parseInt(process.env.SESSION_DURATION_MINUTES || '480'),
+      secapEnabled: secap.activo === true || secap.activo === 'true',
+      emailOpcional: secap.emailOpcional === true || secap.emailOpcional === 'true',
     });
   } catch (err) { next(err); }
 });
@@ -251,13 +255,72 @@ router.post('/auth/check',
   }
 );
 
+/**
+ * Realiza la consulta HTTP a la API externa de SECAP (Registro Civil de Ecuador)
+ */
+async function querySecapCivilRegistry(cedula) {
+  try {
+    const response = await axios.post(
+      'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php',
+      new URLSearchParams({ documento: cedula, tipo: '1' }).toString(),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 6000
+      }
+    );
+    
+    if (response.data && response.data.respuesta === 1) {
+      return {
+        success: true,
+        nombres: (response.data.nombres || '').trim(),
+        apellidos: (response.data.apellidos || '').trim()
+      };
+    }
+    return {
+      success: false,
+      error: response.data?.error || 'No se encontraron datos en el Registro Civil.'
+    };
+  } catch (err) {
+    console.error('[SECAP] Error al consultar API externa:', err.message);
+    return {
+      success: false,
+      error: 'Servidor de verificación de identidad fuera de línea.'
+    };
+  }
+}
+
+// GET — Valida identidad contra el Registro Civil de Ecuador (SECAP Proxy)
+router.get('/api/public/validate-identity', async (req, res, next) => {
+  try {
+    const ced = String(req.query.cedula || '').trim();
+    if (!/^\d{10}$/.test(ced)) {
+      return res.status(400).json({ error: 'Cédula debe tener 10 dígitos numéricos.' });
+    }
+
+    const secapCfg = await db.getControllerConfig('secap') || {};
+    if (!secapCfg.activo || secapCfg.activo === 'false') {
+      return res.json({ enabled: false });
+    }
+
+    const result = await querySecapCivilRegistry(ced);
+    res.json({ 
+      enabled: true, 
+      emailOpcional: secapCfg.emailOpcional === true || secapCfg.emailOpcional === 'true', 
+      ...result 
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── API: registro de usuario nuevo ─────────────────────────────────────────
 
 router.post('/auth/register',
   body('cedula').isString().trim().isLength({ min: 10, max: 10 }).isNumeric(),
   body('nombres').isString().trim().isLength({ min: 2, max: 100 }),
   body('apellidos').isString().trim().isLength({ min: 2, max: 100 }),
-  body('email').isEmail().normalizeEmail(),
+  body('email').optional({ checkFalsy: true }).isEmail().normalizeEmail(),
   body('terms').custom(val => val === true || val === 'true').withMessage('Debe aceptar los términos de uso.'),
   async (req, res, next) => {
     try {
@@ -286,6 +349,22 @@ router.post('/auth/register',
       // Verificar que no esté ya registrado
       if (await db.userExists(ced)) {
         return res.status(409).json({ error: 'Esta cédula ya está registrada.' });
+      }
+
+      // Obtener configuración SECAP y validar nombres legales
+      const secapCfg = await db.getControllerConfig('secap') || {};
+      let finalNombres = nombres;
+      let finalApellidos = apellidos;
+
+      if (secapCfg.activo && secapCfg.activo !== 'false') {
+        const identity = await querySecapCivilRegistry(ced);
+        if (identity.success) {
+          finalNombres = identity.nombres;
+          finalApellidos = identity.apellidos;
+          console.log(`[SECAP] Validación de registro exitosa: ${finalNombres} ${finalApellidos}`);
+        } else {
+          console.log(`[SECAP] Validación falló (${identity.error}). Usando datos ingresados manualmente.`);
+        }
       }
 
       // Obtener el texto de términos actual
@@ -322,7 +401,7 @@ router.post('/auth/register',
       }
 
       // Crear usuario (incluye radcheck insert y guardar los términos aceptados)
-      const user = await db.createUser({ cedula: ced, nombres, apellidos, email, terminosAceptados, tipo_usuario });
+      const user = await db.createUser({ cedula: ced, nombres: finalNombres, apellidos: finalApellidos, email, terminosAceptados, tipo_usuario });
 
       // Registrar dispositivo del usuario si viene la MAC
       const params = typeof vendorParams === 'object' ? vendorParams : {};

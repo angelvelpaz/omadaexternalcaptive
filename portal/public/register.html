@@ -179,6 +179,16 @@
         termsLabel.classList.add('cursor-pointer');
       }
       
+      // Cargar si SECAP está activo y correo es opcional
+      window.secapEnabled = cfg.secapEnabled;
+      window.emailOpcional = cfg.emailOpcional;
+      if (cfg.emailOpcional) {
+        const emailLabel = document.querySelector('label[for="email"]');
+        if (emailLabel) {
+          emailLabel.innerHTML = 'Correo Electrónico <span class="text-xs text-gray-400 font-normal">(Opcional)</span>';
+        }
+      }
+
       // Aplicar colores personalizados dinámicamente
       if (cfg.primaryColor && cfg.accentColor) {
         const style = document.createElement('style');
@@ -212,6 +222,11 @@
     // Pre-completar cédula desde URL
     const cedulaInput = document.getElementById('cedula');
     cedulaInput.value = urlParams.get('cedula') || '';
+    if (cedulaInput.value.length === 10) {
+      setTimeout(() => {
+        cedulaInput.dispatchEvent(new Event('input'));
+      }, 500);
+    }
 
     const external = urlParams.get('external') === 'true';
     if (external) {
@@ -296,8 +311,10 @@
         if (apellidos.length < 2) {
           showFieldError('apellidos', 'Ingrese sus apellidos (mínimo 2 caracteres).'); valid = false;
         }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          showFieldError('email', 'Ingrese un correo electrónico válido.'); valid = false;
+        if (!window.emailOpcional || email.length > 0) {
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            showFieldError('email', 'Ingrese un correo electrónico válido.'); valid = false;
+          }
         }
       }
 
@@ -338,6 +355,78 @@
         document.getElementById('alert-error').textContent = 'Error de conexión. Intente nuevamente.';
         document.getElementById('alert-error').classList.remove('hidden');
         setLoading(false);
+      }
+    });
+
+    let secapChecking = false;
+
+    cedulaInput.addEventListener('input', async () => {
+      const ced = cedulaInput.value.trim();
+      if (ced.length === 10 && window.secapEnabled && !secapChecking && !external) {
+        if (!validateCedula(ced)) return;
+
+        secapChecking = true;
+        
+        const errorEl = document.getElementById('cedula-error');
+        errorEl.innerHTML = '<span class="text-blue-600 font-medium">⏳ Verificando identidad en Registro Civil...</span>';
+        errorEl.classList.remove('hidden');
+
+        const nombresInput = document.getElementById('nombres');
+        const apellidosInput = document.getElementById('apellidos');
+        
+        nombresInput.disabled = true;
+        apellidosInput.disabled = true;
+
+        try {
+          const res = await fetch(`/api/public/validate-identity?cedula=${ced}`);
+          const data = await res.json();
+
+          if (data.enabled && data.success) {
+            nombresInput.value = data.nombres;
+            apellidosInput.value = data.apellidos;
+            
+            nombresInput.readOnly = true;
+            apellidosInput.readOnly = true;
+            nombresInput.classList.add('bg-gray-100', 'text-gray-500', 'border-green-300');
+            apellidosInput.classList.add('bg-gray-100', 'text-gray-500', 'border-green-300');
+
+            errorEl.innerHTML = '<span class="text-green-600 font-medium">✓ Identidad verificada correctamente.</span>';
+          } else {
+            nombresInput.readOnly = false;
+            apellidosInput.readOnly = false;
+            nombresInput.disabled = false;
+            apellidosInput.disabled = false;
+            nombresInput.classList.remove('bg-gray-100', 'text-gray-500', 'border-green-300');
+            apellidosInput.classList.remove('bg-gray-100', 'text-gray-500', 'border-green-300');
+
+            if (data.enabled) {
+              errorEl.innerHTML = `<span class="text-amber-600 font-medium">⚠ ${data.error || 'Cédula no encontrada en Registro Civil. Ingrese sus nombres manualmente.'}</span>`;
+            } else {
+              errorEl.classList.add('hidden');
+            }
+          }
+        } catch (err) {
+          console.error('[SECAP-UI] Error al validar identidad:', err);
+          nombresInput.readOnly = false;
+          apellidosInput.readOnly = false;
+          nombresInput.disabled = false;
+          apellidosInput.disabled = false;
+          errorEl.innerHTML = '<span class="text-amber-600 font-medium">⚠ Error al conectar con Registro Civil. Ingrese sus nombres manualmente.</span>';
+        } finally {
+          secapChecking = false;
+        }
+      } else if (ced.length < 10) {
+        const nombresInput = document.getElementById('nombres');
+        const apellidosInput = document.getElementById('apellidos');
+        
+        nombresInput.readOnly = false;
+        apellidosInput.readOnly = false;
+        nombresInput.disabled = false;
+        apellidosInput.disabled = false;
+        nombresInput.classList.remove('bg-gray-100', 'text-gray-500', 'border-green-300');
+        apellidosInput.classList.remove('bg-gray-100', 'text-gray-500', 'border-green-300');
+        
+        document.getElementById('cedula-error').classList.add('hidden');
       }
     });
 

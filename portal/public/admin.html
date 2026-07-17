@@ -2817,7 +2817,7 @@ async function deleteGroup(groupname) {
 
 // ── Controladores ─────────────────────────────────────────────────────────────
 
-const VENDOR_LABELS = { freeradius: 'FreeRADIUS', unifi: 'UniFi', omada: 'TP-Link Omada', mikrotik: 'MikroTik RouterOS' };
+const VENDOR_LABELS = { freeradius: 'FreeRADIUS', unifi: 'UniFi', omada: 'TP-Link Omada', mikrotik: 'MikroTik RouterOS', secap: 'Validación de Cédula (SECAP)' };
 
 const VENDOR_ICONS = {
   freeradius: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2835,6 +2835,10 @@ const VENDOR_ICONS = {
   mikrotik: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
       d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+  </svg>`,
+  secap: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
   </svg>`,
 };
 
@@ -2945,6 +2949,18 @@ function buildEditForm(vendor, cfg) {
         </ol>
       </div>`;
   }
+  if (vendor === 'secap') {
+    return `
+      <div class="space-y-4">
+        <p class="text-xs text-gray-500">Habilite esta opción para validar automáticamente las cédulas de los usuarios externos contra el Registro Civil de Ecuador mediante el SECAP durante el proceso de registro.</p>
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="cfg-${vendor}-emailOpcional" class="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer" ${cfg.emailOpcional === 'true' || cfg.emailOpcional === true ? 'checked' : ''}>
+            <label for="cfg-${vendor}-emailOpcional" class="text-sm font-medium text-gray-700 cursor-pointer">Hacer correo electrónico opcional para usuarios externos</label>
+          </div>
+        </div>
+      </div>`;
+  }
   return '';
 }
 
@@ -2984,6 +3000,10 @@ function renderControllerCard(vendor, cfg) {
     summary = `<span class="text-gray-500">URL Router:</span> <span class="font-mono">${cfg.url ? esc(cfg.url) : '<span class="text-amber-600">no configurado</span>'}</span>
                <span class="text-gray-400 mx-1">·</span>
                <span class="text-gray-500">Usuario API:</span> <span class="font-mono">${cfg.user ? esc(cfg.user) : '—'}</span>`;
+  } else if (vendor === 'secap') {
+    summary = `<span class="text-gray-500">Verificación Registro Civil:</span> <span class="font-semibold text-blue-600">Activo</span>
+               <span class="text-gray-400 mx-1">·</span>
+               <span class="text-gray-500">Correo opcional:</span> <span class="font-semibold">${cfg.emailOpcional ? 'Sí' : 'No'}</span>`;
   }
 
   return `
@@ -3059,7 +3079,7 @@ async function loadControllers() {
     const cfg = await api('GET', '/controllers');
     // Guardar config actual para acceso posterior en formularios
     window._ctrlCfg = cfg;
-    container.innerHTML = ['freeradius', 'unifi', 'omada', 'mikrotik']
+    container.innerHTML = ['freeradius', 'unifi', 'omada', 'mikrotik', 'secap']
       .map(v => renderControllerCard(v, cfg[v]))
       .join('');
   } catch (err) {
@@ -3108,6 +3128,8 @@ async function saveControllerConfig(vendor) {
     body = { url: get('url'), clientId: get('clientId'), secret: get('secret'), siteId: get('siteId') };
   } else if (vendor === 'mikrotik') {
     body = { url: get('url'), user: get('user'), pass: get('pass') };
+  } else if (vendor === 'secap') {
+    body = { emailOpcional: get('emailOpcional') };
   }
 
   btn.disabled = true;

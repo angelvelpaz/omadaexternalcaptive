@@ -854,6 +854,14 @@ function buildControllerResponse(vendor, dbCfg) {
       fromEnv:    false,
     };
   }
+  if (vendor === 'secap') {
+    return {
+      activo:        cfg.activo !== undefined ? (cfg.activo === true || cfg.activo === 'true') : false,
+      emailOpcional: cfg.emailOpcional !== undefined ? (cfg.emailOpcional === true || cfg.emailOpcional === 'true') : false,
+      configured:    true,
+      fromEnv:       false,
+    };
+  }
   return {};
 }
 
@@ -896,13 +904,19 @@ function buildControllerConfig(vendor, dbCfg) {
       pass:  cfg.pass || '',
     };
   }
+  if (vendor === 'secap') {
+    return {
+      activo:        cfg.activo !== undefined ? (cfg.activo === true || cfg.activo === 'true') : false,
+      emailOpcional: cfg.emailOpcional !== undefined ? (cfg.emailOpcional === true || cfg.emailOpcional === 'true') : false,
+    };
+  }
   return {};
 }
 
 // GET — configuración actual (secretos enmascarados)
 router.get('/api/controllers', requireAdmin, async (req, res, next) => {
   try {
-    const vendors = ['freeradius', 'unifi', 'omada', 'mikrotik'];
+    const vendors = ['freeradius', 'unifi', 'omada', 'mikrotik', 'secap'];
     const result  = {};
     for (const vendor of vendors) {
       const dbCfg = await db.getControllerConfig(vendor);
@@ -914,7 +928,7 @@ router.get('/api/controllers', requireAdmin, async (req, res, next) => {
 
 // PUT — guarda configuración en DB
 router.put('/api/controllers/:vendor', requireAdmin,
-  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik']),
+  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'secap']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -970,6 +984,11 @@ router.put('/api/controllers/:vendor', requireAdmin,
           pass:    getVal(input.pass, existing.pass),
           activo:  activoVal,
         };
+      } else if (vendor === 'secap') {
+        newCfg = {
+          activo:        input.activo !== undefined ? (input.activo === true || input.activo === 'true' || input.activo === '1') : false,
+          emailOpcional: input.emailOpcional !== undefined ? (input.emailOpcional === true || input.emailOpcional === 'true' || input.emailOpcional === '1') : false,
+        };
       }
 
       await db.saveControllerConfig(vendor, newCfg);
@@ -988,9 +1007,8 @@ router.put('/api/controllers/:vendor', requireAdmin,
   }
 );
 
-// POST — prueba conectividad usando la config guardada
 router.post('/api/controllers/:vendor/test', requireAdmin,
-  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik']),
+  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'secap']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -1006,6 +1024,9 @@ router.post('/api/controllers/:vendor/test', requireAdmin,
         case 'unifi':      result = await controllerTest.testUnifi(cfg);      break;
         case 'omada':      result = await controllerTest.testOmada(cfg);      break;
         case 'mikrotik':   result = await controllerTest.testMikrotik(cfg);   break;
+        case 'secap':
+          result = { ok: true, message: 'Servicio SECAP configurado con éxito.' };
+          break;
       }
       res.json({ ...result, testedAt: new Date().toISOString() });
     } catch (err) { next(err); }

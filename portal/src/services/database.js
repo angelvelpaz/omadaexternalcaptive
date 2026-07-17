@@ -796,20 +796,23 @@ async function getStats() {
       SELECT
         u.cedula AS username,
         u.nombres || ' ' || u.apellidos AS nombre_completo,
-        SUM(r.acctinputoctets + r.acctoutputoctets) AS total_bytes
+        SUM(COALESCE(r.acctinputoctets, 0) + COALESCE(r.acctoutputoctets, 0)) AS total_bytes
       FROM radacct r
-      JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
-      JOIN usuarios_portal u ON u.cedula = d.cedula
+      JOIN usuarios_portal u ON (
+        u.cedula = r.username 
+        OR EXISTS (
+          SELECT 1 FROM dispositivos_usuario d 
+          WHERE d.cedula = u.cedula 
+            AND REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+        )
+      )
       GROUP BY u.cedula, nombre_completo
       ORDER BY total_bytes DESC
       LIMIT 10
     `),
     pool.query(`
-      SELECT DISTINCT r.callingstationid
-      FROM radacct r
-      JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
-      JOIN usuarios_portal u ON u.cedula = d.cedula
-      WHERE r.callingstationid IS NOT NULL AND r.callingstationid <> ''
+      SELECT mac_address AS callingstationid
+      FROM dispositivos_usuario
     `),
   ]);
 

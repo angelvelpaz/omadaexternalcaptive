@@ -341,18 +341,16 @@
 
       <!-- Filtros avanzados y ordenación -->
       <div class="bg-gray-50 border border-gray-200 rounded-xl p-3.5 mb-4 flex flex-col md:flex-row gap-3.5 text-xs text-gray-700">
-        <!-- Filtro Última Conexión -->
+        <!-- Filtro Última Conexión (Rango de Fechas) -->
         <div class="flex-1 flex flex-col gap-1">
-          <span class="font-bold text-gray-500 uppercase tracking-wider text-[10px]">Filtro: Última Conexión</span>
-          <select id="user-filter-last-conn" onchange="applyUserFilters()"
-            class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer">
-            <option value="all">Todos los estados</option>
-            <option value="24h">Conectado hoy (últimas 24h)</option>
-            <option value="7d">Conectado esta semana (últimos 7 días)</option>
-            <option value="30d">Conectado este mes (últimos 30 días)</option>
-            <option value="connected">Conectado alguna vez</option>
-            <option value="never">Nunca conectado</option>
-          </select>
+          <span class="font-bold text-gray-500 uppercase tracking-wider text-[10px]">Filtro: Última Conexión (Desde - Hasta)</span>
+          <div class="flex items-center gap-1.5">
+            <input type="date" id="user-filter-last-conn-start" onchange="applyUserFilters()"
+              class="w-full border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-800 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer">
+            <span class="text-gray-400 font-bold shrink-0">-</span>
+            <input type="date" id="user-filter-last-conn-end" onchange="applyUserFilters()"
+              class="w-full border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-800 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer">
+          </div>
         </div>
 
         <!-- Filtro Consumo Total -->
@@ -1183,7 +1181,8 @@ let usersTotalCount = 0;
 let usersSearch = '';
 let usersOrderBy = 'fecha_registro';
 let usersOrderDir = 'DESC';
-let filterLastConn = 'all';
+let filterLastConnStart = '';
+let filterLastConnEnd = '';
 let filterConsumption = 'all';
 
 function formatBytes(bytes) {
@@ -1705,7 +1704,8 @@ async function loadUsers() {
       offset: usersOffset,
       orderBy: usersOrderBy,
       orderDir: usersOrderDir,
-      filterLastConn: filterLastConn,
+      filterLastConnStart: filterLastConnStart,
+      filterLastConnEnd: filterLastConnEnd,
       filterConsumption: filterConsumption
     });
 
@@ -1789,16 +1789,19 @@ function toggleUserSort(col) {
 }
 
 function applyUserFilters() {
-  filterLastConn = document.getElementById('user-filter-last-conn').value;
+  filterLastConnStart = document.getElementById('user-filter-last-conn-start').value;
+  filterLastConnEnd = document.getElementById('user-filter-last-conn-end').value;
   filterConsumption = document.getElementById('user-filter-consumption').value;
   usersOffset = 0;
   loadUsers();
 }
 
 function resetUserFilters() {
-  document.getElementById('user-filter-last-conn').value = 'all';
+  document.getElementById('user-filter-last-conn-start').value = '';
+  document.getElementById('user-filter-last-conn-end').value = '';
   document.getElementById('user-filter-consumption').value = 'all';
-  filterLastConn = 'all';
+  filterLastConnStart = '';
+  filterLastConnEnd = '';
   filterConsumption = 'all';
   usersOffset = 0;
   loadUsers();

@@ -302,7 +302,8 @@ async function listUsers({
   offset = 0, 
   orderBy = 'fecha_registro', 
   orderDir = 'DESC', 
-  filterLastConn = 'all', 
+  filterLastConnStart = '', 
+  filterLastConnEnd = '', 
   filterConsumption = 'all' 
 } = {}) {
   const trimmed = (search || '').trim();
@@ -361,17 +362,16 @@ async function listUsers({
     paramIdx += 2;
   }
 
-  // Filtro última conexión
-  if (filterLastConn === '24h') {
-    sql += ` AND ultima_conexion >= NOW() - INTERVAL '24 hours'`;
-  } else if (filterLastConn === '7d') {
-    sql += ` AND ultima_conexion >= NOW() - INTERVAL '7 days'`;
-  } else if (filterLastConn === '30d') {
-    sql += ` AND ultima_conexion >= NOW() - INTERVAL '30 days'`;
-  } else if (filterLastConn === 'never') {
-    sql += ` AND ultima_conexion IS NULL`;
-  } else if (filterLastConn === 'connected') {
-    sql += ` AND ultima_conexion IS NOT NULL`;
+  // Filtro última conexión (Rango de fechas)
+  if (filterLastConnStart) {
+    sql += ` AND ultima_conexion >= $${paramIdx}::timestamptz`;
+    params.push(filterLastConnStart + ' 00:00:00');
+    paramIdx++;
+  }
+  if (filterLastConnEnd) {
+    sql += ` AND ultima_conexion <= ($${paramIdx} || ' 23:59:59')::timestamptz`;
+    params.push(filterLastConnEnd);
+    paramIdx++;
   }
 
   // Filtro consumo total

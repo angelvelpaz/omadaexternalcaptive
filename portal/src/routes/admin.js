@@ -329,7 +329,8 @@ router.get('/api/users', requireAdmin,
   query('offset').optional().isInt({ min: 0 }).toInt(),
   query('orderBy').optional().isString().trim(),
   query('orderDir').optional().isString().trim(),
-  query('filterLastConn').optional().isString().trim(),
+  query('filterLastConnStart').optional().isString().trim(),
+  query('filterLastConnEnd').optional().isString().trim(),
   query('filterConsumption').optional().isString().trim(),
   async (req, res, next) => {
     try {
@@ -339,11 +340,12 @@ router.get('/api/users', requireAdmin,
       const offset = matched.offset ?? 0;
       const orderBy = matched.orderBy || 'fecha_registro';
       const orderDir = matched.orderDir || 'DESC';
-      const filterLastConn = matched.filterLastConn || 'all';
+      const filterLastConnStart = matched.filterLastConnStart || '';
+      const filterLastConnEnd = matched.filterLastConnEnd || '';
       const filterConsumption = matched.filterConsumption || 'all';
       
       res.json(await db.listUsers({ 
-        search, limit, offset, orderBy, orderDir, filterLastConn, filterConsumption 
+        search, limit, offset, orderBy, orderDir, filterLastConnStart, filterLastConnEnd, filterConsumption 
       }));
     } catch (err) { next(err); }
   }

@@ -193,4 +193,44 @@ async function testOmada(cfg = {}) {
   }
 }
 
-module.exports = { testFreeRadius, testUnifi, testOmada, masked };
+/**
+ * Prueba la conectividad con la API REST de MikroTik RouterOS v7+
+ */
+async function testMikrotik(cfg = {}) {
+  const url = cfg.url;
+  const user = cfg.user;
+  const pass = cfg.pass;
+
+  if (!url || !user || !pass) {
+    return { ok: false, message: 'URL del router, usuario y contraseña de API son requeridos.' };
+  }
+
+  let cleanUrl = url.trim();
+  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    cleanUrl = 'https://' + cleanUrl;
+  }
+
+  const client = axios.create({
+    baseURL: cleanUrl,
+    httpsAgent: httpsAgent(false),
+    timeout: 5000,
+    auth: {
+      username: user,
+      password: pass
+    }
+  });
+
+  try {
+    const res = await client.get('/rest/system/identity');
+    if (res.data && res.data.name !== undefined) {
+      return { ok: true, message: `Conectado con éxito a MikroTik RouterOS. Identidad: ${res.data.name}` };
+    }
+    return { ok: true, message: 'Conectado a la API REST de MikroTik RouterOS.' };
+  } catch (err) {
+    const status = err.response?.status;
+    const details = err.response?.data?.message || err.message;
+    return { ok: false, message: `Error al conectar con MikroTik: ${status ? 'HTTP ' + status + ' - ' : ''}${details}` };
+  }
+}
+
+module.exports = { testFreeRadius, testUnifi, testOmada, testMikrotik, masked };

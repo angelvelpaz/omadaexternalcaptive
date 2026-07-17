@@ -2817,7 +2817,7 @@ async function deleteGroup(groupname) {
 
 // ── Controladores ─────────────────────────────────────────────────────────────
 
-const VENDOR_LABELS = { freeradius: 'FreeRADIUS', unifi: 'UniFi', omada: 'TP-Link Omada' };
+const VENDOR_LABELS = { freeradius: 'FreeRADIUS', unifi: 'UniFi', omada: 'TP-Link Omada', mikrotik: 'MikroTik RouterOS' };
 
 const VENDOR_ICONS = {
   freeradius: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2831,6 +2831,10 @@ const VENDOR_ICONS = {
   omada: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
       d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+  </svg>`,
+  mikrotik: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
   </svg>`,
 };
 
@@ -2909,6 +2913,38 @@ function buildEditForm(vendor, cfg) {
         </div>
       </div>`;
   }
+  if (vendor === 'mikrotik') {
+    return `
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-medium text-gray-600 mb-1">URL de la API REST del Router (v7+)</label>
+          <input class="${FIELD_CLASS}" id="cfg-${vendor}-url" value="${esc(cfg.url || '')}" placeholder="https://192.168.88.1">
+          <p class="text-[10px] text-gray-400 mt-0.5">La API REST debe estar activa en el router (IP -> Services -> www-ssl habilitado).</p>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Usuario de API</label>
+          <input class="${FIELD_CLASS}" id="cfg-${vendor}-user" value="${esc(cfg.user || '')}" placeholder="admin">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Contraseña de API</label>
+          <input type="password" class="${FIELD_CLASS}" id="cfg-${vendor}-pass"
+            placeholder="${cfg.pass ? 'Dejar en blanco para no cambiar' : 'Contraseña'}">
+        </div>
+      </div>
+      <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 mt-3 text-xs text-blue-800 space-y-2">
+        <h5 class="font-bold uppercase tracking-wider text-[10px] text-blue-600">Guía de Configuración en MikroTik</h5>
+        <p class="font-medium">Siga estos pasos para integrar MikroTik RouterOS con este Portal:</p>
+        <ol class="list-decimal pl-4 space-y-1">
+          <li>Configure un **RADIUS client** en el router apuntando a la IP de este servidor (puertos 1812/1813 UDP, Shared Secret configurado en la pestaña FreeRADIUS).</li>
+          <li>En su **Hotspot Server Profile**, habilite la casilla **RADIUS** y configure la pestaña **Login** marcando la opción **HTTP PAP** y **cookie** (opcional).</li>
+          <li>En las páginas HTML del Hotspot de su router, edite el archivo <code class="bg-blue-100/50 px-1 py-0.5 rounded font-mono">login.html</code> para que redireccione a los usuarios a:
+            <br>
+            <code class="bg-blue-100/50 px-1.5 py-0.5 rounded font-mono text-[10px] select-all break-all">${window.location.origin}/index.html?mac=$(mac)&amp;ip=$(ip)&amp;username=$(username)&amp;link-login=$(link-login)&amp;link-orig=$(link-orig)</code>
+          </li>
+          <li>Configure el **Walled Garden** en el Hotspot para permitir el tráfico libre hacia la IP de este servidor web del portal cautivo.</li>
+        </ol>
+      </div>`;
+  }
   return '';
 }
 
@@ -2944,6 +2980,10 @@ function renderControllerCard(vendor, cfg) {
     summary = `<span class="text-gray-500">URL:</span> <span class="font-mono">${cfg.url ? esc(cfg.url) : '<span class="text-amber-600">no configurado</span>'}</span>
                <span class="text-gray-400 mx-1">·</span>
                <span class="text-gray-500">Client ID:</span> <span class="font-mono">${cfg.clientId ? esc(cfg.clientId) : '—'}</span>`;
+  } else if (vendor === 'mikrotik') {
+    summary = `<span class="text-gray-500">URL Router:</span> <span class="font-mono">${cfg.url ? esc(cfg.url) : '<span class="text-amber-600">no configurado</span>'}</span>
+               <span class="text-gray-400 mx-1">·</span>
+               <span class="text-gray-500">Usuario API:</span> <span class="font-mono">${cfg.user ? esc(cfg.user) : '—'}</span>`;
   }
 
   return `
@@ -3019,7 +3059,7 @@ async function loadControllers() {
     const cfg = await api('GET', '/controllers');
     // Guardar config actual para acceso posterior en formularios
     window._ctrlCfg = cfg;
-    container.innerHTML = ['freeradius', 'unifi', 'omada']
+    container.innerHTML = ['freeradius', 'unifi', 'omada', 'mikrotik']
       .map(v => renderControllerCard(v, cfg[v]))
       .join('');
   } catch (err) {
@@ -3066,6 +3106,8 @@ async function saveControllerConfig(vendor) {
     body = { url: get('url'), user: get('user'), pass: get('pass'), site: get('site'), verifySSL: get('verifySSL') };
   } else if (vendor === 'omada') {
     body = { url: get('url'), clientId: get('clientId'), secret: get('secret'), siteId: get('siteId') };
+  } else if (vendor === 'mikrotik') {
+    body = { url: get('url'), user: get('user'), pass: get('pass') };
   }
 
   btn.disabled = true;

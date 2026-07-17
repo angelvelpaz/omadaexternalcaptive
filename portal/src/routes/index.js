@@ -407,7 +407,7 @@ router.post('/auth/login',
       const clientIp = req.ip || req.connection.remoteAddress;
       const params = typeof vendorParams === 'object' ? vendorParams : {};
 
-      if (vendor && ['unifi', 'omada', 'freeradius'].includes(vendor)) {
+      if (vendor && ['unifi', 'omada', 'freeradius', 'mikrotik'].includes(vendor)) {
         const ctrlCfg = await db.getControllerConfig(vendor);
         if (ctrlCfg && (ctrlCfg.activo === false || ctrlCfg.activo === 'false')) {
           return res.status(403).json({ error: 'El servicio de conexión para este controlador está temporalmente desactivado.' });

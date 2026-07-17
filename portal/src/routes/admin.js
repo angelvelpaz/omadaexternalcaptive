@@ -843,6 +843,17 @@ function buildControllerResponse(vendor, dbCfg) {
       fromEnv,
     };
   }
+  if (vendor === 'mikrotik') {
+    const pass = cfg.pass || '';
+    return {
+      url:        cfg.url      || '',
+      user:       cfg.user     || '',
+      pass:       controllerTest.masked(pass),
+      activo:     cfg.activo !== undefined ? (cfg.activo === true || cfg.activo === 'true') : true,
+      configured: !!cfg.url && !!cfg.user && !!pass,
+      fromEnv:    false,
+    };
+  }
   return {};
 }
 
@@ -878,13 +889,20 @@ function buildControllerConfig(vendor, dbCfg) {
       siteId:   cfg.siteId   || process.env.OMADA_SITE_ID         || '',
     };
   }
+  if (vendor === 'mikrotik') {
+    return {
+      url:   cfg.url  || '',
+      user:  cfg.user || '',
+      pass:  cfg.pass || '',
+    };
+  }
   return {};
 }
 
 // GET — configuración actual (secretos enmascarados)
 router.get('/api/controllers', requireAdmin, async (req, res, next) => {
   try {
-    const vendors = ['freeradius', 'unifi', 'omada'];
+    const vendors = ['freeradius', 'unifi', 'omada', 'mikrotik'];
     const result  = {};
     for (const vendor of vendors) {
       const dbCfg = await db.getControllerConfig(vendor);
@@ -896,7 +914,7 @@ router.get('/api/controllers', requireAdmin, async (req, res, next) => {
 
 // PUT — guarda configuración en DB
 router.put('/api/controllers/:vendor', requireAdmin,
-  param('vendor').isIn(['freeradius', 'unifi', 'omada']),
+  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -945,6 +963,13 @@ router.put('/api/controllers/:vendor', requireAdmin,
           siteId:   getVal(input.siteId, existing.siteId),
           activo:  activoVal,
         };
+      } else if (vendor === 'mikrotik') {
+        newCfg = {
+          url:     getVal(input.url, existing.url),
+          user:    getVal(input.user, existing.user),
+          pass:    getVal(input.pass, existing.pass),
+          activo:  activoVal,
+        };
       }
 
       await db.saveControllerConfig(vendor, newCfg);
@@ -965,7 +990,7 @@ router.put('/api/controllers/:vendor', requireAdmin,
 
 // POST — prueba conectividad usando la config guardada
 router.post('/api/controllers/:vendor/test', requireAdmin,
-  param('vendor').isIn(['freeradius', 'unifi', 'omada']),
+  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -980,6 +1005,7 @@ router.post('/api/controllers/:vendor/test', requireAdmin,
         case 'freeradius': result = await controllerTest.testFreeRadius(cfg); break;
         case 'unifi':      result = await controllerTest.testUnifi(cfg);      break;
         case 'omada':      result = await controllerTest.testOmada(cfg);      break;
+        case 'mikrotik':   result = await controllerTest.testMikrotik(cfg);   break;
       }
       res.json({ ...result, testedAt: new Date().toISOString() });
     } catch (err) { next(err); }

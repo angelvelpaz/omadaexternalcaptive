@@ -463,6 +463,63 @@ router.post('/api/users/bulk-active', requireAdmin,
   }
 );
 
+router.post('/api/users/bulk-delete', requireAdmin, requireRol('administrador', 'superadministrador'),
+  body('cedulas').isArray({ min: 1 }),
+  body('purgeHistory').isBoolean(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Parámetros inválidos.' });
+
+      const { cedulas, purgeHistory } = req.body;
+
+      // 1. Obtener dispositivos de todos estos usuarios antes de eliminarlos para desautorizarlos de las controladoras
+      const allDevices = [];
+      for (const ced of cedulas) {
+        try {
+          const devs = await db.getUserDevices(ced);
+          allDevices.push(...devs);
+        } catch (err) {
+          console.error(`[DB] Error al buscar dispositivos del usuario ${ced} para desautorizar:`, err.message);
+        }
+      }
+
+      // 2. Ejecutar eliminación en lote
+      await db.bulkDeleteUsers(cedulas, purgeHistory);
+
+      // Auditoría
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'ELIMINAR_USUARIO_LOTE',
+        detalles: `Eliminó en lote ${cedulas.length} usuarios. ¿Historial purgado?: ${purgeHistory}`
+      });
+
+      // 3. Desautorizar dispositivos en segundo plano
+      for (const d of allDevices) {
+        const mac = d.mac_address;
+        
+        // Omada
+        if (process.env.OMADA_CONTROLLER_URL) {
+          omadaSvc.unauthorizeClient({ clientMac: mac }).catch(err => {
+            console.error(`[OMADA] Error al desautorizar MAC ${mac} en borrado en lote:`, err.message);
+          });
+        }
+
+        // UniFi
+        if (process.env.UNIFI_CONTROLLER_URL) {
+          unifiSvc.unauthorizeGuest(mac).catch(err => {
+            console.error(`[UNIFI] Error al desautorizar MAC ${mac} en borrado en lote:`, err.message);
+          });
+        }
+      }
+
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  }
+);
+
 router.patch('/api/users/:cedula/active', requireAdmin,
   param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
   body('active').isBoolean(),

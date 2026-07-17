@@ -484,6 +484,58 @@ async function setUserActive(cedula, active) {
   }
 }
 
+async function bulkDeleteUsers(cedulas, purgeHistory = false) {
+  if (!Array.isArray(cedulas) || cedulas.length === 0) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (purgeHistory) {
+      // 1. Obtener todas las MACs de dispositivos de los usuarios
+      const macsRes = await client.query(
+        'SELECT mac_address FROM dispositivos_usuario WHERE cedula = ANY($1)',
+        [cedulas]
+      );
+      const macs = [];
+      for (const r of macsRes.rows) {
+        const clean = r.mac_address.trim().toUpperCase();
+        macs.push(clean.replace(/:/g, '-'));
+        macs.push(clean.replace(/-/g, ':'));
+      }
+
+      // 2. Eliminar de radacct (tanto por cédula como por MAC de sus dispositivos)
+      await client.query(
+        `DELETE FROM radacct WHERE username = ANY($1) OR UPPER(callingstationid) = ANY($2)`,
+        [cedulas, macs]
+      );
+
+      // 3. Eliminar dispositivos registrados
+      await client.query(
+        `DELETE FROM dispositivos_usuario WHERE cedula = ANY($1)`,
+        [cedulas]
+      );
+
+      // 4. Eliminar historial de accesos
+      await client.query(
+        `DELETE FROM access_log WHERE cedula = ANY($1)`,
+        [cedulas]
+      );
+    }
+
+    // 5. Eliminar credenciales y perfil (siempre se ejecuta)
+    await client.query(`DELETE FROM radcheck    WHERE username = ANY($1)`, [cedulas]);
+    await client.query(`DELETE FROM radreply    WHERE username = ANY($1)`, [cedulas]);
+    await client.query(`DELETE FROM radusergroup WHERE username = ANY($1)`, [cedulas]);
+    await client.query(`DELETE FROM usuarios_portal WHERE cedula = ANY($1)`, [cedulas]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function bulkUpdateUserActive(cedulas, active) {
   if (!Array.isArray(cedulas) || cedulas.length === 0) return;
   const client = await pool.connect();
@@ -1629,7 +1681,7 @@ module.exports = {
   closeExpiredSessions,
   userExists, getUserByCedula, createUser, logAccess, updateTermsAcceptance,
   // admin
-  listUsers, getUserDetail, setUserActive, bulkUpdateUserActive, deleteUser, setUserGroups, updateUserType, bulkUpdateUserType,
+  listUsers, getUserDetail, setUserActive, bulkUpdateUserActive, deleteUser, bulkDeleteUsers, setUserGroups, updateUserType, bulkUpdateUserType,
   listGroups, addGroupAttribute, deleteGroupAttribute, deleteGroup,
   getStats,
   getControllerConfig, saveControllerConfig,

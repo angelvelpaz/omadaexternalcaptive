@@ -88,7 +88,12 @@
         `;
         document.head.appendChild(style);
       }
-    }).catch(() => {});
+
+      const redirectSecs = cfg.redirectSeconds !== undefined ? parseInt(cfg.redirectSeconds) : 3;
+      startTimer(redirectSecs);
+    }).catch(() => {
+      startTimer(3);
+    });
 
     // Auto-redirección si hay URL de destino
     const defaultUrl = 'http://www.google.com';
@@ -98,34 +103,41 @@
     redirectSection.classList.remove('hidden');
     document.getElementById('btn-browse').href = targetUrl;
 
-    let count = 18;
-    const progressBar = document.getElementById('progress-bar');
-    const countdownEl = document.getElementById('countdown');
+    function doRedirect() {
+      try { window.location.replace(targetUrl); } catch (e) {}
+      try { window.location.href = targetUrl; } catch (e) {}
+      try {
+        const link = document.createElement('a');
+        link.href = targetUrl;
+        link.target = '_self';
+        document.body.appendChild(link);
+        link.click();
+      } catch (e) {}
+    }
 
-    const interval = setInterval(() => {
-      count--;
-      countdownEl.textContent = count;
-      progressBar.style.width = (count / 18 * 100) + '%';
-      if (count <= 0) {
-        clearInterval(interval);
-        
-        // Intentar redirección de varias formas para máxima compatibilidad con navegadores cautivos
-        try {
-          window.location.replace(targetUrl);
-        } catch (e) {}
-        try {
-          window.location.href = targetUrl;
-        } catch (e) {}
-        try {
-          // Crear un enlace temporal para simular clic físico (útil en iOS/Android webviews restrictivos)
-          const link = document.createElement('a');
-          link.href = targetUrl;
-          link.target = '_self';
-          document.body.appendChild(link);
-          link.click();
-        } catch (e) {}
+    function startTimer(seconds) {
+      let count = Math.max(0, parseInt(seconds));
+      if (count === 0) {
+        doRedirect();
+        return;
       }
-    }, 1000);
+
+      const total = count;
+      const progressBar = document.getElementById('progress-bar');
+      const countdownEl = document.getElementById('countdown');
+      countdownEl.textContent = count;
+      progressBar.style.width = '100%';
+
+      const interval = setInterval(() => {
+        count--;
+        countdownEl.textContent = Math.max(0, count);
+        progressBar.style.width = (Math.max(0, count) / total * 100) + '%';
+        if (count <= 0) {
+          clearInterval(interval);
+          doRedirect();
+        }
+      }, 1000);
+    }
   </script>
 </body>
 </html>

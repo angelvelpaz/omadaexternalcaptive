@@ -79,6 +79,7 @@ router.get('/auth/config', async (req, res, next) => {
       termsText: branding.termsText || '',
       termsUpdatedAt: branding.termsUpdatedAt || '2026-07-09T14:50:00.000Z',
       sessionMinutes: parseInt(process.env.SESSION_DURATION_MINUTES || '480'),
+      redirectSeconds: parseInt(branding.redirectSeconds !== undefined ? branding.redirectSeconds : '3'),
       secapEnabled: secap.activo === true || secap.activo === 'true',
       emailOpcional: secap.emailOpcional === true || secap.emailOpcional === 'true',
     });

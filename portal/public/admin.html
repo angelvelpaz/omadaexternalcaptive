@@ -709,6 +709,13 @@
             <p class="text-[10px] text-gray-400 mt-1">Permite restringir el acceso a este panel de administración únicamente a direcciones IP específicas o rangos de subredes CIDR (separados por comas). Por defecto es <span class="font-mono">0.0.0.0</span> (acceso libre).</p>
           </div>
 
+          <!-- Tiempo de Redirección en Pantalla de Éxito -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tiempo de redirección en pantalla de éxito (segundos)</label>
+            <input type="number" id="cfg-branding-redirectSeconds" min="0" max="60" placeholder="3" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="text-[10px] text-gray-400 mt-1">Define cuántos segundos esperará el usuario en la pantalla de "Conectado exitosamente" antes de redirigirse a su destino. Por defecto es <span class="font-semibold text-gray-600">3 segundos</span> (use <span class="font-mono">0</span> para redirección instantánea).</p>
+          </div>
+
           <!-- Términos y Condiciones -->
           <div>
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Términos y Condiciones de Uso (Texto Plano)</label>
@@ -3928,6 +3935,7 @@ async function loadBranding() {
     document.getElementById('cfg-branding-termsText').value    = config.termsText || '';
     document.getElementById('cfg-branding-inactiveMessage').value = config.inactiveMessage || '';
     document.getElementById('cfg-branding-ipWhitelist').value = config.ipWhitelist || '0.0.0.0';
+    document.getElementById('cfg-branding-redirectSeconds').value = config.redirectSeconds !== undefined ? config.redirectSeconds : '3';
   } catch (err) {
     errEl.textContent = 'Error al cargar la personalización: ' + err.message;
     errEl.classList.remove('hidden');
@@ -3970,6 +3978,7 @@ document.getElementById('form-branding').addEventListener('submit', async (e) =>
     termsText:    document.getElementById('cfg-branding-termsText').value.trim(),
     inactiveMessage: document.getElementById('cfg-branding-inactiveMessage').value.trim(),
     ipWhitelist:  document.getElementById('cfg-branding-ipWhitelist').value.trim(),
+    redirectSeconds: document.getElementById('cfg-branding-redirectSeconds').value.trim(),
   };
 
   btn.disabled = true;

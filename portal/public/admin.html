@@ -1187,6 +1187,35 @@
   </div>
 </div>
 
+<!-- ── MODAL ESTADO EN TIEMPO REAL (OMADA) ── -->
+<div id="modal-live-status" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden transform transition-all">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-900 to-indigo-900 text-white">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-white/10 rounded-lg">
+          <svg class="w-6 h-6 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071a10 10 0 0114.142 0M1.42 9h.01"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-lg leading-tight">Estado en Tiempo Real (Omada)</h3>
+          <p class="text-xs text-blue-200 font-mono" id="live-modal-mac">00-00-00-00-00-00</p>
+        </div>
+      </div>
+      <button onclick="closeLiveStatusModal()" class="text-white/70 hover:text-white text-xl font-bold p-1 rounded-lg hover:bg-white/10">&times;</button>
+    </div>
+
+    <div class="p-6 space-y-4 text-sm" id="live-modal-content">
+      <div class="text-center py-8 text-gray-400">Cargando métricas desde el controlador Omada...</div>
+    </div>
+
+    <div class="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+      <span class="text-xs text-gray-400" id="live-modal-updated">Consulta en vivo</span>
+      <button onclick="closeLiveStatusModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium text-xs">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Estado ────────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('admin_token') || '';
@@ -4691,6 +4720,96 @@ document.addEventListener('keydown', (e) => {
     document.getElementById('btn-audit-search').click();
   }
 });
+
+async function showDeviceLiveStatus(mac) {
+  const modal = document.getElementById('modal-live-status');
+  const macEl = document.getElementById('live-modal-mac');
+  const content = document.getElementById('live-modal-content');
+  const updatedEl = document.getElementById('live-modal-updated');
+
+  macEl.textContent = mac;
+  content.innerHTML = '<div class="text-center py-8 text-gray-400"><div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent mb-2"></div><p class="font-medium text-gray-600">Consultando controlador Omada...</p></div>';
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  try {
+    const data = await api('GET', `/devices/${encodeURIComponent(mac)}/live-status`);
+    updatedEl.textContent = `Actualizado: ${new Date().toLocaleTimeString('es-EC')}`;
+
+    if (!data.online) {
+      content.innerHTML = `
+        <div class="text-center py-6">
+          <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m-12.728 0a9 9 0 010-12.728m2.828 2.828a5 5 0 017.072 0m-7.072 0a5 5 0 010 7.072m2.828-2.828a1 1 0 011.414 0"/>
+            </svg>
+          </div>
+          <h4 class="font-bold text-gray-700 text-base">Dispositivo Fuera de Línea</h4>
+          <p class="text-xs text-gray-500 mt-1">La dirección MAC <span class="font-mono font-semibold">${esc(mac)}</span> no reporta actividad o transmisión activa en el controlador Omada.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const durationStr = data.uptime ? formatDuration(data.uptime) : '—';
+    const uploadStr = data.upload ? formatBytes(data.upload) : '0 B';
+    const downloadStr = data.download ? formatBytes(data.download) : '0 B';
+
+    content.innerHTML = `
+      <div class="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 bg-green-500 rounded-full animate-ping"></span>
+          <span class="font-bold text-green-800 text-sm">🟢 CONECTADO / EN LÍNEA</span>
+        </div>
+        <span class="px-2.5 py-1 bg-green-200 text-green-900 rounded-lg font-semibold text-xs capitalize">${esc(data.vendor || 'omada')}</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="p-3 bg-gray-50 rounded-xl">
+          <span class="block text-[10px] font-bold uppercase text-gray-400">Red Wi-Fi (SSID)</span>
+          <span class="font-bold text-indigo-700 text-sm">${esc(data.ssid || '—')}</span>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-xl">
+          <span class="block text-[10px] font-bold uppercase text-gray-400">Punto de Acceso (AP)</span>
+          <span class="font-bold text-gray-900 text-sm">${esc(data.apName || '—')}</span>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-xl">
+          <span class="block text-[10px] font-bold uppercase text-gray-400">Sitio Omada</span>
+          <span class="font-bold text-gray-900 text-sm">${esc(data.siteName || '—')}</span>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-xl">
+          <span class="block text-[10px] font-bold uppercase text-gray-400">Dirección IP</span>
+          <span class="font-mono font-bold text-gray-900 text-sm">${esc(data.ip || '—')}</span>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-xl">
+          <span class="block text-[10px] font-bold uppercase text-gray-400">Dispositivo</span>
+          <span class="font-bold text-gray-900 text-sm">${esc(data.name || '—')}</span>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-xl">
+          <span class="block text-[10px] font-bold uppercase text-gray-400">Tiempo Activo</span>
+          <span class="font-bold text-gray-900 text-sm">${durationStr}</span>
+        </div>
+      </div>
+
+      <div class="p-3 bg-blue-50 border border-blue-100 rounded-xl flex justify-between items-center">
+        <div>
+          <span class="block text-[10px] font-bold uppercase text-blue-600">Tráfico en Vivo</span>
+          <span class="text-xs font-semibold text-blue-900">↑ Subida: ${uploadStr} &nbsp; | &nbsp; ↓ Bajada: ${downloadStr}</span>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    content.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-xl text-xs font-medium">Error al consultar Omada: ${esc(err.message)}</div>`;
+  }
+}
+
+function closeLiveStatusModal() {
+  const modal = document.getElementById('modal-live-status');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
 
 function openCreateUserModal() {
   const modal = document.getElementById('user-modal');

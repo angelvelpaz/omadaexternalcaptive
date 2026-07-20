@@ -1022,8 +1022,12 @@ async function getConsolidatedConnectionsReport({ search = '', startDate, endDat
   params.push(limit, offset);
 
   const res = await pool.query(fullQuery, params);
+  const data = res.rows.map(row => ({
+    ...row,
+    vendor: getVendor(row.mac_address)
+  }));
 
-  return { data: res.rows, total: parseInt(totalRes.rows[0].count) };
+  return { data, total: parseInt(totalRes.rows[0].count) };
 }
 
 async function getAccessLogReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {

@@ -3306,7 +3306,7 @@ async function loadReports() {
           const totalBytesStr = c.total_bytes ? formatBytes(c.total_bytes) : '0 B';
           const uploadStr = c.upload ? formatBytes(c.upload) : '0 B';
           const downloadStr = c.download ? formatBytes(c.download) : '0 B';
-          const vendorName = getVendor(c.mac_address);
+          const vendorName = c.vendor || 'Genérico / Privado';
           const cleanBrand = cleanVendorName(vendorName);
           return `
             <tr class="hover:bg-gray-50">
@@ -3421,6 +3421,36 @@ function formatBytes(bytes) {
   return parseFloat((num / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function cleanVendorName(rawName) {
+  if (!rawName || rawName === 'Unknown' || rawName === 'Desconocido' || rawName === 'Genérico / Privado') {
+    return 'Genérico / Privado';
+  }
+  const name = String(rawName).toLowerCase();
+  if (name.includes('apple')) return 'Apple';
+  if (name.includes('samsung')) return 'Samsung';
+  if (name.includes('huawei')) return 'Huawei';
+  if (name.includes('xiaomi') || name.includes('chongqing chimi') || name.includes('beijing xiaomi')) return 'Xiaomi';
+  if (name.includes('motorola') || name.includes('lenovo')) return 'Motorola/Lenovo';
+  if (name.includes('tp-link') || name.includes('shenzhen tp-link')) return 'TP-Link';
+  if (name.includes('intel')) return 'Intel';
+  if (name.includes('lg electronics') || name.includes('lg ')) return 'LG';
+  if (name.includes('oppo') || name.includes('guangdong oppo')) return 'Oppo';
+  if (name.includes('vivo mobile')) return 'Vivo';
+  if (name.includes('realme')) return 'Realme';
+  if (name.includes('oneplus')) return 'OnePlus';
+  if (name.includes('zte')) return 'ZTE';
+  if (name.includes('nokia')) return 'Nokia';
+  if (name.includes('sony')) return 'Sony';
+  if (name.includes('google')) return 'Google';
+  if (name.includes('amazon')) return 'Amazon';
+  if (name.includes('hmd global')) return 'Nokia';
+  if (name.includes('asus')) return 'Asus';
+  if (name.includes('hp ') || name.includes('hewlett-packard')) return 'HP';
+  if (name.includes('dell')) return 'Dell';
+  
+  return String(rawName).split(',')[0].split(';')[0].trim();
+}
+
 function updateReportPaginationButtons() {
   const prevBtn = document.getElementById('btn-report-prev');
   const nextBtn = document.getElementById('btn-report-next');
@@ -3521,7 +3551,7 @@ document.getElementById('btn-report-export').addEventListener('click', async () 
           c.cedula,
           c.nombres ? `${c.nombres} ${c.apellidos}` : '—',
           c.mac_address,
-          cleanVendorName(getVendor(c.mac_address)),
+          cleanVendorName(c.vendor),
           c.total_sesiones || 1,
           c.primera_conexion ? new Date(c.primera_conexion).toLocaleString('es-EC') : '—',
           c.ultima_conexion ? new Date(c.ultima_conexion).toLocaleString('es-EC') : '—',

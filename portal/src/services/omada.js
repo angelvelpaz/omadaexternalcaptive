@@ -405,10 +405,10 @@ async function getActiveClients() {
     const allClients = [];
 
     for (const site of sites) {
-      const siteId = site.id;
+      const siteId = site.siteId || site.id;
       try {
         const clientsResp = await client.get(
-          `/openapi/v1/${omadacId}/sites/${siteId}/clients?page=1&pageSize=100`,
+          `/openapi/v1/${omadacId}/sites/${siteId}/clients?page=1&pageSize=1000`,
           {
             headers: { Authorization: `AccessToken=${accessToken}` },
           }

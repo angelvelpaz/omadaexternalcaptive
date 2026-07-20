@@ -60,7 +60,7 @@ async function syncStats() {
 
       // Buscar si el dispositivo está registrado a una cédula en la BD
       const devRes = await pool.query(
-        'SELECT cedula FROM dispositivos_usuario WHERE UPPER(mac_address) = $1',
+        "SELECT cedula FROM dispositivos_usuario WHERE REPLACE(UPPER(mac_address), ':', '-') = $1",
         [mac]
       );
 
@@ -82,7 +82,7 @@ async function syncStats() {
       const accRes = await pool.query(
         `SELECT radacctid, acctsessionid
          FROM radacct
-         WHERE callingstationid = $1 AND acctstoptime IS NULL LIMIT 1`,
+         WHERE REPLACE(UPPER(callingstationid), ':', '-') = $1 AND acctstoptime IS NULL LIMIT 1`,
         [mac]
       );
 

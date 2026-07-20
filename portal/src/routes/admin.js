@@ -209,13 +209,17 @@ router.get('/api/reports', requireAdmin,
         return res.status(400).json({ error: 'Parámetros de consulta inválidos.' });
       }
 
-      const { type, search = '', startDate, endDate, limit = 50, offset = 0 } = req.query;
+      const { type, mode = 'consolidated', search = '', startDate, endDate, limit = 50, offset = 0 } = req.query;
 
       let result;
       if (type === 'users') {
         result = await db.getUsersReport({ search, startDate, endDate, limit, offset });
       } else if (type === 'connections') {
-        result = await db.getConnectionsReport({ search, startDate, endDate, limit, offset });
+        if (mode === 'consolidated') {
+          result = await db.getConsolidatedConnectionsReport({ search, startDate, endDate, limit, offset });
+        } else {
+          result = await db.getConnectionsReport({ search, startDate, endDate, limit, offset });
+        }
       } else if (type === 'access') {
         result = await db.getAccessLogReport({ search, startDate, endDate, limit, offset });
       }

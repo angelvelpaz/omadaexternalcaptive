@@ -546,14 +546,23 @@
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
         <h2 class="text-lg font-bold text-gray-800 mb-4">Reportes del Sistema</h2>
         
-        <form id="form-reports" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+        <form id="form-reports" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
           <!-- Tipo de reporte -->
           <div>
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tipo de Reporte</label>
             <select id="report-type" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="users">Usuarios Registrados</option>
-              <option value="connections">Conexiones (RADIUS)</option>
+              <option value="connections" selected>Conexiones (RADIUS)</option>
               <option value="access">Bitácora de Accesos (Auditoría)</option>
+            </select>
+          </div>
+
+          <!-- Modo de vista (sólo para Conexiones) -->
+          <div id="report-mode-container">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Modo de Vista</label>
+            <select id="report-mode" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="consolidated" selected>📊 Consolidado (Por Usuario y MAC)</option>
+              <option value="detailed">📜 Detallado (Sesión por Sesión)</option>
             </select>
           </div>
 
@@ -3224,8 +3233,11 @@ async function loadReports() {
 
   tbody.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-gray-400">Cargando...</td></tr>';
 
+  const mode = document.getElementById('report-mode') ? document.getElementById('report-mode').value : 'consolidated';
+
   const params = new URLSearchParams({
     type,
+    mode,
     search,
     limit: PAGE_SIZE,
     offset: reportsOffset
@@ -3275,36 +3287,78 @@ async function loadReports() {
       `).join('') : '<tr><td colspan="8" class="py-8 text-center text-gray-400">No se encontraron usuarios.</td></tr>';
 
     } else if (type === 'connections') {
-      thead.innerHTML = `
-        <tr>
-          <th class="px-6 py-3">Cédula</th>
-          <th class="px-6 py-3">Usuario</th>
-          <th class="px-6 py-3">Dirección MAC</th>
-          <th class="px-6 py-3">Dirección IP</th>
-          <th class="px-6 py-3">Inicio Conexión</th>
-          <th class="px-6 py-3">Fin Conexión</th>
-          <th class="px-6 py-3">Duración</th>
-          <th class="px-6 py-3">Tráfico (Subida/Bajada)</th>
-        </tr>
-      `;
-
-      tbody.innerHTML = res.data.length ? res.data.map(c => {
-        const durationStr = c.duration ? formatDuration(c.duration) : (c.stop_time ? '0s' : '<span class="text-green-600 font-semibold">Activa</span>');
-        const uploadStr = c.upload ? formatBytes(c.upload) : '0 B';
-        const downloadStr = c.download ? formatBytes(c.download) : '0 B';
-        return `
-          <tr class="hover:bg-gray-50">
-            <td class="px-6 py-4 font-mono font-medium text-gray-900">${esc(c.username)}</td>
-            <td class="px-6 py-4">${c.nombres ? esc(c.nombres) + ' ' + esc(c.apellidos) : '—'}</td>
-            <td class="px-6 py-4 font-mono text-xs">${esc(c.mac_address)}</td>
-            <td class="px-6 py-4 font-mono text-xs">${esc(c.ip_address)}</td>
-            <td class="px-6 py-4 text-xs text-gray-500">${c.start_time ? new Date(c.start_time).toLocaleString('es-EC') : '—'}</td>
-            <td class="px-6 py-4 text-xs text-gray-500">${c.stop_time ? new Date(c.stop_time).toLocaleString('es-EC') : (c.start_time ? '<span class="text-green-600 font-medium">En línea</span>' : '—')}</td>
-            <td class="px-6 py-4 text-xs text-gray-700">${durationStr}</td>
-            <td class="px-6 py-4 text-xs text-gray-500">${uploadStr} / ${downloadStr}</td>
+      if (mode === 'consolidated') {
+        thead.innerHTML = `
+          <tr>
+            <th class="px-6 py-3">Cédula</th>
+            <th class="px-6 py-3">Usuario</th>
+            <th class="px-6 py-3">Dirección MAC</th>
+            <th class="px-6 py-3">Conexiones</th>
+            <th class="px-6 py-3">Primera Conexión</th>
+            <th class="px-6 py-3">Última Conexión</th>
+            <th class="px-6 py-3">Tiempo Total</th>
+            <th class="px-6 py-3">Consumo Total</th>
           </tr>
         `;
-      }).join('') : '<tr><td colspan="8" class="py-8 text-center text-gray-400">No se encontraron conexiones.</td></tr>';
+
+        tbody.innerHTML = res.data.length ? res.data.map(c => {
+          const durationStr = c.duration ? formatDuration(c.duration) : '0s';
+          const totalBytesStr = c.total_bytes ? formatBytes(c.total_bytes) : '0 B';
+          const uploadStr = c.upload ? formatBytes(c.upload) : '0 B';
+          const downloadStr = c.download ? formatBytes(c.download) : '0 B';
+          const vendorName = getVendor(c.mac_address);
+          const cleanBrand = cleanVendorName(vendorName);
+          return `
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 font-mono font-medium text-gray-900">${esc(c.cedula)}</td>
+              <td class="px-6 py-4 font-medium text-gray-900">${c.nombres ? esc(c.nombres) + ' ' + esc(c.apellidos) : '—'}</td>
+              <td class="px-6 py-4 font-mono text-xs">
+                <div>${esc(c.mac_address)}</div>
+                <div class="text-[10px] text-gray-400 font-sans">${esc(cleanBrand)}</div>
+              </td>
+              <td class="px-6 py-4 font-semibold text-xs text-blue-600">${c.total_sesiones || 1} sesiones</td>
+              <td class="px-6 py-4 text-xs text-gray-500">${c.primera_conexion ? new Date(c.primera_conexion).toLocaleString('es-EC') : '—'}</td>
+              <td class="px-6 py-4 text-xs text-gray-500">${c.ultima_conexion ? new Date(c.ultima_conexion).toLocaleString('es-EC') : '—'}</td>
+              <td class="px-6 py-4 text-xs font-medium text-gray-700">${durationStr}</td>
+              <td class="px-6 py-4 text-xs font-bold text-gray-900">
+                <div>${totalBytesStr}</div>
+                <div class="text-[10px] font-normal text-gray-400">↑ ${uploadStr} / ↓ ${downloadStr}</div>
+              </td>
+            </tr>
+          `;
+        }).join('') : '<tr><td colspan="8" class="py-8 text-center text-gray-400">No se encontraron conexiones.</td></tr>';
+      } else {
+        thead.innerHTML = `
+          <tr>
+            <th class="px-6 py-3">Cédula</th>
+            <th class="px-6 py-3">Usuario</th>
+            <th class="px-6 py-3">Dirección MAC</th>
+            <th class="px-6 py-3">Dirección IP</th>
+            <th class="px-6 py-3">Inicio Conexión</th>
+            <th class="px-6 py-3">Fin Conexión</th>
+            <th class="px-6 py-3">Duración</th>
+            <th class="px-6 py-3">Tráfico (Subida/Bajada)</th>
+          </tr>
+        `;
+
+        tbody.innerHTML = res.data.length ? res.data.map(c => {
+          const durationStr = c.duration ? formatDuration(c.duration) : (c.stop_time ? '0s' : '<span class="text-green-600 font-semibold">Activa</span>');
+          const uploadStr = c.upload ? formatBytes(c.upload) : '0 B';
+          const downloadStr = c.download ? formatBytes(c.download) : '0 B';
+          return `
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 font-mono font-medium text-gray-900">${esc(c.username)}</td>
+              <td class="px-6 py-4">${c.nombres ? esc(c.nombres) + ' ' + esc(c.apellidos) : '—'}</td>
+              <td class="px-6 py-4 font-mono text-xs">${esc(c.mac_address)}</td>
+              <td class="px-6 py-4 font-mono text-xs">${esc(c.ip_address)}</td>
+              <td class="px-6 py-4 text-xs text-gray-500">${c.start_time ? new Date(c.start_time).toLocaleString('es-EC') : '—'}</td>
+              <td class="px-6 py-4 text-xs text-gray-500">${c.stop_time ? new Date(c.stop_time).toLocaleString('es-EC') : (c.start_time ? '<span class="text-green-600 font-medium">En línea</span>' : '—')}</td>
+              <td class="px-6 py-4 text-xs text-gray-700">${durationStr}</td>
+              <td class="px-6 py-4 text-xs text-gray-500">${uploadStr} / ${downloadStr}</td>
+            </tr>
+          `;
+        }).join('') : '<tr><td colspan="8" class="py-8 text-center text-gray-400">No se encontraron conexiones.</td></tr>';
+      }
 
     } else if (type === 'access') {
       thead.innerHTML = `
@@ -3376,10 +3430,20 @@ function updateReportPaginationButtons() {
 }
 
 // Event Listeners para Reportes
-document.getElementById('report-type').addEventListener('change', () => {
+document.getElementById('report-type').addEventListener('change', (e) => {
+  const isConn = e.target.value === 'connections';
+  const modeContainer = document.getElementById('report-mode-container');
+  if (modeContainer) modeContainer.classList.toggle('hidden', !isConn);
   reportsOffset = 0;
   loadReports();
 });
+
+if (document.getElementById('report-mode')) {
+  document.getElementById('report-mode').addEventListener('change', () => {
+    reportsOffset = 0;
+    loadReports();
+  });
+}
 
 document.getElementById('btn-report-prev').addEventListener('click', () => {
   if (reportsOffset >= PAGE_SIZE) {
@@ -3450,18 +3514,38 @@ document.getElementById('btn-report-export').addEventListener('click', async () 
         new Date(u.fecha_registro).toLocaleString('es-EC')
       ]);
     } else if (type === 'connections') {
-      headers = ['Cédula', 'Nombres', 'Apellidos', 'MAC Address', 'IP Address', 'Inicio Conexión', 'Fin Conexión', 'Duración (segundos)', 'Subida (Bytes)', 'Bajada (Bytes)'];
-      rows = res.data.map(c => [
-        c.username,
-        c.nombres ? `${c.nombres} ${c.apellidos}` : '',
-        c.mac_address,
-        c.ip_address,
-        c.start_time ? new Date(c.start_time).toLocaleString('es-EC') : '',
-        c.stop_time ? new Date(c.stop_time).toLocaleString('es-EC') : (c.start_time ? 'Activa' : ''),
-        c.duration || 0,
-        c.upload || 0,
-        c.download || 0
-      ]);
+      const mode = document.getElementById('report-mode') ? document.getElementById('report-mode').value : 'consolidated';
+      if (mode === 'consolidated') {
+        headers = ['Cédula', 'Nombres y Apellidos', 'Dirección MAC', 'Fabricante', 'Total Sesiones', 'Primera Conexión', 'Última Conexión', 'Tiempo Total (Segundos)', 'Tiempo Total Formateado', 'Upload (Bytes)', 'Download (Bytes)', 'Total Bytes', 'Consumo Formateado'];
+        rows = res.data.map(c => [
+          c.cedula,
+          c.nombres ? `${c.nombres} ${c.apellidos}` : '—',
+          c.mac_address,
+          cleanVendorName(getVendor(c.mac_address)),
+          c.total_sesiones || 1,
+          c.primera_conexion ? new Date(c.primera_conexion).toLocaleString('es-EC') : '—',
+          c.ultima_conexion ? new Date(c.ultima_conexion).toLocaleString('es-EC') : '—',
+          c.duration || 0,
+          c.duration ? formatDuration(c.duration) : '0s',
+          c.upload || 0,
+          c.download || 0,
+          c.total_bytes || 0,
+          c.total_bytes ? formatBytes(c.total_bytes) : '0 B'
+        ]);
+      } else {
+        headers = ['Cédula', 'Nombres', 'Apellidos', 'MAC Address', 'IP Address', 'Inicio Conexión', 'Fin Conexión', 'Duración (segundos)', 'Subida (Bytes)', 'Bajada (Bytes)'];
+        rows = res.data.map(c => [
+          c.username,
+          c.nombres ? `${c.nombres} ${c.apellidos}` : '',
+          c.mac_address,
+          c.ip_address,
+          c.start_time ? new Date(c.start_time).toLocaleString('es-EC') : '',
+          c.stop_time ? new Date(c.stop_time).toLocaleString('es-EC') : (c.start_time ? 'Activa' : ''),
+          c.duration || 0,
+          c.upload || 0,
+          c.download || 0
+        ]);
+      }
     } else if (type === 'access') {
       headers = ['Cédula', 'Nombres', 'Apellidos', 'Dispositivo', 'MAC Address', 'IP Address', 'Resultado', 'Fecha y Hora'];
       rows = res.data.map(a => [
@@ -3635,18 +3719,33 @@ document.getElementById('btn-report-pdf').addEventListener('click', async () => 
         new Date(u.fecha_registro).toLocaleString('es-EC')
       ]);
     } else if (type === 'connections') {
-      headers = [['Cédula', 'Nombres y Apellidos', 'Dirección MAC', 'Dirección IP', 'Inicio Conexión', 'Fin Conexión', 'Duración', 'Subida', 'Bajada']];
-      rows = res.data.map(c => [
-        c.username,
-        c.nombres ? `${c.nombres} ${c.apellidos}` : '—',
-        c.mac_address,
-        c.ip_address,
-        c.start_time ? new Date(c.start_time).toLocaleString('es-EC') : '—',
-        c.stop_time ? new Date(c.stop_time).toLocaleString('es-EC') : (c.start_time ? 'En línea' : '—'),
-        c.duration ? formatDuration(c.duration) : (c.stop_time ? '0s' : 'En línea'),
-        c.upload ? formatBytes(c.upload) : '0 B',
-        c.download ? formatBytes(c.download) : '0 B'
-      ]);
+      const mode = document.getElementById('report-mode') ? document.getElementById('report-mode').value : 'consolidated';
+      if (mode === 'consolidated') {
+        headers = [['Cédula', 'Nombres y Apellidos', 'Dirección MAC', 'Sesiones', 'Primera Conexión', 'Última Conexión', 'Tiempo Total', 'Consumo Total']];
+        rows = res.data.map(c => [
+          c.cedula,
+          c.nombres ? `${c.nombres} ${c.apellidos}` : '—',
+          c.mac_address,
+          String(c.total_sesiones || 1),
+          c.primera_conexion ? new Date(c.primera_conexion).toLocaleDateString('es-EC') : '—',
+          c.ultima_conexion ? new Date(c.ultima_conexion).toLocaleDateString('es-EC') : '—',
+          c.duration ? formatDuration(c.duration) : '0s',
+          c.total_bytes ? formatBytes(c.total_bytes) : '0 B'
+        ]);
+      } else {
+        headers = [['Cédula', 'Nombres y Apellidos', 'Dirección MAC', 'Dirección IP', 'Inicio Conexión', 'Fin Conexión', 'Duración', 'Subida', 'Bajada']];
+        rows = res.data.map(c => [
+          c.username,
+          c.nombres ? `${c.nombres} ${c.apellidos}` : '—',
+          c.mac_address,
+          c.ip_address,
+          c.start_time ? new Date(c.start_time).toLocaleString('es-EC') : '—',
+          c.stop_time ? new Date(c.stop_time).toLocaleString('es-EC') : (c.start_time ? 'En línea' : '—'),
+          c.duration ? formatDuration(c.duration) : (c.stop_time ? '0s' : 'En línea'),
+          c.upload ? formatBytes(c.upload) : '0 B',
+          c.download ? formatBytes(c.download) : '0 B'
+        ]);
+      }
     } else if (type === 'access') {
       headers = [['Cédula', 'Nombres y Apellidos', 'Dispositivo', 'Dirección MAC', 'Dirección IP', 'Evento', 'Fecha y Hora']];
       rows = res.data.map(a => [

@@ -962,6 +962,70 @@ async function getConnectionsReport({ search = '', startDate, endDate, limit = 5
   return { data: res.rows, total: parseInt(totalRes.rows[0].count) };
 }
 
+async function getConsolidatedConnectionsReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
+  let innerQuery = `
+    SELECT 
+      COALESCE(u.cedula, r.username) AS cedula,
+      COALESCE(u.nombres, 'Sin Registro') AS nombres,
+      COALESCE(u.apellidos, '') AS apellidos,
+      u.tipo_usuario,
+      REPLACE(UPPER(r.callingstationid), ':', '-') AS mac_address,
+      COUNT(r.radacctid)::int AS total_sesiones,
+      MIN(r.acctstarttime) AS primera_conexion,
+      MAX(r.acctstarttime) AS ultima_conexion,
+      SUM(
+        CASE 
+          WHEN r.acctstoptime IS NULL THEN EXTRACT(EPOCH FROM (NOW() - r.acctstarttime))::bigint
+          ELSE r.acctsessiontime
+        END
+      )::bigint AS duration,
+      SUM(COALESCE(r.acctinputoctets, 0))::bigint AS upload,
+      SUM(COALESCE(r.acctoutputoctets, 0))::bigint AS download,
+      SUM(COALESCE(r.acctinputoctets, 0) + COALESCE(r.acctoutputoctets, 0))::bigint AS total_bytes
+    FROM radacct r
+    LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+    LEFT JOIN usuarios_portal u ON u.cedula = (
+      CASE 
+        WHEN r.username ~ '^[0-9]+$' THEN r.username 
+        ELSE d.cedula 
+      END
+    )
+    WHERE r.callingstationid IS NOT NULL AND r.callingstationid <> ''
+  `;
+  const params = [];
+  let paramIdx = 1;
+
+  if (search) {
+    innerQuery += ` AND (r.username ILIKE $${paramIdx} OR u.cedula ILIKE $${paramIdx} OR u.nombres ILIKE $${paramIdx} OR u.apellidos ILIKE $${paramIdx} OR r.callingstationid ILIKE $${paramIdx})`;
+    params.push(`%${search}%`);
+    paramIdx++;
+  }
+
+  if (startDate) {
+    innerQuery += ` AND r.acctstarttime >= $${paramIdx}`;
+    params.push(startDate);
+    paramIdx++;
+  }
+
+  if (endDate) {
+    innerQuery += ` AND r.acctstarttime <= $${paramIdx}`;
+    params.push(endDate);
+    paramIdx++;
+  }
+
+  innerQuery += ` GROUP BY COALESCE(u.cedula, r.username), u.nombres, u.apellidos, u.tipo_usuario, REPLACE(UPPER(r.callingstationid), ':', '-')`;
+
+  const countQuery = `SELECT COUNT(*) FROM (${innerQuery}) AS total_cnt`;
+  const totalRes = await pool.query(countQuery, params);
+
+  let fullQuery = `${innerQuery} ORDER BY total_bytes DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+  params.push(limit, offset);
+
+  const res = await pool.query(fullQuery, params);
+
+  return { data: res.rows, total: parseInt(totalRes.rows[0].count) };
+}
+
 async function getAccessLogReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
   let query = `
     SELECT a.id, a.cedula, u.nombres, u.apellidos, a.vendor, a.mac_address, a.ip_address, a.resultado, a.created_at
@@ -1692,7 +1756,7 @@ module.exports = {
   listGroups, addGroupAttribute, deleteGroupAttribute, deleteGroup,
   getStats,
   getControllerConfig, saveControllerConfig,
-  getUsersReport, getConnectionsReport, getAccessLogReport,
+  getUsersReport, getConnectionsReport, getConsolidatedConnectionsReport, getAccessLogReport,
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,

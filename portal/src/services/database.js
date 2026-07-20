@@ -327,14 +327,22 @@ async function listUsers({
              (
                SELECT MAX(r.acctstarttime) 
                FROM radacct r 
-               LEFT JOIN dispositivos_usuario d ON d.cedula = u.cedula
-               WHERE r.username = u.cedula OR REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+               WHERE r.username = u.cedula 
+                  OR REPLACE(UPPER(r.callingstationid), ':', '-') IN (
+                       SELECT REPLACE(UPPER(mac_address), ':', '-') 
+                       FROM dispositivos_usuario 
+                       WHERE cedula = u.cedula
+                     )
              ) AS ultima_conexion,
              (
                SELECT COALESCE(SUM(r.acctinputoctets + r.acctoutputoctets), 0)
                FROM radacct r 
-               LEFT JOIN dispositivos_usuario d ON d.cedula = u.cedula
-               WHERE r.username = u.cedula OR REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+               WHERE r.username = u.cedula 
+                  OR REPLACE(UPPER(r.callingstationid), ':', '-') IN (
+                       SELECT REPLACE(UPPER(mac_address), ':', '-') 
+                       FROM dispositivos_usuario 
+                       WHERE cedula = u.cedula
+                     )
              ) AS consumo_total
       FROM usuarios_portal u
     ) u_agg
@@ -796,17 +804,17 @@ async function getStats() {
       SELECT
         u.cedula AS username,
         u.nombres || ' ' || u.apellidos AS nombre_completo,
-        SUM(COALESCE(r.acctinputoctets, 0) + COALESCE(r.acctoutputoctets, 0)) AS total_bytes
-      FROM radacct r
-      JOIN usuarios_portal u ON (
-        u.cedula = r.username 
-        OR EXISTS (
-          SELECT 1 FROM dispositivos_usuario d 
-          WHERE d.cedula = u.cedula 
-            AND REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
-        )
-      )
-      GROUP BY u.cedula, nombre_completo
+        (
+          SELECT COALESCE(SUM(r.acctinputoctets + r.acctoutputoctets), 0)
+          FROM radacct r 
+          WHERE r.username = u.cedula 
+             OR REPLACE(UPPER(r.callingstationid), ':', '-') IN (
+                  SELECT REPLACE(UPPER(mac_address), ':', '-') 
+                  FROM dispositivos_usuario 
+                  WHERE cedula = u.cedula
+                )
+        ) AS total_bytes
+      FROM usuarios_portal u
       ORDER BY total_bytes DESC
       LIMIT 10
     `),

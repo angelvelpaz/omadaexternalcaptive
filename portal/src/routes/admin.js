@@ -198,6 +198,7 @@ router.get('/api/stats', requireAdmin, async (req, res, next) => {
 router.get('/api/reports', requireAdmin,
   query('type').isIn(['users', 'connections', 'access']),
   query('search').optional().isString().trim().escape(),
+  query('ssid').optional().isString().trim().escape(),
   query('startDate').optional().isISO8601().toDate(),
   query('endDate').optional().isISO8601().toDate(),
   query('limit').optional().isInt({ min: 1, max: 10000 }).toInt(),
@@ -209,16 +210,16 @@ router.get('/api/reports', requireAdmin,
         return res.status(400).json({ error: 'Parámetros de consulta inválidos.' });
       }
 
-      const { type, mode = 'consolidated', search = '', startDate, endDate, limit = 50, offset = 0 } = req.query;
+      const { type, mode = 'consolidated', search = '', ssid = '', startDate, endDate, limit = 50, offset = 0 } = req.query;
 
       let result;
       if (type === 'users') {
         result = await db.getUsersReport({ search, startDate, endDate, limit, offset });
       } else if (type === 'connections') {
         if (mode === 'consolidated') {
-          result = await db.getConsolidatedConnectionsReport({ search, startDate, endDate, limit, offset });
+          result = await db.getConsolidatedConnectionsReport({ search, ssid, startDate, endDate, limit, offset });
         } else {
-          result = await db.getConnectionsReport({ search, startDate, endDate, limit, offset });
+          result = await db.getConnectionsReport({ search, ssid, startDate, endDate, limit, offset });
         }
       } else if (type === 'access') {
         result = await db.getAccessLogReport({ search, startDate, endDate, limit, offset });
@@ -228,6 +229,21 @@ router.get('/api/reports', requireAdmin,
     } catch (err) { next(err); }
   }
 );
+
+router.get('/api/reports/ssids', requireAdmin, async (req, res, next) => {
+  try {
+    const ssids = await db.getDistinctSsids();
+    res.json({ ssids });
+  } catch (err) { next(err); }
+});
+
+router.get('/api/devices/:mac/live-status', requireAdmin, async (req, res, next) => {
+  try {
+    const { mac } = req.params;
+    const liveStatus = await omadaSvc.getDeviceLiveStatus(mac);
+    res.json(liveStatus);
+  } catch (err) { next(err); }
+});
 
 // ─── Dispositivos (CRUD) ───────────────────────────────────────────────────────
 

@@ -423,7 +423,13 @@ async function getActiveClients() {
               uptime:     c.uptime || 0,
               upload:     c.up || c.trafficUp || 0,
               download:   c.down || c.trafficDown || 0,
+              ssid:       c.ssid || null,
+              apMac:      c.apMac || null,
+              apName:     c.apName || null,
+              name:       c.name || c.hostName || null,
+              signalLevel: c.signalLevel || c.rssi || null,
               siteId:     siteId,
+              siteName:   site.name || siteId,
               vendor:     'omada'
             });
           }
@@ -440,4 +446,35 @@ async function getActiveClients() {
   }
 }
 
-module.exports = { authorizeClient, unauthorizeClient, blockClient, unblockClient, kickClient, getActiveClients };
+async function getDeviceLiveStatus(macAddress) {
+  const normMac = String(macAddress).toUpperCase().replace(/[:\-]/g, '');
+  const activeClients = await getActiveClients();
+  const found = activeClients.find(c => String(c.macAddress).toUpperCase().replace(/[:\-]/g, '') === normMac);
+
+  if (!found) {
+    return {
+      online: false,
+      mac: macAddress,
+      message: 'Dispositivo fuera de línea o no conectado en Omada.'
+    };
+  }
+
+  return {
+    online: true,
+    mac: found.macAddress,
+    ip: found.ipAddress || '—',
+    name: found.name || '—',
+    siteId: found.siteId,
+    siteName: found.siteName || 'Omada Site',
+    apMac: found.apMac || '—',
+    apName: found.apName || 'AP Omada',
+    ssid: found.ssid || '—',
+    signalLevel: found.signalLevel,
+    uptime: found.uptime,
+    upload: found.upload,
+    download: found.download,
+    vendor: 'omada'
+  };
+}
+
+module.exports = { authorizeClient, unauthorizeClient, blockClient, unblockClient, kickClient, getActiveClients, getDeviceLiveStatus };

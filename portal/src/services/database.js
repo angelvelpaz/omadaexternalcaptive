@@ -910,10 +910,14 @@ async function getUsersReport({ search = '', startDate, endDate, limit = 50, off
   return { data: res.rows, total: parseInt(totalRes.rows[0].count) };
 }
 
-async function getConnectionsReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
+async function getConnectionsReport({ search = '', ssid = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
   let query = `
     SELECT r.radacctid, COALESCE(u.cedula, r.username) AS username, u.nombres, u.apellidos, r.callingstationid AS mac_address,
            r.framedipaddress AS ip_address, r.acctstarttime AS start_time, r.acctstoptime AS stop_time,
+           CASE 
+             WHEN POSITION(':' IN r.calledstationid) > 0 THEN SUBSTRING(r.calledstationid FROM POSITION(':' IN r.calledstationid) + 1)
+             ELSE r.calledstationid
+           END AS ssid,
            CASE 
              WHEN r.acctstoptime IS NULL THEN EXTRACT(EPOCH FROM (NOW() - r.acctstarttime))::bigint
              ELSE r.acctsessiontime
@@ -935,6 +939,12 @@ async function getConnectionsReport({ search = '', startDate, endDate, limit = 5
   if (search) {
     query += ` AND (r.username ILIKE $${paramIdx} OR u.cedula ILIKE $${paramIdx} OR u.nombres ILIKE $${paramIdx} OR u.apellidos ILIKE $${paramIdx} OR r.callingstationid ILIKE $${paramIdx} OR CAST(r.framedipaddress AS TEXT) ILIKE $${paramIdx})`;
     params.push(`%${search}%`);
+    paramIdx++;
+  }
+
+  if (ssid) {
+    query += ` AND (r.calledstationid ILIKE $${paramIdx} OR (POSITION(':' IN r.calledstationid) > 0 AND SUBSTRING(r.calledstationid FROM POSITION(':' IN r.calledstationid) + 1) ILIKE $${paramIdx}))`;
+    params.push(`%${ssid}%`);
     paramIdx++;
   }
 
@@ -962,7 +972,7 @@ async function getConnectionsReport({ search = '', startDate, endDate, limit = 5
   return { data: res.rows, total: parseInt(totalRes.rows[0].count) };
 }
 
-async function getConsolidatedConnectionsReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
+async function getConsolidatedConnectionsReport({ search = '', ssid = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
   let innerQuery = `
     SELECT 
       COALESCE(u.cedula, r.username) AS cedula,
@@ -970,6 +980,12 @@ async function getConsolidatedConnectionsReport({ search = '', startDate, endDat
       COALESCE(u.apellidos, '') AS apellidos,
       u.tipo_usuario,
       REPLACE(UPPER(r.callingstationid), ':', '-') AS mac_address,
+      MAX(
+        CASE 
+          WHEN POSITION(':' IN r.calledstationid) > 0 THEN SUBSTRING(r.calledstationid FROM POSITION(':' IN r.calledstationid) + 1)
+          ELSE r.calledstationid
+        END
+      ) AS ssid,
       COUNT(r.radacctid)::int AS total_sesiones,
       MIN(r.acctstarttime) AS primera_conexion,
       MAX(r.acctstarttime) AS ultima_conexion,
@@ -1001,6 +1017,12 @@ async function getConsolidatedConnectionsReport({ search = '', startDate, endDat
     paramIdx++;
   }
 
+  if (ssid) {
+    innerQuery += ` AND (r.calledstationid ILIKE $${paramIdx} OR (POSITION(':' IN r.calledstationid) > 0 AND SUBSTRING(r.calledstationid FROM POSITION(':' IN r.calledstationid) + 1) ILIKE $${paramIdx}))`;
+    params.push(`%${ssid}%`);
+    paramIdx++;
+  }
+
   if (startDate) {
     innerQuery += ` AND r.acctstarttime >= $${paramIdx}`;
     params.push(startDate);
@@ -1028,6 +1050,20 @@ async function getConsolidatedConnectionsReport({ search = '', startDate, endDat
   }));
 
   return { data, total: parseInt(totalRes.rows[0].count) };
+}
+
+async function getDistinctSsids() {
+  const res = await pool.query(`
+    SELECT DISTINCT 
+      CASE 
+        WHEN POSITION(':' IN calledstationid) > 0 THEN SUBSTRING(calledstationid FROM POSITION(':' IN calledstationid) + 1)
+        ELSE calledstationid
+      END AS ssid
+    FROM radacct 
+    WHERE calledstationid IS NOT NULL AND calledstationid <> ''
+    ORDER BY ssid ASC
+  `);
+  return res.rows.map(r => r.ssid).filter(Boolean);
 }
 
 async function getAccessLogReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
@@ -1760,7 +1796,7 @@ module.exports = {
   listGroups, addGroupAttribute, deleteGroupAttribute, deleteGroup,
   getStats,
   getControllerConfig, saveControllerConfig,
-  getUsersReport, getConnectionsReport, getConsolidatedConnectionsReport, getAccessLogReport,
+  getUsersReport, getConnectionsReport, getConsolidatedConnectionsReport, getDistinctSsids, getAccessLogReport,
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,

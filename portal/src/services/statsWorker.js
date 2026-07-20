@@ -79,6 +79,8 @@ async function syncStats() {
       const sessionId = `${vendor}-${mac}-${startTime.getTime()}`;
       const uniqueId = getAcctUniqueId(sessionId);
 
+      const calledStationId = client.apMac && client.ssid ? `${client.apMac}:${client.ssid}` : (client.ssid || null);
+
       const accRes = await pool.query(
         `SELECT radacctid, acctsessionid
          FROM radacct
@@ -97,9 +99,10 @@ async function syncStats() {
                  acctinputoctets = $2,
                  acctoutputoctets = $3,
                  acctupdatetime = NOW(),
-                 framedipaddress = $4
-             WHERE radacctid = $5`,
-            [uptime, upload, download, ip, radacctId]
+                 framedipaddress = $4,
+                 calledstationid = COALESCE($5, calledstationid)
+             WHERE radacctid = $6`,
+            [uptime, upload, download, ip, calledStationId, radacctId]
           );
         } else {
           await pool.query(
@@ -113,9 +116,9 @@ async function syncStats() {
             `INSERT INTO radacct (
                acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
                acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
-               acctinputoctets, acctoutputoctets, callingstationid, framedipaddress
-             ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9)`,
-            [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip]
+               acctinputoctets, acctoutputoctets, callingstationid, framedipaddress, calledstationid
+             ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9, $10)`,
+            [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip, calledStationId]
           );
         }
       } else {
@@ -123,9 +126,9 @@ async function syncStats() {
           `INSERT INTO radacct (
              acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
              acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
-             acctinputoctets, acctoutputoctets, callingstationid, framedipaddress
-           ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9)`,
-          [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip]
+             acctinputoctets, acctoutputoctets, callingstationid, framedipaddress, calledstationid
+           ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9, $10)`,
+          [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip, calledStationId]
         );
       }
     }

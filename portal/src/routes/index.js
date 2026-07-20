@@ -351,19 +351,37 @@ router.post('/auth/register',
         return res.status(409).json({ error: 'Esta cédula ya está registrada.' });
       }
 
-      // Obtener configuración SECAP y validar nombres legales
+      // Obtener configuración SECAP y validar nombres legales con timeout inteligente (Fast-Track)
       const secapCfg = await db.getControllerConfig('secap') || {};
       let finalNombres = nombres;
       let finalApellidos = apellidos;
 
       if (secapCfg.activo && secapCfg.activo !== 'false') {
-        const identity = await querySecapCivilRegistry(ced);
-        if (identity.success) {
-          finalNombres = identity.nombres;
-          finalApellidos = identity.apellidos;
-          console.log(`[SECAP] Validación de registro exitosa: ${finalNombres} ${finalApellidos}`);
-        } else {
-          console.log(`[SECAP] Validación falló (${identity.error}). Usando datos ingresados manualmente.`);
+        try {
+          // Intentar obtener nombres de SECAP con una carrera de 400ms máximo
+          const secapPromise = querySecapCivilRegistry(ced);
+          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 400));
+          const result = await Promise.race([secapPromise, timeoutPromise]);
+
+          if (result && result.success) {
+            finalNombres = result.nombres;
+            finalApellidos = result.apellidos;
+            console.log(`[SECAP-FASTTRACK] Nombres verificados síncronos: ${finalNombres} ${finalApellidos}`);
+          } else if (result && result.timeout) {
+            console.log(`[SECAP-FASTTRACK] Consulta SECAP tomando > 400ms. Otorgando acceso de inmediato y actualizando nombres en segundo plano.`);
+            // Disparar actualización de nombres legales en segundo plano cuando la API responda
+            secapPromise.then(async (identity) => {
+              if (identity && identity.success && identity.nombres) {
+                await db.getPool().query(
+                  'UPDATE usuarios_portal SET nombres = $1, apellidos = $2 WHERE cedula = $3',
+                  [identity.nombres, identity.apellidos, ced]
+                );
+                console.log(`[SECAP-ASYNC] Nombres actualizados en BD tras respuesta tardía para ${ced}: ${identity.nombres} ${identity.apellidos}`);
+              }
+            }).catch(e => console.error('[SECAP-ASYNC] Error en actualización en background:', e.message));
+          }
+        } catch (secapErr) {
+          console.error('[SECAP-FASTTRACK] Error al validar SECAP:', secapErr.message);
         }
       }
 
@@ -372,36 +390,8 @@ router.post('/auth/register',
       const DEFAULT_TERMS = `1. Aceptación\nAl conectarse a esta red Wi-Fi pública, usted acepta cumplir con estos términos y condiciones.\n\n2. Uso Permitido\nEsta red está destinada para uso general de navegación, comunicaciones y acceso a información. El uso es personal e intransferible.\n\n3. Uso Prohibido\nEstá prohibido utilizar la red para actividades ilegales, distribución de contenido inapropiado, ataques informáticos o cualquier actividad que viole la ley ecuatoriana.\n\n4. Privacidad\nLos datos de registro son recopilados únicamente para fines de autenticación y no serán compartidos con terceros sin autorización legal.\n\n5. Limitación de Responsabilidad\nEl administrador de la red no se responsabiliza por el contenido accedido por los usuarios ni por interrupciones del servicio.\n\n6. Duración de Sesión\nCada sesión tiene una duración limitada. Al expirar, deberá autenticarse nuevamente.`;
       const terminosAceptados = branding.termsText || DEFAULT_TERMS;
 
-      // Verificar si existe en la base de datos externa para asignarle el tipo
-      let tipo_usuario = 'externo';
-      const extConfig = await db.getControllerConfig('external_db_config');
-      if (extConfig && (extConfig.enabled === true || extConfig.enabled === 'true') && extConfig.host && extConfig.tableName && extConfig.colCedula) {
-        const { Client } = require('pg');
-        const extClient = new Client({
-          host: extConfig.host,
-          port: parseInt(extConfig.port) || 5432,
-          database: extConfig.database,
-          user: extConfig.user,
-          password: extConfig.password,
-          ssl: extConfig.ssl && (extConfig.ssl === true || extConfig.ssl === 'true') ? { rejectUnauthorized: false } : false,
-          connectionTimeoutMillis: 2000,
-        });
-        try {
-          await extClient.connect();
-          const escapedTable = extConfig.tableName.replace(/"/g, '""');
-          const escapedCol = extConfig.colCedula.replace(/"/g, '""');
-          const extRes = await extClient.query(`SELECT 1 FROM "${escapedTable}" WHERE "${escapedCol}" = $1 LIMIT 1`, [ced]);
-          if (extRes.rowCount > 0) {
-            tipo_usuario = 'institucional';
-          }
-          await extClient.end();
-        } catch (e) {
-          console.error('[EXT-DB] Error al consultar tipo de usuario en register:', e.message);
-        }
-      }
-
       // Crear usuario (incluye radcheck insert y guardar los términos aceptados)
-      const user = await db.createUser({ cedula: ced, nombres: finalNombres, apellidos: finalApellidos, email, terminosAceptados, tipo_usuario });
+      const user = await db.createUser({ cedula: ced, nombres: finalNombres, apellidos: finalApellidos, email, terminosAceptados, tipo_usuario: 'externo' });
 
       // Registrar dispositivo del usuario si viene la MAC
       const params = typeof vendorParams === 'object' ? vendorParams : {};
@@ -410,33 +400,56 @@ router.post('/auth/register',
         await db.registerUserDevice(ced, mac);
       }
 
-      // Autenticar vía RADIUS
-      const radiusOk = await radius.authenticate(ced, user.radius_password);
-      if (!radiusOk) {
-        console.error(`[AUTH] RADIUS rechazó al usuario recién creado: ${ced}`);
-        return res.status(500).json({ error: 'Error al activar la sesión. Contacte al administrador.' });
-      }
-
       let redirectUrl = params.redirectUrl || '/success';
 
-      // Retornar éxito inmediatamente al cliente para evitar reseteos de TCP durante el cambio de ACLs
+      // Retornar éxito INMEDIATAMENTE al cliente para respuesta ultra-rápida en pantalla (< 150 ms)
       res.json({
         success: true,
         nombre: user.nombres,
         redirectUrl: redirectUrl || '/success',
       });
 
-      // Procesar la autorización en el controlador y el log en background
+      // Procesar en background: BD externa institucional, RADIUS, controlador Omada y auditoría
       (async () => {
         try {
-          // Un pequeño delay de 300ms permite que el cliente reciba la respuesta HTTP limpia
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
+          await new Promise(resolve => setTimeout(resolve, 150));
+
+          // Verificar si existe en la base de datos externa para asignarle el tipo institucional
+          const extConfig = await db.getControllerConfig('external_db_config');
+          if (extConfig && (extConfig.enabled === true || extConfig.enabled === 'true') && extConfig.host && extConfig.tableName && extConfig.colCedula) {
+            const { Client } = require('pg');
+            const extClient = new Client({
+              host: extConfig.host,
+              port: parseInt(extConfig.port) || 5432,
+              database: extConfig.database,
+              user: extConfig.user,
+              password: extConfig.password,
+              ssl: extConfig.ssl && (extConfig.ssl === true || extConfig.ssl === 'true') ? { rejectUnauthorized: false } : false,
+              connectionTimeoutMillis: 2000,
+            });
+            try {
+              await extClient.connect();
+              const escapedTable = extConfig.tableName.replace(/"/g, '""');
+              const escapedCol = extConfig.colCedula.replace(/"/g, '""');
+              const extRes = await extClient.query(`SELECT 1 FROM "${escapedTable}" WHERE "${escapedCol}" = $1 LIMIT 1`, [ced]);
+              if (extRes.rowCount > 0) {
+                await db.updateUserType(ced, 'institucional');
+              }
+              await extClient.end();
+            } catch (e) {
+              console.error('[EXT-DB] Error al consultar tipo de usuario en background:', e.message);
+            }
+          }
+
+          // Autenticar vía RADIUS
+          await radius.authenticate(ced, user.radius_password);
+
+          // Autorizar en controlador Omada / MikroTik
           await authorizeVendor(vendor, params, ced, user.radius_password);
           
           await db.startAcctSession({
             username: ced,
-            macAddress: params.mac || params.clientMac,
+            macAddress: mac,
             ipAddress: clientIp,
             vendor: vendor
           });
@@ -444,14 +457,14 @@ router.post('/auth/register',
           await db.logAccess({
             cedula: ced,
             vendor,
-            macAddress: params.mac || params.clientMac,
+            macAddress: mac,
             ipAddress: clientIp,
             resultado: 'registered',
           });
           
-          console.log(`[AUTH] Registro y autorización exitosos (async): ${ced}`);
+          console.log(`[AUTH-FASTTRACK] Registro y autorización completados con éxito para ${ced}`);
         } catch (vendorErr) {
-          console.error(`[VENDOR] Error autorizando en ${vendor} (async):`, vendorErr.message);
+          console.error(`[AUTH-FASTTRACK] Error autorizando en ${vendor} (async):`, vendorErr.message);
           await db.logAccess({
             cedula: ced,
             vendor,

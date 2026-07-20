@@ -3,18 +3,34 @@
 const axios = require('axios');
 const https = require('https');
 
-const CONTROLLER_URL  = process.env.OMADA_CONTROLLER_URL || '';
-const OMADA_CLIENT_ID = process.env.OMADA_CLIENT_ID || '';
-const OMADA_CLIENT_SECRET = process.env.OMADA_CLIENT_SECRET || '';
-const OMADA_SITE_ID   = process.env.OMADA_SITE_ID || '';
+const db = require('./database');
+
 const SESSION_MINUTES = parseInt(process.env.SESSION_DURATION_MINUTES || '480');
 
 let cachedToken = null;
 let tokenExpiresAt = 0;
 
-function buildClient() {
+async function getOmadaConfig() {
+  try {
+    const dbConfig = await db.getControllerConfig('omada');
+    const url = dbConfig?.url || process.env.OMADA_CONTROLLER_URL || '';
+    const clientId = dbConfig?.clientId || process.env.OMADA_CLIENT_ID || '';
+    const secret = dbConfig?.secret || process.env.OMADA_CLIENT_SECRET || '';
+    const siteId = dbConfig?.siteId || process.env.OMADA_SITE_ID || '';
+    return { url, clientId, secret, siteId };
+  } catch (err) {
+    return {
+      url: process.env.OMADA_CONTROLLER_URL || '',
+      clientId: process.env.OMADA_CLIENT_ID || '',
+      secret: process.env.OMADA_CLIENT_SECRET || '',
+      siteId: process.env.OMADA_SITE_ID || ''
+    };
+  }
+}
+
+function buildClient(baseUrl) {
   const client = axios.create({
-    baseURL: CONTROLLER_URL,
+    baseURL: baseUrl,
     httpsAgent: new https.Agent({ rejectUnauthorized: false }),
     timeout: 10000,
   });
@@ -41,18 +57,20 @@ function buildClient() {
  * Obtiene un access token del controlador Omada vía OAuth2 client credentials.
  * @returns {{ accessToken: string, omadacId: string }}
  */
-async function getToken(client) {
+async function getToken(client, cfg) {
   const now = Date.now();
   if (cachedToken && tokenExpiresAt > now + 300000) {
     return cachedToken;
   }
 
+  const omadaConfig = cfg || await getOmadaConfig();
+
   const resp = await client.post(
     '/openapi/authorize/token?grant_type=client_credentials',
     {
-      omadacId:      OMADA_SITE_ID,
-      client_id:     OMADA_CLIENT_ID,
-      client_secret: OMADA_CLIENT_SECRET,
+      omadacId:      omadaConfig.siteId,
+      client_id:     omadaConfig.clientId,
+      client_secret: omadaConfig.secret,
     },
     {
       headers: { 'Content-Type': 'application/json' },
@@ -73,7 +91,7 @@ async function getToken(client) {
 
   cachedToken = {
     accessToken: result.accessToken,
-    omadacId:    OMADA_SITE_ID,
+    omadacId:    omadaConfig.siteId,
   };
   tokenExpiresAt = now + (expiresIn * 1000);
 
@@ -89,14 +107,15 @@ async function getToken(client) {
  * @param {number} params.timeLimit - Límite de tiempo en minutos
  */
 async function authorizeClient({ clientMac, siteId, timeLimit }) {
-  if (!CONTROLLER_URL) {
+  const cfg = await getOmadaConfig();
+  if (!cfg.url) {
     throw new Error('OMADA_CONTROLLER_URL no configurado');
   }
 
-  const client = buildClient();
-  const { accessToken, omadacId } = await getToken(client);
+  const client = buildClient(cfg.url);
+  const { accessToken, omadacId } = await getToken(client, cfg);
 
-  const targetSiteId = siteId || 'default';
+  const targetSiteId = siteId || cfg.siteId || 'default';
   const minutes = timeLimit || SESSION_MINUTES;
 
   console.log(`[OMADA] Token obtenido, autorizando MAC: ${clientMac} en sitio: ${targetSiteId}`);
@@ -129,12 +148,14 @@ async function authorizeClient({ clientMac, siteId, timeLimit }) {
  * @param {string} params.clientMac - MAC del cliente
  */
 async function unauthorizeClient({ clientMac }) {
-  if (!CONTROLLER_URL) {
-    throw new Error('OMADA_CONTROLLER_URL no configurado');
+  const cfg = await getOmadaConfig();
+  if (!cfg.url) {
+    console.warn('[OMADA] Controlador Omada no configurado.');
+    return false;
   }
 
-  const client = buildClient();
-  const { accessToken, omadacId } = await getToken(client);
+  const client = buildClient(cfg.url);
+  const { accessToken, omadacId } = await getToken(client, cfg);
 
   // 1. Obtener lista de sitios
   const sitesResp = await client.get(`/openapi/v1/${omadacId}/sites?page=1&pageSize=100`, {
@@ -222,12 +243,13 @@ async function unauthorizeClient({ clientMac }) {
  * @param {string} params.clientMac - MAC del cliente
  */
 async function blockClient({ clientMac }) {
-  if (!CONTROLLER_URL) {
+  const cfg = await getOmadaConfig();
+  if (!cfg.url) {
     throw new Error('OMADA_CONTROLLER_URL no configurado');
   }
 
-  const client = buildClient();
-  const { accessToken, omadacId } = await getToken(client);
+  const client = buildClient(cfg.url);
+  const { accessToken, omadacId } = await getToken(client, cfg);
 
   const sitesResp = await client.get(`/openapi/v1/${omadacId}/sites?page=1&pageSize=100`, {
     headers: { Authorization: `AccessToken=${accessToken}` },
@@ -283,12 +305,13 @@ async function blockClient({ clientMac }) {
  * @param {string} params.clientMac - MAC del cliente
  */
 async function unblockClient({ clientMac }) {
-  if (!CONTROLLER_URL) {
+  const cfg = await getOmadaConfig();
+  if (!cfg.url) {
     throw new Error('OMADA_CONTROLLER_URL no configurado');
   }
 
-  const client = buildClient();
-  const { accessToken, omadacId } = await getToken(client);
+  const client = buildClient(cfg.url);
+  const { accessToken, omadacId } = await getToken(client, cfg);
 
   const sitesResp = await client.get(`/openapi/v1/${omadacId}/sites?page=1&pageSize=100`, {
     headers: { Authorization: `AccessToken=${accessToken}` },
@@ -345,12 +368,13 @@ async function unblockClient({ clientMac }) {
  * @param {string} params.siteId    - ID del sitio
  */
 async function kickClient({ clientMac, siteId }) {
-  if (!CONTROLLER_URL) {
+  const cfg = await getOmadaConfig();
+  if (!cfg.url) {
     throw new Error('OMADA_CONTROLLER_URL no configurado');
   }
 
-  const client = buildClient();
-  const { accessToken, omadacId } = await getToken(client);
+  const client = buildClient(cfg.url);
+  const { accessToken, omadacId } = await getToken(client, cfg);
 
   const targetSiteId = siteId || 'default';
   const formattedMac = clientMac.toUpperCase().replace(/:/g, '-');
@@ -385,11 +409,12 @@ async function kickClient({ clientMac, siteId }) {
  * Obtiene la lista de clientes activos en todos los sitios de Omada.
  */
 async function getActiveClients() {
-  if (!CONTROLLER_URL) return [];
+  const cfg = await getOmadaConfig();
+  if (!cfg.url) return [];
 
   try {
-    const client = buildClient();
-    const { accessToken, omadacId } = await getToken(client);
+    const client = buildClient(cfg.url);
+    const { accessToken, omadacId } = await getToken(client, cfg);
 
     // 1. Obtener lista de sitios
     const sitesResp = await client.get(`/openapi/v1/${omadacId}/sites?page=1&pageSize=100`, {

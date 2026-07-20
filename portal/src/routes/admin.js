@@ -645,23 +645,22 @@ router.delete('/api/users/:cedula', requireAdmin, requireRol('administrador', 's
         detalles: `Eliminó usuario cédula: ${cedula}. ¿Historial purgado?: ${purgeHistory}`
       });
 
-      // 3. Desautorizar cada uno de sus dispositivos en segundo plano
+      // 3. Desautorizar cada uno de sus dispositivos en Omada y UniFi
       for (const d of devices) {
         const mac = d.mac_address;
         
-        // Omada
-        if (process.env.OMADA_CONTROLLER_URL) {
-          omadaSvc.unauthorizeClient({ clientMac: mac }).catch(err => {
-            console.error(`[OMADA] Error al desautorizar MAC ${mac}:`, err.message);
-          });
+        // Omada: desautorizar y desconectar (kick) en todos los sitios
+        try {
+          console.log(`[ADMIN-USER] Desautorizando y desconectando MAC ${mac} en Omada`);
+          await omadaSvc.unauthorizeClient({ clientMac: mac });
+        } catch (omadaErr) {
+          console.error(`[ADMIN-USER] Error al desautorizar MAC ${mac} en Omada:`, omadaErr.message);
         }
 
         // UniFi
-        if (process.env.UNIFI_CONTROLLER_URL) {
-          unifiSvc.unauthorizeGuest(mac).catch(err => {
-            console.error(`[UNIFI] Error al desautorizar MAC ${mac}:`, err.message);
-          });
-        }
+        try {
+          await unifiSvc.unauthorizeGuest(mac);
+        } catch (unifiErr) {}
       }
 
       res.json({ ok: true });
@@ -711,24 +710,20 @@ router.delete('/api/users/:cedula/devices/:mac', requireAdmin,
         detalles: `Eliminó dispositivo MAC ${mac} del usuario cédula: ${cedula}`
       });
 
-      // 2. Intentar desautorizar en Omada si está activo
-      if (process.env.OMADA_CONTROLLER_URL) {
-        try {
-          console.log(`[ADMIN-DEVICE] Intentando desautorizar MAC ${mac} en Omada`);
-          await omadaSvc.unauthorizeClient({ clientMac: mac });
-        } catch (omadaErr) {
-          console.error(`[ADMIN-DEVICE] Error desautorizando MAC ${mac} en Omada:`, omadaErr.message);
-        }
+      // 2. Intentar desautorizar en Omada
+      try {
+        console.log(`[ADMIN-DEVICE] Desautorizando MAC ${mac} en Omada`);
+        await omadaSvc.unauthorizeClient({ clientMac: mac });
+      } catch (omadaErr) {
+        console.error(`[ADMIN-DEVICE] Error desautorizando MAC ${mac} en Omada:`, omadaErr.message);
       }
 
-      // 3. Intentar desautorizar en UniFi si está activo
-      if (process.env.UNIFI_CONTROLLER_URL) {
-        try {
-          console.log(`[ADMIN-DEVICE] Intentando desautorizar MAC ${mac} en UniFi`);
-          await unifiSvc.unauthorizeGuest(mac);
-        } catch (unifiErr) {
-          console.error(`[ADMIN-DEVICE] Error desautorizando MAC ${mac} en UniFi:`, unifiErr.message);
-        }
+      // 3. Intentar desautorizar en UniFi
+      try {
+        console.log(`[ADMIN-DEVICE] Intentando desautorizar MAC ${mac} en UniFi`);
+        await unifiSvc.unauthorizeGuest(mac);
+      } catch (unifiErr) {
+        console.error(`[ADMIN-DEVICE] Error desautorizando MAC ${mac} en UniFi:`, unifiErr.message);
       }
 
       res.json({ ok: true });

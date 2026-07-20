@@ -136,7 +136,7 @@ router.use(async (req, res, next) => {
 
 async function requireAdmin(req, res, next) {
   const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  let token = auth.startsWith('Bearer ') ? auth.slice(7) : (req.headers['x-admin-token'] || req.query.token || null);
   if (!token) {
     return res.status(401).json({ error: 'No autorizado. Se requiere token.' });
   }

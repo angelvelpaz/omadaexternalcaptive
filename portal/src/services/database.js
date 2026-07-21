@@ -801,31 +801,35 @@ async function getStats() {
       ORDER BY a.created_at DESC LIMIT 10
     `),
     pool.query(`
+      WITH user_traffic AS (
+        SELECT
+          COALESCE(d.cedula, r.username) AS cedula,
+          SUM(r.acctinputoctets + r.acctoutputoctets) AS total_bytes
+        FROM radacct r
+        LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(d.mac_address), ':', '-') = REPLACE(UPPER(r.callingstationid), ':', '-')
+        WHERE (r.username IS NOT NULL AND r.username != '') OR d.cedula IS NOT NULL
+        GROUP BY COALESCE(d.cedula, r.username)
+      )
       SELECT
         u.cedula AS username,
-        u.nombres || ' ' || u.apellidos AS nombre_completo,
-        (
-          SELECT COALESCE(SUM(r.acctinputoctets + r.acctoutputoctets), 0)
-          FROM radacct r 
-          WHERE r.username = u.cedula 
-             OR REPLACE(UPPER(r.callingstationid), ':', '-') IN (
-                  SELECT REPLACE(UPPER(mac_address), ':', '-') 
-                  FROM dispositivos_usuario 
-                  WHERE cedula = u.cedula
-                )
-        ) AS total_bytes
-      FROM usuarios_portal u
-      ORDER BY total_bytes DESC
+        COALESCE(NULLIF(TRIM(u.nombres || ' ' || u.apellidos), ''), u.cedula) AS nombre_completo,
+        t.total_bytes
+      FROM user_traffic t
+      JOIN usuarios_portal u ON u.cedula = t.cedula
+      ORDER BY t.total_bytes DESC
       LIMIT 10
     `),
     pool.query(`
       SELECT mac_address AS callingstationid
       FROM dispositivos_usuario
+      ORDER BY created_at DESC
+      LIMIT 300
     `),
   ]);
 
   const brandCounts = {};
   for (const row of allMacs.rows) {
+    if (!row.callingstationid) continue;
     const rawVendor = getVendor(row.callingstationid);
     const brand = cleanVendorName(rawVendor);
     brandCounts[brand] = (brandCounts[brand] || 0) + 1;

@@ -877,7 +877,7 @@ async function saveControllerConfig(vendor, config) {
 async function getUsersReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
   let query = `
     SELECT id, cedula, nombres, apellidos, email, activo, fecha_registro, acepta_terminos, fecha_acepta_terminos,
-           (SELECT mac_address FROM access_log WHERE cedula = usuarios_portal.cedula AND mac_address IS NOT NULL AND mac_address != '' ORDER BY created_at DESC LIMIT 1) AS mac_address
+           (SELECT mac_address FROM dispositivos_usuario WHERE cedula = usuarios_portal.cedula LIMIT 1) AS mac_address
     FROM usuarios_portal
     WHERE 1=1
   `;
@@ -885,7 +885,7 @@ async function getUsersReport({ search = '', startDate, endDate, limit = 50, off
   let paramIdx = 1;
 
   if (search) {
-    query += ` AND (cedula ILIKE $${paramIdx} OR nombres ILIKE $${paramIdx} OR apellidos ILIKE $${paramIdx} OR email ILIKE $${paramIdx} OR EXISTS (SELECT 1 FROM access_log WHERE cedula = usuarios_portal.cedula AND mac_address ILIKE $${paramIdx}))`;
+    query += ` AND (cedula ILIKE $${paramIdx} OR nombres ILIKE $${paramIdx} OR apellidos ILIKE $${paramIdx} OR email ILIKE $${paramIdx} OR EXISTS (SELECT 1 FROM dispositivos_usuario WHERE cedula = usuarios_portal.cedula AND mac_address ILIKE $${paramIdx}))`;
     params.push(`%${search}%`);
     paramIdx++;
   }
@@ -902,9 +902,30 @@ async function getUsersReport({ search = '', startDate, endDate, limit = 50, off
     paramIdx++;
   }
 
-  // Get total count
-  const countQuery = `SELECT COUNT(*) FROM (${query}) AS total`;
-  const totalRes = await pool.query(countQuery, params);
+  // Get total count (Optimized count without columns subqueries)
+  let countQuery = `SELECT COUNT(*) FROM usuarios_portal WHERE 1=1`;
+  const countParams = [];
+  let countParamIdx = 1;
+
+  if (search) {
+    countQuery += ` AND (cedula ILIKE $${countParamIdx} OR nombres ILIKE $${countParamIdx} OR apellidos ILIKE $${countParamIdx} OR email ILIKE $${countParamIdx} OR EXISTS (SELECT 1 FROM dispositivos_usuario WHERE cedula = usuarios_portal.cedula AND mac_address ILIKE $${countParamIdx}))`;
+    countParams.push(`%${search}%`);
+    countParamIdx++;
+  }
+
+  if (startDate) {
+    countQuery += ` AND fecha_registro >= $${countParamIdx}`;
+    countParams.push(startDate);
+    countParamIdx++;
+  }
+
+  if (endDate) {
+    countQuery += ` AND fecha_registro <= $${countParamIdx}`;
+    countParams.push(endDate);
+    countParamIdx++;
+  }
+
+  const totalRes = await pool.query(countQuery, countParams);
 
   query += ` ORDER BY fecha_registro DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
   params.push(limit, offset);

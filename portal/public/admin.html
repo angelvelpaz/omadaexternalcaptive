@@ -436,9 +436,6 @@
                 <th onclick="toggleUserSort('ultima_conexion')" class="px-4 py-3 cursor-pointer select-none hover:bg-gray-100 hidden md:table-cell whitespace-nowrap">
                   Última Conexión <span id="sort-icon-ultima_conexion" class="text-gray-400">⇅</span>
                 </th>
-                <th onclick="toggleUserSort('consumo_total')" class="px-4 py-3 cursor-pointer select-none hover:bg-gray-100 hidden sm:table-cell whitespace-nowrap">
-                  Consumo <span id="sort-icon-consumo_total" class="text-gray-400">⇅</span>
-                </th>
                 <th class="px-4 py-3 text-center">Estado</th>
                 <th class="px-4 py-3 text-right">Acciones</th>
               </tr>
@@ -1236,7 +1233,7 @@ let token = localStorage.getItem('admin_token') || '';
 let adminRol = localStorage.getItem('admin_rol') || 'operador';
 let currentTab = 'dashboard';
 let usersOffset = 0;
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 10;
 let usersTotalCount = 0;
 let usersSearch = '';
 let usersOrderBy = 'fecha_registro';
@@ -1804,9 +1801,6 @@ async function loadUsers() {
         <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">${new Date(u.fecha_registro).toLocaleDateString('es-EC')}</td>
         <td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
           ${u.ultima_conexion ? new Date(u.ultima_conexion).toLocaleString('es-EC') : '<span class="text-gray-300">Nunca</span>'}
-        </td>
-        <td class="px-4 py-3 font-semibold text-gray-750 text-xs hidden sm:table-cell whitespace-nowrap">
-          ${formatBytes(u.consumo_total)}
         </td>
         <td class="px-4 py-3 text-center">
           <button onclick="toggleActive('${u.cedula}', ${!u.activo})"

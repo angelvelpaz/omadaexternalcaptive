@@ -985,9 +985,50 @@ async function getConnectionsReport({ search = '', ssid = '', startDate, endDate
     paramIdx++;
   }
 
-  // Get total count
-  const countQuery = `SELECT COUNT(*) FROM (${query}) AS total`;
-  const totalRes = await pool.query(countQuery, params);
+  // Get total count (Optimized count query without joins if no user search is present)
+  let countQuery;
+  const countParams = [];
+  let countParamIdx = 1;
+
+  if (search) {
+    countQuery = `
+      SELECT COUNT(*)
+      FROM radacct r
+      LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+      LEFT JOIN usuarios_portal u ON u.cedula = (
+        CASE 
+          WHEN r.username ~ '^[0-9]+$' THEN r.username 
+          ELSE d.cedula 
+        END
+      )
+      WHERE 1=1
+      AND (r.username ILIKE $${countParamIdx} OR u.cedula ILIKE $${countParamIdx} OR u.nombres ILIKE $${countParamIdx} OR u.apellidos ILIKE $${countParamIdx} OR r.callingstationid ILIKE $${countParamIdx} OR CAST(r.framedipaddress AS TEXT) ILIKE $${countParamIdx})
+    `;
+    countParams.push(`%${search}%`);
+    countParamIdx++;
+  } else {
+    countQuery = `SELECT COUNT(*) FROM radacct r WHERE 1=1`;
+  }
+
+  if (ssid) {
+    countQuery += ` AND (r.calledstationid ILIKE $${countParamIdx} OR (POSITION(':' IN r.calledstationid) > 0 AND SUBSTRING(r.calledstationid FROM POSITION(':' IN r.calledstationid) + 1) ILIKE $${countParamIdx}))`;
+    countParams.push(`%${ssid}%`);
+    countParamIdx++;
+  }
+
+  if (startDate) {
+    countQuery += ` AND r.acctstarttime >= $${countParamIdx}`;
+    countParams.push(startDate);
+    countParamIdx++;
+  }
+
+  if (endDate) {
+    countQuery += ` AND r.acctstarttime <= $${countParamIdx}`;
+    countParams.push(endDate);
+    countParamIdx++;
+  }
+
+  const totalRes = await pool.query(countQuery, countParams);
 
   query += ` ORDER BY r.acctstarttime DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
   params.push(limit, offset);

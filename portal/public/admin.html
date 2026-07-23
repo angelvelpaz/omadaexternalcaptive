@@ -257,7 +257,7 @@
     <!-- ── TAB DASHBOARD ── -->
     <div id="tab-dashboard" class="tab-content hidden">
       <!-- Stats cards -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
         <div class="bg-white rounded-xl shadow-sm p-5">
           <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Usuarios activos</p>
           <p id="stat-active" class="text-3xl font-bold text-green-600">—</p>
@@ -267,8 +267,16 @@
           <p id="stat-total" class="text-3xl font-bold text-blue-600">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-5">
+          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Institucionales</p>
+          <p id="stat-institutional" class="text-3xl font-bold text-indigo-600">—</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-5">
+          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Externos</p>
+          <p id="stat-external" class="text-3xl font-bold text-emerald-600">—</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-5">
           <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Ingresos hoy</p>
-          <p id="stat-today" class="text-3xl font-bold text-indigo-600">—</p>
+          <p id="stat-today" class="text-3xl font-bold text-indigo-500">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-5">
           <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Inactivos</p>
@@ -1583,10 +1591,12 @@ let topBrandsChart = null;
 async function loadDashboard() {
   try {
     const s = await api('GET', '/stats');
-    document.getElementById('stat-active').textContent   = s.active_users;
-    document.getElementById('stat-total').textContent    = s.total_users;
-    document.getElementById('stat-inactive').textContent = s.inactive_users;
-    document.getElementById('stat-today').textContent    = s.todayLogins;
+    document.getElementById('stat-active').textContent        = s.active_users;
+    document.getElementById('stat-total').textContent         = s.total_users;
+    document.getElementById('stat-institutional').textContent = s.institutional_users;
+    document.getElementById('stat-external').textContent      = s.external_users;
+    document.getElementById('stat-inactive').textContent      = s.inactive_users;
+    document.getElementById('stat-today').textContent         = s.todayLogins;
 
     const vendorColors = { mikrotik: 'blue', unifi: 'purple', omada: 'green', unknown: 'gray' };
     document.getElementById('stat-vendors').innerHTML = s.byVendor.length

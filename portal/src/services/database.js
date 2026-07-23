@@ -757,7 +757,9 @@ async function getStats() {
       SELECT
         COUNT(*) FILTER (WHERE activo = TRUE)  AS active_users,
         COUNT(*) FILTER (WHERE activo = FALSE) AS inactive_users,
-        COUNT(*)                               AS total_users
+        COUNT(*)                               AS total_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'institucional') AS institutional_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'externo')       AS external_users
       FROM usuarios_portal
     `),
     pool.query(`
@@ -837,7 +839,9 @@ async function getStats() {
       nombre_completo: row.nombre_completo,
       total_bytes: parseFloat(row.total_bytes || 0)
     })),
-    topBrands
+    topBrands,
+    institutional_users: parseInt(totals.rows[0].institutional_users || 0),
+    external_users: parseInt(totals.rows[0].external_users || 0)
   };
 }
 

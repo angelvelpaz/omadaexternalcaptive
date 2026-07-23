@@ -731,6 +731,155 @@ router.delete('/api/users/:cedula/devices/:mac', requireAdmin,
   }
 );
 
+router.post('/api/users/:cedula/devices', requireAdmin,
+  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  body('mac').isString().trim(),
+  async (req, res, next) => {
+    try {
+      const { cedula } = req.params;
+      let { mac } = req.body;
+
+      if (!mac) {
+        return res.status(400).json({ error: 'La dirección MAC es obligatoria' });
+      }
+
+      // Normalizar MAC
+      mac = mac.toUpperCase().replace(/[^0-9A-F]/g, '');
+      if (mac.length !== 12) {
+        return res.status(400).json({ error: 'Formato de dirección MAC inválido. Debe tener 12 caracteres hexadecimales.' });
+      }
+
+      // Convertir a formato con guiones: AA-BB-CC-DD-EE-FF
+      const formattedMac = mac.match(/.{1,2}/g).join('-');
+
+      // 1. Validar si la MAC ya existe asociada a algún usuario
+      const existingUser = await db.getUserByDeviceMac(formattedMac);
+      if (existingUser) {
+        return res.status(400).json({ error: `Este dispositivo ya está registrado al usuario con cédula ${existingUser.cedula}` });
+      }
+
+      // 2. Validar límite de dispositivos del usuario
+      const user = await db.getUserByCedula(cedula);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+
+      const currentCount = await db.getUserDevicesCount(cedula);
+      if (user.max_dispositivos !== null && user.max_dispositivos > 0 && currentCount >= user.max_dispositivos) {
+        return res.status(400).json({ error: `El usuario ha alcanzado su límite máximo de ${user.max_dispositivos} dispositivos` });
+      }
+
+      // 3. Registrar en BD
+      await db.registerUserDevice(cedula, formattedMac);
+
+      // Auditoría
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'REGISTRAR_DISPOSITIVO',
+        detalles: `Registró dispositivo MAC ${formattedMac} al usuario cédula: ${cedula}`
+      });
+
+      // 4. Autorizar en controladoras
+      try {
+        console.log(`[ADMIN-DEVICE] Autorizando MAC ${formattedMac} en Omada`);
+        await omadaSvc.authorizeClient({ clientMac: formattedMac });
+      } catch (omadaErr) {
+        console.error(`[ADMIN-DEVICE] Error autorizando MAC ${formattedMac} en Omada:`, omadaErr.message);
+      }
+
+      try {
+        console.log(`[ADMIN-DEVICE] Intentando autorizar MAC ${formattedMac} en UniFi`);
+        await unifiSvc.authorizeGuest(formattedMac);
+      } catch (unifiErr) {
+        console.error(`[ADMIN-DEVICE] Error autorizando MAC ${formattedMac} en UniFi:`, unifiErr.message);
+      }
+
+      res.json({ ok: true, macAddress: formattedMac });
+    } catch (err) { next(err); }
+  }
+);
+
+router.put('/api/users/:cedula/devices/:mac', requireAdmin,
+  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('mac').isString().trim(),
+  body('newMac').isString().trim(),
+  async (req, res, next) => {
+    try {
+      const { cedula, mac } = req.params;
+      let { newMac } = req.body;
+
+      if (!newMac) {
+        return res.status(400).json({ error: 'La nueva dirección MAC es obligatoria' });
+      }
+
+      // Normalizar MAC
+      newMac = newMac.toUpperCase().replace(/[^0-9A-F]/g, '');
+      if (newMac.length !== 12) {
+        return res.status(400).json({ error: 'Formato de dirección MAC inválido. Debe tener 12 caracteres hexadecimales.' });
+      }
+
+      const formattedNewMac = newMac.match(/.{1,2}/g).join('-');
+      const formattedOldMac = mac.toUpperCase().replace(/:/g, '-');
+
+      if (formattedNewMac === formattedOldMac) {
+        return res.json({ ok: true, macAddress: formattedNewMac });
+      }
+
+      // 1. Validar si la nueva MAC ya existe asociada a otro usuario
+      const existingUser = await db.getUserByDeviceMac(formattedNewMac);
+      if (existingUser && existingUser.cedula !== cedula) {
+        return res.status(400).json({ error: `La nueva MAC ya está registrada al usuario con cédula ${existingUser.cedula}` });
+      }
+
+      // 2. Desautorizar la MAC antigua en controladoras
+      try {
+        console.log(`[ADMIN-DEVICE] Desautorizando MAC antigua ${formattedOldMac} en Omada`);
+        await omadaSvc.unauthorizeClient({ clientMac: formattedOldMac });
+      } catch (omadaErr) {
+        console.error(`[ADMIN-DEVICE] Error desautorizando MAC antigua ${formattedOldMac} en Omada:`, omadaErr.message);
+      }
+
+      try {
+        console.log(`[ADMIN-DEVICE] Desautorizando MAC antigua ${formattedOldMac} en UniFi`);
+        await unifiSvc.unauthorizeGuest(formattedOldMac);
+      } catch (unifiErr) {
+        console.error(`[ADMIN-DEVICE] Error desautorizando MAC antigua ${formattedOldMac} en UniFi:`, unifiErr.message);
+      }
+
+      // 3. Actualizar en BD
+      await db.updateUserDevice(cedula, formattedOldMac, cedula, formattedNewMac);
+
+      // Auditoría
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'EDITAR_DISPOSITIVO',
+        detalles: `Editó dispositivo MAC ${formattedOldMac} por ${formattedNewMac} del usuario cédula: ${cedula}`
+      });
+
+      // 4. Autorizar la nueva MAC en controladoras
+      try {
+        console.log(`[ADMIN-DEVICE] Autorizando nueva MAC ${formattedNewMac} en Omada`);
+        await omadaSvc.authorizeClient({ clientMac: formattedNewMac });
+      } catch (omadaErr) {
+        console.error(`[ADMIN-DEVICE] Error autorizando nueva MAC ${formattedNewMac} en Omada:`, omadaErr.message);
+      }
+
+      try {
+        console.log(`[ADMIN-DEVICE] Autorizando nueva MAC ${formattedNewMac} en UniFi`);
+        await unifiSvc.authorizeGuest(formattedNewMac);
+      } catch (unifiErr) {
+        console.error(`[ADMIN-DEVICE] Error autorizando nueva MAC ${formattedNewMac} en UniFi:`, unifiErr.message);
+      }
+
+      res.json({ ok: true, macAddress: formattedNewMac });
+    } catch (err) { next(err); }
+  }
+);
+
 // ─── Grupos RADIUS ────────────────────────────────────────────────────────────
 
 router.get('/api/groups', requireAdmin, async (req, res, next) => {

@@ -2699,20 +2699,44 @@ async function viewUser(cedula) {
         </div>
 
         <div class="space-y-2">
-          <p class="text-xs text-gray-500 font-semibold mb-1">Dispositivos Registrados (${user.devices ? user.devices.length : 0})</p>
-          <div class="max-h-32 overflow-y-auto space-y-1.5 text-xs">
+          <div class="flex justify-between items-center">
+            <p class="text-xs text-gray-500 font-semibold">Dispositivos Registrados (${user.devices ? user.devices.length : 0})</p>
+          </div>
+          
+          <div class="max-h-40 overflow-y-auto space-y-1.5 text-xs" id="user-detail-devices-list">
             ${user.devices && user.devices.length ? user.devices.map(d => `
-              <div class="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
-                <div>
-                  <span class="font-mono font-medium text-gray-800">${esc(d.mac_address)}</span>
+              <div class="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg border border-gray-100" id="device-row-${d.mac_address}">
+                <div class="flex-1 flex items-center">
+                  <span id="mac-text-${d.mac_address}" class="font-mono font-medium text-gray-800">${esc(d.mac_address)}</span>
+                  <input id="mac-input-${d.mac_address}" type="text" 
+                    class="hidden font-mono text-xs border border-gray-300 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                    value="${esc(d.mac_address)}">
                   <span class="text-gray-400 mx-2">·</span>
-                  <span class="text-gray-400 text-[10px]">Reg: ${new Date(d.created_at).toLocaleString('es-EC')}</span>
+                  <span class="text-gray-400 text-[10px] whitespace-nowrap">Reg: ${new Date(d.created_at).toLocaleDateString('es-EC')}</span>
                 </div>
-                <button onclick="deleteDevice('${cedula}', '${esc(d.mac_address)}')" 
-                  class="text-red-500 hover:text-red-700 font-medium">
-                  Eliminar
-                </button>
+                <div class="flex items-center gap-2">
+                  <button id="btn-edit-${d.mac_address}" onclick="startEditDevice('${d.mac_address}')" 
+                    class="text-blue-600 hover:text-blue-800 font-medium">Editar</button>
+                  <button id="btn-save-${d.mac_address}" onclick="saveEditDevice('${cedula}', '${d.mac_address}')" 
+                    class="hidden text-green-600 hover:text-green-800 font-medium">Guardar</button>
+                  <button id="btn-cancel-${d.mac_address}" onclick="cancelEditDevice('${d.mac_address}')" 
+                    class="hidden text-gray-500 hover:text-gray-750 font-medium">Cancelar</button>
+                  <span class="text-gray-200">|</span>
+                  <button onclick="deleteDevice('${cedula}', '${esc(d.mac_address)}')" 
+                    class="text-red-500 hover:text-red-700 font-medium">
+                    Eliminar
+                  </button>
+                </div>
               </div>`).join('') : '<p class="text-gray-400 text-xs text-center py-2">Ningún dispositivo registrado todavía</p>'}
+          </div>
+
+          <div class="flex gap-2 border-t border-gray-100 pt-3 mt-2">
+            <input type="text" id="add-device-mac-input" placeholder="AA:BB:CC:DD:EE:FF" 
+              class="flex-1 text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono">
+            <button onclick="addDevice('${cedula}')"
+              class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors font-medium">
+              Agregar MAC
+            </button>
           </div>
         </div>
       </div>
@@ -2776,6 +2800,54 @@ async function deleteDevice(cedula, mac) {
     await api('DELETE', `/users/${cedula}/devices/${encodeURIComponent(mac)}`);
     viewUser(cedula);
   } catch (err) { alert(err.message); }
+}
+
+function startEditDevice(mac) {
+  document.getElementById('mac-text-' + mac).classList.add('hidden');
+  document.getElementById('mac-input-' + mac).classList.remove('hidden');
+  
+  document.getElementById('btn-edit-' + mac).classList.add('hidden');
+  document.getElementById('btn-save-' + mac).classList.remove('hidden');
+  document.getElementById('btn-cancel-' + mac).classList.remove('hidden');
+}
+
+function cancelEditDevice(mac) {
+  document.getElementById('mac-text-' + mac).classList.remove('hidden');
+  document.getElementById('mac-input-' + mac).classList.add('hidden');
+  
+  document.getElementById('btn-edit-' + mac).classList.remove('hidden');
+  document.getElementById('btn-save-' + mac).classList.add('hidden');
+  document.getElementById('btn-cancel-' + mac).classList.add('hidden');
+  
+  document.getElementById('mac-input-' + mac).value = document.getElementById('mac-text-' + mac).textContent;
+}
+
+async function saveEditDevice(cedula, oldMac) {
+  const newMac = document.getElementById('mac-input-' + oldMac).value.trim();
+  if (!newMac) {
+    alert('La dirección MAC no puede estar vacía');
+    return;
+  }
+  try {
+    await api('PUT', `/users/${cedula}/devices/${encodeURIComponent(oldMac)}`, { newMac });
+    viewUser(cedula);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function addDevice(cedula) {
+  const mac = document.getElementById('add-device-mac-input').value.trim();
+  if (!mac) {
+    alert('Por favor, ingresa una dirección MAC');
+    return;
+  }
+  try {
+    await api('POST', `/users/${cedula}/devices`, { mac });
+    viewUser(cedula);
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 document.getElementById('modal-close').addEventListener('click', closeModal);

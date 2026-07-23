@@ -82,6 +82,8 @@ router.get('/auth/config', async (req, res, next) => {
       redirectSeconds: parseInt(branding.redirectSeconds !== undefined ? branding.redirectSeconds : '3'),
       secapEnabled: secap.activo === true || secap.activo === 'true',
       emailOpcional: secap.emailOpcional === true || secap.emailOpcional === 'true',
+      disableRegistration: branding.disableRegistration === true,
+      adImageUrl: branding.adImageUrl || '',
     });
   } catch (err) { next(err); }
 });
@@ -649,6 +651,101 @@ router.post('/auth/login',
     } catch (err) {
       next(err);
     }
+  }
+);
+
+router.post('/auth/free-access',
+  body('mac').isString().trim(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
+      }
+
+      const { mac, vendor, vendorParams } = req.body;
+      const clientIp = req.ip || req.connection.remoteAddress;
+      const params = typeof vendorParams === 'object' ? vendorParams : {};
+
+      if (!mac) {
+        return res.status(400).json({ error: 'La dirección MAC es obligatoria.' });
+      }
+
+      // 1. Asegurar que el usuario genérico 9999999999 existe
+      let user = await db.getUserByCedula('9999999999');
+      if (!user) {
+        user = await db.createUser({
+          cedula: '9999999999',
+          nombres: 'Acceso Libre',
+          apellidos: 'Publicitario',
+          email: 'acceso.libre@wifi.local',
+          terminosAceptados: 'Aceptado en Modo Publicitario',
+          tipo_usuario: 'externo'
+        });
+        // Asegurar que el usuario genérico tenga límite ilimitado
+        await db.setUserMaxDevices('9999999999', 0);
+      }
+
+      const normalizedMac = mac.trim().toUpperCase().replace(/:/g, '-');
+      let detectedVendor = vendor;
+      const finalParams = { ...params };
+
+      // Forzar que los parámetros usen la MAC correcta si no venían
+      if (!finalParams.clientMac) finalParams.clientMac = normalizedMac;
+      if (!finalParams.mac) finalParams.mac = normalizedMac;
+
+      // 2. Asociar el dispositivo al usuario genérico si no está registrado
+      const isReg = await db.isDeviceRegistered('9999999999', normalizedMac);
+      if (!isReg) {
+        await db.registerUserDevice('9999999999', normalizedMac);
+      }
+
+      // Autenticar vía RADIUS (para garantizar consistencia con FreeRADIUS)
+      const radiusOk = await radius.authenticate('9999999999', user.radius_password);
+      if (!radiusOk) {
+        return res.status(401).json({ error: 'Autenticación RADIUS del usuario genérico fallida.' });
+      }
+
+      // Guardar aceptación de términos
+      await db.updateTermsAcceptance('9999999999', 'Aceptado en Modo Publicitario');
+
+      let redirectUrl = finalParams.redirectUrl || '/success';
+
+      // 3. Responder de inmediato al cliente
+      res.json({
+        success: true,
+        nombre: 'Invitado',
+        redirectUrl: redirectUrl || '/success',
+        ...(detectedVendor === 'mikrotik' ? { radiusPassword: user.radius_password } : {}),
+      });
+
+      // 4. Procesar la autorización en el controlador y el log en background
+      (async () => {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          await authorizeVendor(detectedVendor, finalParams, '9999999999', user.radius_password);
+          
+          await db.startAcctSession({
+            username: '9999999999',
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            vendor: detectedVendor
+          });
+          
+          await db.logAccess({
+            cedula: '9999999999',
+            vendor: detectedVendor,
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            resultado: 'success'
+          });
+        } catch (bgErr) {
+          console.error('[AUTH-FREE-BG] Error en el proceso de fondo:', bgErr.message);
+        }
+      })();
+
+    } catch (err) { next(err); }
   }
 );
 

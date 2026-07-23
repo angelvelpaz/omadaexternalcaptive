@@ -114,6 +114,40 @@
       </button>
     </form>
 
+    <!-- Contenedor Acceso Publicitario (Acceso Libre) -->
+    <div id="ad-access-container" class="hidden">
+      <!-- Imagen publicitaria -->
+      <div class="mb-5 overflow-hidden rounded-xl border border-gray-150 shadow-sm bg-gray-50 flex items-center justify-center">
+        <img id="ad-image" src="" alt="Publicidad" class="w-full object-contain max-h-64">
+      </div>
+      
+      <!-- Términos y condiciones -->
+      <div class="mb-5 flex items-start gap-3 mt-4">
+        <input type="checkbox" id="ad-terms" checked
+          class="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer">
+        <label for="ad-terms" class="text-sm text-gray-600 cursor-pointer">
+          Acepto los <a href="/static/terms.html" target="_blank" class="text-blue-600 underline hover:text-blue-800">términos de uso</a>
+        </label>
+      </div>
+      <p id="ad-terms-error" class="text-red-500 text-xs mb-4 hidden">Debe aceptar los términos de uso.</p>
+
+      <button
+        onclick="connectFreeAccess()"
+        id="btn-free-access"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg
+               transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      >
+        <span id="btn-free-text">Conectarse a Internet</span>
+        <span id="btn-free-spinner" class="hidden">
+          <svg class="animate-spin inline h-5 w-5 mr-2 -mt-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          Conectando...
+        </span>
+      </button>
+    </div>
+
     <!-- MikroTik auto-submit form (oculto) -->
     <form id="form-mikrotik" method="POST" class="hidden">
       <input type="hidden" id="mk-username" name="username">
@@ -131,7 +165,15 @@
       if (cfg.name) PORTAL_NAME.textContent = cfg.name;
       document.title = cfg.name || 'Portal Wi-Fi';
       if (cfg.logo) PORTAL_LOGO.src = cfg.logo;
-      if (cfg.welcomeText) document.getElementById('welcome-text').textContent = cfg.welcomeText;
+      
+      if (cfg.disableRegistration) {
+        document.getElementById('form-cedula').classList.add('hidden');
+        document.getElementById('welcome-text').textContent = 'Visualice la publicidad para continuar';
+        document.getElementById('ad-access-container').classList.remove('hidden');
+        document.getElementById('ad-image').src = cfg.adImageUrl || cfg.logo || '/static/logo.svg';
+      } else {
+        if (cfg.welcomeText) document.getElementById('welcome-text').textContent = cfg.welcomeText;
+      }
       
       // Aplicar colores personalizados dinámicamente
       if (cfg.primaryColor && cfg.accentColor) {
@@ -400,6 +442,55 @@
 
     // Iniciar verificación de autologin al cargar
     checkAutologin();
+
+    async function connectFreeAccess() {
+      const termsChecked = document.getElementById('ad-terms').checked;
+      const termsError = document.getElementById('ad-terms-error');
+      termsError.classList.add('hidden');
+
+      if (!termsChecked) {
+        termsError.classList.remove('hidden');
+        return;
+      }
+
+      const clientMac = getClientMac();
+      if (!clientMac) {
+        alert('No se pudo detectar la dirección MAC de su dispositivo.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-free-access');
+      const btnText = document.getElementById('btn-free-text');
+      const btnSpinner = document.getElementById('btn-free-spinner');
+
+      btn.disabled = true;
+      btnText.classList.add('hidden');
+      btnSpinner.classList.remove('hidden');
+
+      try {
+        const resp = await fetch('/auth/free-access', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mac: clientMac, vendor, vendorParams: getVendorParams() }),
+        });
+        const data = await resp.json();
+
+        if (!data.success) {
+          alert(data.error || 'Error al conectar.');
+          btn.disabled = false;
+          btnText.classList.remove('hidden');
+          btnSpinner.classList.add('hidden');
+          return;
+        }
+
+        handleRedirect(data, '9999999999');
+      } catch (err) {
+        alert('Error de conexión. Intente nuevamente.');
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnSpinner.classList.add('hidden');
+      }
+    }
   </script>
 </body>
 </html>

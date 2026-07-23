@@ -1271,6 +1271,28 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
       }
     }
 
+    let adImageUrl = input.adImageUrl || '';
+    if (input.adBase64 && input.adBase64.startsWith('data:image/')) {
+      const fs = require('fs');
+      const path = require('path');
+
+      const matches = input.adBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        let ext = matches[1];
+        if (ext === 'svg+xml') ext = 'svg';
+        if (ext === 'jpeg') ext = 'jpg';
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        const publicDir = path.join(__dirname, '../../public');
+        const filename = `ad_upload.${ext}`;
+        const filepath = path.join(publicDir, filename);
+
+        fs.writeFileSync(filepath, buffer);
+        adImageUrl = `/static/${filename}`;
+      }
+    }
+
     const newCfg = {
       portalName:      (input.portalName || '').trim() || 'Portal Wi-Fi',
       logoUrl:         logoUrl,
@@ -1281,6 +1303,9 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
       termsUpdatedAt:  termsUpdatedAt,
       inactiveMessage: (input.inactiveMessage || '').trim() || 'Su usuario ha sido desactivado. Por favor, contacte al administrador.',
       ipWhitelist:     ipWhitelist,
+      redirectSeconds: parseInt(input.redirectSeconds !== undefined ? input.redirectSeconds : '3'),
+      disableRegistration: !!input.disableRegistration,
+      adImageUrl:      adImageUrl,
     };
     await db.saveControllerConfig('branding', newCfg);
 

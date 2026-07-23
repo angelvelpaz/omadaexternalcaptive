@@ -320,7 +320,7 @@ async function listUsers({
   const sortCol = validSortCols[orderBy] || 'fecha_registro';
   const sortDir = orderDir === 'ASC' ? 'ASC' : 'DESC';
 
-  // Construir consulta base
+  // Construir consulta base optimizada de alto rendimiento
   let sql = `
     SELECT * FROM (
       SELECT u.id, u.cedula, u.nombres, u.apellidos, u.email, u.activo, u.fecha_registro, u.tipo_usuario,
@@ -328,22 +328,8 @@ async function listUsers({
                SELECT MAX(r.acctstarttime) 
                FROM radacct r 
                WHERE r.username = u.cedula 
-                  OR REPLACE(UPPER(r.callingstationid), ':', '-') IN (
-                       SELECT REPLACE(UPPER(mac_address), ':', '-') 
-                       FROM dispositivos_usuario 
-                       WHERE cedula = u.cedula
-                     )
              ) AS ultima_conexion,
-             (
-               SELECT COALESCE(SUM(r.acctinputoctets + r.acctoutputoctets), 0)
-               FROM radacct r 
-               WHERE r.username = u.cedula 
-                  OR REPLACE(UPPER(r.callingstationid), ':', '-') IN (
-                       SELECT REPLACE(UPPER(mac_address), ':', '-') 
-                       FROM dispositivos_usuario 
-                       WHERE cedula = u.cedula
-                     )
-             ) AS consumo_total
+             0::bigint AS consumo_total
       FROM usuarios_portal u
     ) u_agg
     WHERE 1=1

@@ -117,11 +117,12 @@ async function authorizeClient({ clientMac, siteId, timeLimit }) {
 
   const targetSiteId = siteId || cfg.siteId || 'default';
   const minutes = timeLimit || SESSION_MINUTES;
+  const formattedMac = clientMac.toUpperCase().replace(/:/g, '-');
 
-  console.log(`[OMADA] Token obtenido, autorizando MAC: ${clientMac} en sitio: ${targetSiteId}`);
+  console.log(`[OMADA] Token obtenido, autorizando MAC: ${formattedMac} en sitio: ${targetSiteId}`);
 
   const resp = await client.post(
-    `/openapi/v1/${omadacId}/sites/${targetSiteId}/hotspot/clients/${clientMac.toUpperCase()}/auth`,
+    `/openapi/v1/${omadacId}/sites/${targetSiteId}/hotspot/clients/${formattedMac}/auth`,
     {
       timeLimit: parseInt(minutes),
     },
@@ -137,7 +138,7 @@ async function authorizeClient({ clientMac, siteId, timeLimit }) {
     throw new Error('Autorización Omada fallida: ' + JSON.stringify(resp.data));
   }
 
-  console.log(`[OMADA] Cliente ${clientMac} autorizado por ${minutes} minutos`);
+  console.log(`[OMADA] Cliente ${formattedMac} autorizado por ${minutes} minutos`);
   return true;
 }
 
@@ -169,8 +170,9 @@ async function unauthorizeClient({ clientMac }) {
 
   const list = sitesBody.result?.data ?? sitesBody.data?.data ?? [];
   const siteIds = Array.isArray(list) ? list.map(s => s.siteId || s.id) : ['default'];
+  const formattedMac = clientMac.toUpperCase().replace(/:/g, '-');
 
-  console.log(`[OMADA] Desautorizando MAC: ${clientMac} en sitios:`, siteIds);
+  console.log(`[OMADA] Desautorizando MAC: ${formattedMac} en sitios:`, siteIds);
 
   let successCount = 0;
   let errors = [];
@@ -182,7 +184,7 @@ async function unauthorizeClient({ clientMac }) {
     // 2.1 Desautorizar en el portal Hotspot
     try {
       const resp1 = await client.post(
-        `/openapi/v1/${omadacId}/sites/${siteId}/hotspot/clients/${clientMac.toUpperCase()}/unauth`,
+        `/openapi/v1/${omadacId}/sites/${siteId}/hotspot/clients/${formattedMac}/unauth`,
         {},
         {
           headers: {
@@ -203,7 +205,7 @@ async function unauthorizeClient({ clientMac }) {
     // 2.2 Desconectar físicamente del AP (reconnect)
     try {
       const resp2 = await client.post(
-        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${clientMac.toUpperCase()}/reconnect`,
+        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/reconnect`,
         {},
         {
           headers: {
@@ -223,14 +225,14 @@ async function unauthorizeClient({ clientMac }) {
 
     if (actionOk) {
       successCount++;
-      console.log(`[OMADA] Cliente ${clientMac} desautorizado/desconectado en sitio ${siteId}`);
+      console.log(`[OMADA] Cliente ${formattedMac} desautorizado/desconectado en sitio ${siteId}`);
     }
   }
 
   if (successCount === 0) {
-    console.log(`[OMADA] No se encontró sesión activa para desconectar al cliente ${clientMac} (Detalles: ${errors.join('; ')})`);
+    console.log(`[OMADA] No se encontró sesión activa para desconectar al cliente ${formattedMac} (Detalles: ${errors.join('; ')})`);
   } else {
-    console.log(`[OMADA] Cliente ${clientMac} desautorizado/desconectado en ${successCount} sitio(s)`);
+    console.log(`[OMADA] Cliente ${formattedMac} desautorizado/desconectado en ${successCount} sitio(s)`);
   }
 
   return true;
@@ -262,8 +264,9 @@ async function blockClient({ clientMac }) {
 
   const list = sitesBody.result?.data ?? sitesBody.data?.data ?? [];
   const siteIds = Array.isArray(list) ? list.map(s => s.siteId || s.id) : ['default'];
+  const formattedMac = clientMac.toUpperCase().replace(/:/g, '-');
 
-  console.log(`[OMADA] Bloqueando MAC: ${clientMac} en sitios:`, siteIds);
+  console.log(`[OMADA] Bloqueando MAC: ${formattedMac} en sitios:`, siteIds);
 
   let successCount = 0;
   let errors = [];
@@ -271,7 +274,7 @@ async function blockClient({ clientMac }) {
   for (const siteId of siteIds) {
     try {
       const resp = await client.post(
-        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${clientMac.toUpperCase()}/block`,
+        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/block`,
         {},
         {
           headers: {
@@ -282,7 +285,7 @@ async function blockClient({ clientMac }) {
       );
       if (resp.data?.errorCode === 0) {
         successCount++;
-        console.log(`[OMADA] Cliente ${clientMac} bloqueado en sitio ${siteId}`);
+        console.log(`[OMADA] Cliente ${formattedMac} bloqueado en sitio ${siteId}`);
       } else {
         errors.push(`Sitio ${siteId}: ${resp.data?.msg}`);
       }
@@ -292,7 +295,7 @@ async function blockClient({ clientMac }) {
   }
 
   if (successCount === 0) {
-    console.log(`[OMADA] No se pudo bloquear al cliente ${clientMac} en ningún sitio (Detalles: ${errors.join('; ')})`);
+    console.log(`[OMADA] No se pudo bloquear al cliente ${formattedMac} en ningún sitio (Detalles: ${errors.join('; ')})`);
   }
 
   return true;
@@ -324,8 +327,9 @@ async function unblockClient({ clientMac }) {
 
   const list = sitesBody.result?.data ?? sitesBody.data?.data ?? [];
   const siteIds = Array.isArray(list) ? list.map(s => s.siteId || s.id) : ['default'];
+  const formattedMac = clientMac.toUpperCase().replace(/:/g, '-');
 
-  console.log(`[OMADA] Desbloqueando MAC: ${clientMac} en sitios:`, siteIds);
+  console.log(`[OMADA] Desbloqueando MAC: ${formattedMac} en sitios:`, siteIds);
 
   let successCount = 0;
   let errors = [];
@@ -333,7 +337,7 @@ async function unblockClient({ clientMac }) {
   for (const siteId of siteIds) {
     try {
       const resp = await client.post(
-        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${clientMac.toUpperCase()}/unblock`,
+        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/unblock`,
         {},
         {
           headers: {
@@ -344,7 +348,7 @@ async function unblockClient({ clientMac }) {
       );
       if (resp.data?.errorCode === 0) {
         successCount++;
-        console.log(`[OMADA] Cliente ${clientMac} desbloqueado en sitio ${siteId}`);
+        console.log(`[OMADA] Cliente ${formattedMac} desbloqueado en sitio ${siteId}`);
       } else {
         errors.push(`Sitio ${siteId}: ${resp.data?.msg}`);
       }
@@ -354,7 +358,7 @@ async function unblockClient({ clientMac }) {
   }
 
   if (successCount === 0) {
-    console.log(`[OMADA] No se pudo desbloquear al cliente ${clientMac} en ningún sitio (Detalles: ${errors.join('; ')})`);
+    console.log(`[OMADA] No se pudo desbloquear al cliente ${formattedMac} en ningún sitio (Detalles: ${errors.join('; ')})`);
   }
 
   return true;

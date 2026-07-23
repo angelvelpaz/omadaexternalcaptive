@@ -76,8 +76,8 @@ async function connect() {
     const dbHash = `${salt}:${hash}`;
     
     await client.query(
-      `INSERT INTO administradores (username, password_hash, nombres, activo)
-       VALUES ('admin', $1, 'Administrador Principal', TRUE)`,
+      `INSERT INTO administradores (username, password_hash, nombres, activo, rol)
+       VALUES ('admin', $1, 'Administrador Principal', TRUE, 'superadministrador')`,
       [dbHash]
     );
     console.log('[DB] Administrador principal ("admin") creado por defecto.');
@@ -96,6 +96,11 @@ async function connect() {
     await client.query(`
       ALTER TABLE administradores 
       ADD COLUMN IF NOT EXISTS rol VARCHAR(30) DEFAULT 'operador';
+    `);
+    await client.query(`
+      UPDATE administradores 
+      SET rol = 'superadministrador' 
+      WHERE username = 'admin' AND (rol = 'operador' OR rol IS NULL);
     `);
   } catch (colErr) {
     console.error('[DB] Advertencia al validar columnas adicionales:', colErr.message);

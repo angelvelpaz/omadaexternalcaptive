@@ -1210,6 +1210,9 @@ router.get('/api/branding', requireAdmin, async (req, res, next) => {
       termsText:       config.termsText || '',
       inactiveMessage: config.inactiveMessage || 'Su usuario ha sido desactivado. Por favor, contacte al administrador.',
       ipWhitelist:     config.ipWhitelist || '0.0.0.0',
+      redirectSeconds: config.redirectSeconds !== undefined ? config.redirectSeconds : 3,
+      disableRegistration: config.disableRegistration === true,
+      adImageUrl:      config.adImageUrl || '',
     });
   } catch (err) { next(err); }
 });

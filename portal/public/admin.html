@@ -1317,12 +1317,9 @@ async function api(method, path, body) {
   if (res.status === 401) {
     localStorage.removeItem('admin_token');
     token = '';
-    const loginView = document.getElementById('view-login');
-    const dashView = document.getElementById('view-dashboard');
-    if (loginView && dashView) {
-      loginView.classList.remove('hidden');
-      dashView.classList.add('hidden');
-    }
+    document.documentElement.classList.remove('is-auth');
+    document.getElementById('admin-panel').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
     throw new Error('Sesión no autorizada o token expirado. Por favor, vuelve a iniciar sesión.');
   }
   if (!res.ok) throw new Error(data.error || 'Error desconocido');
@@ -1378,11 +1375,13 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
   localStorage.removeItem('admin_nombres');
   adminRol = 'operador';
   token = '';
+  document.documentElement.classList.remove('is-auth');
   document.getElementById('admin-panel').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
 });
 
 function showPanel() {
+  document.documentElement.classList.add('is-auth');
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('admin-panel').classList.remove('hidden');
   

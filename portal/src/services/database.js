@@ -41,6 +41,7 @@ async function connect() {
       password_hash  VARCHAR(255) NOT NULL,
       nombres        VARCHAR(100) NOT NULL,
       activo         BOOLEAN DEFAULT TRUE,
+      rol            VARCHAR(30) DEFAULT 'operador',
       created_at     TIMESTAMPTZ DEFAULT NOW()
     )
   `);
@@ -92,8 +93,12 @@ async function connect() {
       ALTER TABLE usuarios_portal 
       ADD COLUMN IF NOT EXISTS tipo_usuario VARCHAR(20) DEFAULT 'externo';
     `);
+    await client.query(`
+      ALTER TABLE administradores 
+      ADD COLUMN IF NOT EXISTS rol VARCHAR(30) DEFAULT 'operador';
+    `);
   } catch (colErr) {
-    console.error('[DB] Advertencia al validar columnas adicionales en usuarios_portal:', colErr.message);
+    console.error('[DB] Advertencia al validar columnas adicionales:', colErr.message);
   }
 
   // Inicializar grupos RADIUS por defecto si no existen

@@ -871,6 +871,20 @@ router.post('/auth/ldap',
           tipo_usuario: 'externo'
         });
         await db.setUserMaxDevices(normalizedUsername, 1);
+      } else if (!user.activo) {
+        // Bloquear acceso de inmediato si el usuario está desactivado en el portal
+        const branding = await db.getControllerConfig('branding') || {};
+        const warningMsg = branding.inactiveMessage || 'Su usuario ha sido desactivado. Por favor, contacte al administrador.';
+        
+        await db.logAccess({
+          cedula: normalizedUsername,
+          vendor: vendor || 'unknown',
+          macAddress: mac.trim().toUpperCase().replace(/:/g, '-'),
+          ipAddress: clientIp,
+          resultado: 'failed'
+        });
+        
+        return res.status(403).json({ error: warningMsg });
       }
 
       const normalizedMac = mac.trim().toUpperCase().replace(/:/g, '-');

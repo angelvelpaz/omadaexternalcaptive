@@ -128,15 +128,43 @@
       countdownEl.textContent = count;
       progressBar.style.width = '100%';
 
+      let redirected = false;
+      function performRedirect() {
+        if (redirected) return;
+        redirected = true;
+        clearInterval(interval);
+        clearInterval(connectivityInterval);
+        doRedirect();
+      }
+
       const interval = setInterval(() => {
         count--;
         countdownEl.textContent = Math.max(0, count);
         progressBar.style.width = (Math.max(0, count) / total * 100) + '%';
         if (count <= 0) {
-          clearInterval(interval);
-          doRedirect();
+          performRedirect();
         }
       }, 1000);
+
+      // Verificación activa de conectividad real cada 1.5 segundos
+      const connectivityInterval = setInterval(async () => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+          await fetch('https://connectivitycheck.gstatic.com/generate_204', {
+            mode: 'no-cors',
+            cache: 'no-store',
+            signal: controller.signal
+          });
+
+          clearTimeout(timeoutId);
+          console.log('[CONECTIVIDAD] Acceso a internet real detectado. Redirigiendo inmediatamente...');
+          performRedirect();
+        } catch (e) {
+          // Aún bloqueado por portal, continuar esperando
+        }
+      }, 1500);
     }
   </script>
 </body>

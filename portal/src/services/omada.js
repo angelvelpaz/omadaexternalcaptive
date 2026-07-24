@@ -181,46 +181,69 @@ async function unauthorizeClient({ clientMac }) {
   for (const siteId of siteIds) {
     let actionOk = false;
 
-    // 2.1 Desautorizar en el portal Hotspot
-    try {
-      const resp1 = await client.post(
-        `/openapi/v1/${omadacId}/sites/${siteId}/hotspot/clients/${formattedMac}/unauth`,
-        {},
-        {
-          headers: {
-            Authorization: `AccessToken=${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+    // 2.1 Desautorizar en el portal Hotspot (Hasta 3 intentos con backoff)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const resp1 = await client.post(
+          `/openapi/v1/${omadacId}/sites/${siteId}/hotspot/clients/${formattedMac}/unauth`,
+          {},
+          {
+            headers: {
+              Authorization: `AccessToken=${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        if (resp1.data?.errorCode === 0) {
+          actionOk = true;
+          break;
+        } else {
+          // Si el cliente no existe en este sitio, romper reintentos
+          if (resp1.data?.msg && resp1.data.msg.includes("does not exist")) {
+            errors.push(`Sitio ${siteId} (unauth): ${resp1.data?.msg}`);
+            break;
+          }
+          throw new Error(resp1.data?.msg || 'Error de API');
         }
-      );
-      if (resp1.data?.errorCode === 0) {
-        actionOk = true;
-      } else {
-        errors.push(`Sitio ${siteId} (unauth): ${resp1.data?.msg}`);
+      } catch (err) {
+        if (attempt === 3) {
+          errors.push(`Sitio ${siteId} (unauth) tras 3 intentos: ${err.response?.data?.msg || err.message}`);
+        } else {
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
       }
-    } catch (err) {
-      errors.push(`Sitio ${siteId} (unauth): ${err.response?.data?.msg || err.message}`);
     }
 
-    // 2.2 Desconectar físicamente del AP (reconnect)
-    try {
-      const resp2 = await client.post(
-        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/reconnect`,
-        {},
-        {
-          headers: {
-            Authorization: `AccessToken=${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+    // 2.2 Desconectar físicamente del AP (reconnect) (Hasta 3 intentos con backoff)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const resp2 = await client.post(
+          `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/reconnect`,
+          {},
+          {
+            headers: {
+              Authorization: `AccessToken=${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        if (resp2.data?.errorCode === 0) {
+          actionOk = true;
+          break;
+        } else {
+          if (resp2.data?.msg && resp2.data.msg.includes("does not exist")) {
+            errors.push(`Sitio ${siteId} (reconnect): ${resp2.data?.msg}`);
+            break;
+          }
+          throw new Error(resp2.data?.msg || 'Error de API');
         }
-      );
-      if (resp2.data?.errorCode === 0) {
-        actionOk = true;
-      } else {
-        errors.push(`Sitio ${siteId} (reconnect): ${resp2.data?.msg}`);
+      } catch (err) {
+        if (attempt === 3) {
+          errors.push(`Sitio ${siteId} (reconnect) tras 3 intentos: ${err.response?.data?.msg || err.message}`);
+        } else {
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
       }
-    } catch (err) {
-      errors.push(`Sitio ${siteId} (reconnect): ${err.response?.data?.msg || err.message}`);
     }
 
     if (actionOk) {
@@ -272,25 +295,36 @@ async function blockClient({ clientMac }) {
   let errors = [];
 
   for (const siteId of siteIds) {
-    try {
-      const resp = await client.post(
-        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/block`,
-        {},
-        {
-          headers: {
-            Authorization: `AccessToken=${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const resp = await client.post(
+          `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/block`,
+          {},
+          {
+            headers: {
+              Authorization: `AccessToken=${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        if (resp.data?.errorCode === 0) {
+          successCount++;
+          console.log(`[OMADA] Cliente ${formattedMac} bloqueado en sitio ${siteId}`);
+          break;
+        } else {
+          if (resp.data?.msg && resp.data.msg.includes("does not exist")) {
+            errors.push(`Sitio ${siteId}: ${resp.data?.msg}`);
+            break;
+          }
+          throw new Error(resp.data?.msg || 'Error de API');
         }
-      );
-      if (resp.data?.errorCode === 0) {
-        successCount++;
-        console.log(`[OMADA] Cliente ${formattedMac} bloqueado en sitio ${siteId}`);
-      } else {
-        errors.push(`Sitio ${siteId}: ${resp.data?.msg}`);
+      } catch (err) {
+        if (attempt === 3) {
+          errors.push(`Sitio ${siteId} tras 3 intentos: ${err.response?.data?.msg || err.message}`);
+        } else {
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
       }
-    } catch (err) {
-      errors.push(`Sitio ${siteId}: ${err.response?.data?.msg || err.message}`);
     }
   }
 
@@ -335,25 +369,36 @@ async function unblockClient({ clientMac }) {
   let errors = [];
 
   for (const siteId of siteIds) {
-    try {
-      const resp = await client.post(
-        `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/unblock`,
-        {},
-        {
-          headers: {
-            Authorization: `AccessToken=${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const resp = await client.post(
+          `/openapi/v1/${omadacId}/sites/${siteId}/clients/${formattedMac}/unblock`,
+          {},
+          {
+            headers: {
+              Authorization: `AccessToken=${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        if (resp.data?.errorCode === 0) {
+          successCount++;
+          console.log(`[OMADA] Cliente ${formattedMac} desbloqueado en sitio ${siteId}`);
+          break;
+        } else {
+          if (resp.data?.msg && resp.data.msg.includes("does not exist")) {
+            errors.push(`Sitio ${siteId}: ${resp.data?.msg}`);
+            break;
+          }
+          throw new Error(resp.data?.msg || 'Error de API');
         }
-      );
-      if (resp.data?.errorCode === 0) {
-        successCount++;
-        console.log(`[OMADA] Cliente ${formattedMac} desbloqueado en sitio ${siteId}`);
-      } else {
-        errors.push(`Sitio ${siteId}: ${resp.data?.msg}`);
+      } catch (err) {
+        if (attempt === 3) {
+          errors.push(`Sitio ${siteId} tras 3 intentos: ${err.response?.data?.msg || err.message}`);
+        } else {
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
       }
-    } catch (err) {
-      errors.push(`Sitio ${siteId}: ${err.response?.data?.msg || err.message}`);
     }
   }
 

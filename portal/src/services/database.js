@@ -33,6 +33,16 @@ async function connect() {
     )
   `);
 
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS ssid_config (
+      id          SERIAL PRIMARY KEY,
+      ssid_name   VARCHAR(64) UNIQUE NOT NULL,
+      auth_type   VARCHAR(20) NOT NULL,
+      config      JSONB NOT NULL DEFAULT '{}',
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   // Crear tablas para administración multiusuario y auditoría
   await client.query(`
     CREATE TABLE IF NOT EXISTS administradores (
@@ -1851,6 +1861,38 @@ async function closeExpiredSessions() {
   }
 }
 
+async function getSsidConfig(ssidName) {
+  const result = await pool.query(
+    'SELECT auth_type, config FROM ssid_config WHERE ssid_name = $1 LIMIT 1',
+    [ssidName]
+  );
+  return result.rows[0] || null;
+}
+
+async function saveSsidConfig(ssidName, authType, config) {
+  await pool.query(
+    `INSERT INTO ssid_config (ssid_name, auth_type, config, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (ssid_name) DO UPDATE 
+     SET auth_type = EXCLUDED.auth_type, config = EXCLUDED.config, updated_at = NOW()`,
+    [ssidName, authType, typeof config === 'object' ? JSON.stringify(config) : config]
+  );
+}
+
+async function listAllSsidConfigs() {
+  const result = await pool.query(
+    'SELECT id, ssid_name, auth_type, config, updated_at FROM ssid_config ORDER BY ssid_name ASC'
+  );
+  return result.rows;
+}
+
+async function deleteSsidConfig(ssidName) {
+  await pool.query(
+    'DELETE FROM ssid_config WHERE ssid_name = $1',
+    [ssidName]
+  );
+}
+
 module.exports = {
   connect,
   getPool,
@@ -1871,4 +1913,6 @@ module.exports = {
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,
   deleteAdmin, getAdminAuditLogs, updateAdminRol,
+  // ssid configurations
+  getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
 };

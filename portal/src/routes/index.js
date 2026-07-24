@@ -11,6 +11,7 @@ const db       = require('../services/database');
 const radius   = require('../services/radius');
 const unifi    = require('../services/unifi');
 const omadaSvc = require('../services/omada');
+const ldapSvc  = require('../services/ldap');
 
 // ─── Detección de vendor ─────────────────────────────────────────────────────
 
@@ -68,8 +69,58 @@ function extractVendorParams(vendor, query) {
 
 router.get('/auth/config', async (req, res, next) => {
   try {
-    const branding = await db.getControllerConfig('branding') || {};
-    const secap = await db.getControllerConfig('secap') || {};
+    const ssidParam = (req.query.ssid || '').trim();
+    let branding = await db.getControllerConfig('branding') || {};
+    let secap = await db.getControllerConfig('secap') || {};
+    
+    let activeAuthType = 'cedula';
+    let disableRegistration = branding.disableRegistration === true;
+    let adImageUrl = branding.adImageUrl || '';
+    let ldapEnabled = false;
+
+    // Si hay un SSID provisto, buscar en ssid_config
+    let ssidConfig = null;
+    if (ssidParam) {
+      ssidConfig = await db.getSsidConfig(ssidParam);
+    }
+    // Fallback al perfil 'default' si no se encuentra el SSID específico
+    if (!ssidConfig && ssidParam !== 'default') {
+      ssidConfig = await db.getSsidConfig('default');
+    }
+
+    if (ssidConfig) {
+      activeAuthType = ssidConfig.auth_type;
+      const sc = ssidConfig.config || {};
+      
+      // Sobrescribir variables de branding y secap del perfil de red
+      branding = {
+        portalName: sc.portalName || branding.portalName,
+        logoUrl: sc.logoUrl || branding.logoUrl,
+        primaryColor: sc.primaryColor || branding.primaryColor,
+        accentColor: sc.accentColor || branding.accentColor,
+        welcomeText: sc.welcomeText || branding.welcomeText,
+        termsText: sc.termsText || branding.termsText,
+        termsUpdatedAt: sc.termsUpdatedAt || branding.termsUpdatedAt,
+        inactiveMessage: sc.inactiveMessage || branding.inactiveMessage,
+        redirectSeconds: sc.redirectSeconds !== undefined ? sc.redirectSeconds : branding.redirectSeconds,
+      };
+
+      secap = {
+        activo: sc.secapEnabled === true || sc.secapEnabled === 'true',
+        emailOpcional: sc.emailOpcional === true || sc.emailOpcional === 'true',
+      };
+
+      if (activeAuthType === 'publicidad') {
+        disableRegistration = true;
+        adImageUrl = sc.adImageUrl || '';
+      } else if (activeAuthType === 'ldap') {
+        disableRegistration = false;
+        ldapEnabled = true;
+      } else {
+        disableRegistration = false;
+      }
+    }
+
     res.json({
       name: branding.portalName || process.env.PORTAL_NAME || 'Portal Wi-Fi',
       logo: branding.logoUrl || process.env.PORTAL_LOGO_URL || '/static/logo.svg',
@@ -82,8 +133,10 @@ router.get('/auth/config', async (req, res, next) => {
       redirectSeconds: parseInt(branding.redirectSeconds !== undefined ? branding.redirectSeconds : '3'),
       secapEnabled: secap.activo === true || secap.activo === 'true',
       emailOpcional: secap.emailOpcional === true || secap.emailOpcional === 'true',
-      disableRegistration: branding.disableRegistration === true,
-      adImageUrl: branding.adImageUrl || '',
+      disableRegistration: disableRegistration,
+      adImageUrl: adImageUrl,
+      ldapEnabled: ldapEnabled,
+      authType: activeAuthType
     });
   } catch (err) { next(err); }
 });
@@ -742,6 +795,138 @@ router.post('/auth/free-access',
           });
         } catch (bgErr) {
           console.error('[AUTH-FREE-BG] Error en el proceso de fondo:', bgErr.message);
+        }
+      })();
+
+    } catch (err) { next(err); }
+  }
+);
+
+router.post('/auth/ldap',
+  body('username').isString().trim().notEmpty().withMessage('El usuario es obligatorio.'),
+  body('password').isString().notEmpty().withMessage('La contraseña es obligatoria.'),
+  body('mac').isString().trim().notEmpty().withMessage('La dirección MAC es obligatoria.'),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
+      }
+
+      const { username, password, mac, ssid, vendor, vendorParams } = req.body;
+      const clientIp = req.ip || req.connection.remoteAddress;
+      const params = typeof vendorParams === 'object' ? vendorParams : {};
+
+      // 1. Resolver configuración LDAP según SSID
+      const ssidParam = (ssid || '').trim();
+      let ssidConfig = null;
+      if (ssidParam) ssidConfig = await db.getSsidConfig(ssidParam);
+      if (!ssidConfig && ssidParam !== 'default') ssidConfig = await db.getSsidConfig('default');
+
+      const sc = ssidConfig ? (ssidConfig.config || {}) : {};
+      
+      const ldapUrl = sc.ldapServerUrl || process.env.LDAP_SERVER_URL;
+      const ldapBindDN = sc.ldapBindDN || process.env.LDAP_BIND_DN;
+      const ldapBindPassword = sc.ldapBindCredentials || process.env.LDAP_BIND_PASSWORD;
+      const ldapSearchBase = sc.ldapSearchBase || process.env.LDAP_SEARCH_BASE;
+      const ldapAllowedGroup = sc.ldapAllowedGroup || process.env.LDAP_ALLOWED_GROUP;
+
+      if (!ldapUrl || !ldapBindDN || !ldapSearchBase) {
+        return res.status(400).json({ error: 'La autenticación LDAP no está configurada para esta red o servidor.' });
+      }
+
+      // 2. Autenticar en el Directorio Activo / LDAP
+      const authResult = await ldapSvc.authenticate({
+        url: ldapUrl,
+        bindDN: ldapBindDN,
+        bindPassword: ldapBindPassword,
+        searchBase: ldapSearchBase,
+        allowedGroup: ldapAllowedGroup,
+        username,
+        password
+      });
+
+      if (!authResult.success) {
+        // Guardar logs de acceso fallido
+        await db.logAccess({
+          cedula: username.substring(0, 15),
+          vendor: vendor || 'unknown',
+          macAddress: mac.trim().toUpperCase().replace(/:/g, '-'),
+          ipAddress: clientIp,
+          resultado: 'failure: ldap_invalid_credentials'
+        });
+        return res.status(401).json({ error: authResult.error || 'Credenciales LDAP incorrectas.' });
+      }
+
+      // 3. LDAP exitoso: asegurar que el usuario existe en DB local del portal
+      const normalizedUsername = username.trim().toLowerCase();
+      let user = await db.getUserByCedula(normalizedUsername);
+      if (!user) {
+        user = await db.createUser({
+          cedula: normalizedUsername,
+          nombres: authResult.nombres,
+          apellidos: authResult.apellidos,
+          email: authResult.email,
+          terminosAceptados: 'Aceptado por Login LDAP',
+          tipo_usuario: 'externo'
+        });
+        await db.setUserMaxDevices(normalizedUsername, 0);
+      }
+
+      const normalizedMac = mac.trim().toUpperCase().replace(/:/g, '-');
+      let detectedVendor = vendor;
+      const finalParams = { ...params };
+      if (!finalParams.clientMac) finalParams.clientMac = normalizedMac;
+      if (!finalParams.mac) finalParams.mac = normalizedMac;
+
+      // 4. Registrar dispositivo del usuario LDAP
+      const isReg = await db.isDeviceRegistered(normalizedUsername, normalizedMac);
+      if (!isReg) {
+        await db.registerUserDevice(normalizedUsername, normalizedMac);
+      }
+
+      // Autenticar vía RADIUS
+      const radiusOk = await radius.authenticate(normalizedUsername, user.radius_password);
+      if (!radiusOk) {
+        return res.status(401).json({ error: 'Fallo al autenticar la cuenta local en RADIUS.' });
+      }
+
+      // Guardar aceptación de términos
+      await db.updateTermsAcceptance(normalizedUsername, 'Aceptado por Login LDAP');
+
+      let redirectUrl = finalParams.redirectUrl || '/success';
+
+      // 5. Responder al cliente
+      res.json({
+        success: true,
+        nombre: authResult.nombres,
+        redirectUrl: redirectUrl || '/success',
+        ...(detectedVendor === 'mikrotik' ? { radiusPassword: user.radius_password } : {}),
+      });
+
+      // 6. Autorización del vendor en background
+      (async () => {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+          
+          await db.startAcctSession({
+            username: normalizedUsername,
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            vendor: detectedVendor
+          });
+          
+          await db.logAccess({
+            cedula: normalizedUsername,
+            vendor: detectedVendor,
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            resultado: 'success'
+          });
+        } catch (bgErr) {
+          console.error('[AUTH-LDAP-BG] Error en el proceso de fondo:', bgErr.message);
         }
       })();
 

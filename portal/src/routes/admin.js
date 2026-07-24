@@ -9,6 +9,7 @@ const db             = require('../services/database');
 const controllerTest = require('../services/controllerTest');
 const omadaSvc       = require('../services/omada');
 const unifiSvc       = require('../services/unifi');
+const ldapSvc        = require('../services/ldap');
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin_secret_cambia_esto';
 const PUBLIC = path.join(__dirname, '../../public');
@@ -1322,6 +1323,137 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
 
     res.json({ ok: true });
   } catch (err) { next(err); }
+});
+
+// SSID Config endpoints
+router.get('/api/ssids', requireAdmin, async (req, res, next) => {
+  try {
+    const list = await db.listAllSsidConfigs();
+    res.json(list);
+  } catch (err) { next(err); }
+});
+
+router.post('/api/ssids', requireAdmin, async (req, res, next) => {
+  try {
+    const { ssidName, authType, config } = req.body;
+    if (!ssidName || !authType) {
+      return res.status(400).json({ error: 'El nombre del SSID y el tipo de autenticación son obligatorios.' });
+    }
+
+    const configInput = config || {};
+
+    let logoUrl = configInput.logoUrl || '/static/logo.svg';
+    if (configInput.logoBase64 && configInput.logoBase64.startsWith('data:image/')) {
+      const matches = configInput.logoBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        let ext = matches[1];
+        if (ext === 'svg+xml') ext = 'svg';
+        if (ext === 'jpeg') ext = 'jpg';
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const filename = `logo_upload_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
+        const filepath = path.join(PUBLIC, filename);
+        fs.writeFileSync(filepath, buffer);
+        logoUrl = `/static/${filename}`;
+      }
+    }
+
+    let adImageUrl = configInput.adImageUrl || '';
+    if (configInput.adBase64 && configInput.adBase64.startsWith('data:image/')) {
+      const matches = configInput.adBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        let ext = matches[1];
+        if (ext === 'svg+xml') ext = 'svg';
+        if (ext === 'jpeg') ext = 'jpg';
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const filename = `ad_upload_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
+        const filepath = path.join(PUBLIC, filename);
+        fs.writeFileSync(filepath, buffer);
+        adImageUrl = `/static/${filename}`;
+      }
+    }
+
+    const savedConfig = {
+      portalName:      (configInput.portalName || '').trim() || 'Portal Wi-Fi',
+      logoUrl:         logoUrl,
+      primaryColor:    (configInput.primaryColor || '').trim() || '#4f46e5',
+      accentColor:     (configInput.accentColor || '').trim() || '#6366f1',
+      welcomeText:     (configInput.welcomeText || '').trim() || 'Bienvenido. Por favor identifíquese para continuar.',
+      termsText:       (configInput.termsText || '').trim() || '',
+      inactiveMessage: (configInput.inactiveMessage || '').trim() || 'Su usuario ha sido desactivado.',
+      redirectSeconds: parseInt(configInput.redirectSeconds !== undefined ? configInput.redirectSeconds : '3'),
+      adImageUrl:      adImageUrl,
+      // LDAP
+      ldapServerUrl:   (configInput.ldapServerUrl || '').trim(),
+      ldapBindDN:      (configInput.ldapBindDN || '').trim(),
+      ldapBindCredentials: (configInput.ldapBindCredentials || '').trim(),
+      ldapSearchBase:  (configInput.ldapSearchBase || '').trim(),
+      ldapAllowedGroup: (configInput.ldapAllowedGroup || '').trim(),
+      // SECAP
+      secapEnabled:    configInput.secapEnabled === true || configInput.secapEnabled === 'true',
+      emailOpcional:   configInput.emailOpcional === true || configInput.emailOpcional === 'true'
+    };
+
+    await db.saveSsidConfig(ssidName.trim(), authType.trim(), savedConfig);
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'MODIFICAR_SSID_CONFIG',
+      detalles: `Configuró perfil de SSID: ${ssidName} (tipo: ${authType})`
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.delete('/api/ssids/:ssidName', requireAdmin, async (req, res, next) => {
+  try {
+    const { ssidName } = req.params;
+    if (!ssidName) {
+      return res.status(400).json({ error: 'El nombre del SSID es obligatorio.' });
+    }
+
+    await db.deleteSsidConfig(ssidName);
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'ELIMINAR_SSID_CONFIG',
+      detalles: `Eliminó perfil de SSID: ${ssidName}`
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// Test LDAP connection endpoint
+router.post('/api/controllers/ldap/test', requireAdmin, async (req, res, next) => {
+  try {
+    const { serverUrl, bindDN, bindCredentials, searchBase, allowedGroup, testUser, testPassword } = req.body;
+    if (!serverUrl || !bindDN || !searchBase || !testUser || !testPassword) {
+      return res.status(400).json({ error: 'Complete todos los campos del formulario y las credenciales de prueba.' });
+    }
+
+    const testResult = await ldapSvc.authenticate({
+      url: serverUrl,
+      bindDN,
+      bindPassword: bindCredentials,
+      searchBase,
+      allowedGroup,
+      username: testUser,
+      password: testPassword
+    });
+
+    if (testResult.success) {
+      res.json({ success: true, message: '¡Conexión y autenticación LDAP exitosas!', user: testResult });
+    } else {
+      res.json({ success: false, error: testResult.error });
+    }
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
 });
 
 function sanitizePem(pemText) {

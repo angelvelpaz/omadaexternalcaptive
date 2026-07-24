@@ -45,7 +45,17 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
         let userEntry = null;
 
         res.on('searchEntry', (entry) => {
-          userEntry = entry.object;
+          const obj = {};
+          const attrs = entry.pojo.attributes || [];
+          attrs.forEach(attr => {
+            if (attr.values && attr.values.length > 0) {
+              obj[attr.type] = attr.values.length === 1 ? attr.values[0] : attr.values;
+            } else {
+              obj[attr.type] = [];
+            }
+          });
+          obj.dn = entry.dn ? entry.dn.toString() : (entry.pojo.objectName || '');
+          userEntry = obj;
         });
 
         res.on('error', (err) => {

@@ -4156,11 +4156,13 @@ async function loadBranding() {
   successEl.classList.add('hidden');
 
   try {
+    const selector = document.getElementById('cfg-branding-ssid-selector');
+    const lastSelectedSsid = selector.value || 'default';
+
     // 1. Cargar lista de SSIDs
     ssidsList = await api('GET', '/ssids');
     
     // Repopular selector
-    const selector = document.getElementById('cfg-branding-ssid-selector');
     selector.innerHTML = '<option value="default">Default / Por Defecto (General)</option>';
     ssidsList.forEach(s => {
       if (s.ssid_name !== 'default') {
@@ -4170,6 +4172,10 @@ async function loadBranding() {
         selector.appendChild(opt);
       }
     });
+
+    // Restaurar la selección previa
+    selector.value = lastSelectedSsid;
+    if (!selector.value) selector.value = 'default';
 
     await loadSsidProfileDetails();
   } catch (err) {

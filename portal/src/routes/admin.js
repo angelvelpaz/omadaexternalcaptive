@@ -1172,6 +1172,34 @@ router.put('/api/controllers/:vendor', requireAdmin,
   }
 );
 
+// Test LDAP connection endpoint
+router.post('/api/controllers/ldap/test', requireAdmin, async (req, res, next) => {
+  try {
+    const { serverUrl, bindDN, bindCredentials, searchBase, allowedGroup, testUser, testPassword } = req.body;
+    if (!serverUrl || !bindDN || !searchBase || !testUser || !testPassword) {
+      return res.status(400).json({ error: 'Complete todos los campos del formulario y las credenciales de prueba.' });
+    }
+
+    const testResult = await ldapSvc.authenticate({
+      url: serverUrl,
+      bindDN,
+      bindPassword: bindCredentials,
+      searchBase,
+      allowedGroup,
+      username: testUser,
+      password: testPassword
+    });
+
+    if (testResult.success) {
+      res.json({ success: true, message: '¡Conexión y autenticación LDAP exitosas!', user: testResult });
+    } else {
+      res.json({ success: false, error: testResult.error });
+    }
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 router.post('/api/controllers/:vendor/test', requireAdmin,
   param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'secap']),
   async (req, res, next) => {
@@ -1426,34 +1454,6 @@ router.delete('/api/ssids/:ssidName', requireAdmin, async (req, res, next) => {
 
     res.json({ ok: true });
   } catch (err) { next(err); }
-});
-
-// Test LDAP connection endpoint
-router.post('/api/controllers/ldap/test', requireAdmin, async (req, res, next) => {
-  try {
-    const { serverUrl, bindDN, bindCredentials, searchBase, allowedGroup, testUser, testPassword } = req.body;
-    if (!serverUrl || !bindDN || !searchBase || !testUser || !testPassword) {
-      return res.status(400).json({ error: 'Complete todos los campos del formulario y las credenciales de prueba.' });
-    }
-
-    const testResult = await ldapSvc.authenticate({
-      url: serverUrl,
-      bindDN,
-      bindPassword: bindCredentials,
-      searchBase,
-      allowedGroup,
-      username: testUser,
-      password: testPassword
-    });
-
-    if (testResult.success) {
-      res.json({ success: true, message: '¡Conexión y autenticación LDAP exitosas!', user: testResult });
-    } else {
-      res.json({ success: false, error: testResult.error });
-    }
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
 });
 
 function sanitizePem(pemText) {

@@ -879,9 +879,28 @@ router.post('/auth/ldap',
       if (!finalParams.clientMac) finalParams.clientMac = normalizedMac;
       if (!finalParams.mac) finalParams.mac = normalizedMac;
 
-      // 4. Registrar dispositivo del usuario LDAP
+      // 4. Registrar dispositivo del usuario LDAP (Validando límites)
       const isReg = await db.isDeviceRegistered(normalizedUsername, normalizedMac);
       if (!isReg) {
+        const regCount = await db.getUserDevicesCount(normalizedUsername);
+        
+        // Obtener la configuración fresca del límite de dispositivos del usuario
+        const dbUser = await db.getUserByCedula(normalizedUsername);
+        const maxAllowed = (dbUser && dbUser.max_dispositivos !== null) ? dbUser.max_dispositivos : 1;
+
+        if (maxAllowed > 0 && regCount >= maxAllowed) {
+          await db.logAccess({
+            cedula: normalizedUsername,
+            vendor: detectedVendor || 'unknown',
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            resultado: 'limit_reached'
+          });
+          return res.status(400).json({
+            error: `Límite de dispositivos alcanzado para su usuario (Máximo ${maxAllowed} dispositivo${maxAllowed !== 1 ? 's' : ''}).`
+          });
+        }
+
         await db.registerUserDevice(normalizedUsername, normalizedMac);
       }
 

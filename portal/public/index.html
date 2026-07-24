@@ -34,7 +34,7 @@
     </div>
 
     <!-- Advertencia e instrucciones de MAC Aleatoria / Privada -->
-    <div class="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+    <div id="mac-warning-box" class="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
       <div class="flex gap-2.5 items-start mb-2">
         <span class="text-xl" role="img" aria-label="advertencia">⚠️</span>
         <div>
@@ -116,9 +116,9 @@
 
     <!-- Contenedor Acceso Publicitario (Acceso Libre) -->
     <div id="ad-access-container" class="hidden">
-      <!-- Imagen publicitaria -->
-      <div class="mb-5 overflow-hidden rounded-xl border border-gray-150 shadow-sm bg-gray-50 flex items-center justify-center">
-        <img id="ad-image" src="" alt="Publicidad" class="w-full object-contain max-h-64">
+      <!-- Imagen publicitaria (Full Bleed: borde a borde) -->
+      <div class="mb-6 -mx-8 -mt-2 overflow-hidden bg-gray-50 border-y border-gray-100 flex items-center justify-center">
+        <img id="ad-image" src="" alt="Publicidad" class="w-full object-cover h-auto max-h-[420px] transition-transform duration-500 hover:scale-[1.02]">
       </div>
       
       <!-- Términos y condiciones -->
@@ -168,7 +168,9 @@
       
       if (cfg.disableRegistration) {
         document.getElementById('form-cedula').classList.add('hidden');
-        document.getElementById('welcome-text').textContent = 'Visualice la publicidad para continuar';
+        const warningBox = document.getElementById('mac-warning-box');
+        if (warningBox) warningBox.classList.add('hidden');
+        document.getElementById('welcome-text').classList.add('hidden');
         document.getElementById('ad-access-container').classList.remove('hidden');
         document.getElementById('ad-image').src = cfg.adImageUrl || cfg.logo || '/static/logo.svg';
       } else {

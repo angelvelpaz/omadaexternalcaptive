@@ -4195,7 +4195,8 @@ async function loadSsidProfileDetails() {
       applyProfileFields(defProfile.auth_type, defProfile.config);
     } else {
       const globalBranding = await api('GET', '/branding');
-      const globalSecap = await api('GET', '/secap');
+      const controllers = await api('GET', '/controllers');
+      const globalSecap = controllers.secap || {};
       
       const config = {
         ...globalBranding,
@@ -4426,7 +4427,7 @@ document.getElementById('form-branding').addEventListener('submit', async (e) =>
         activo: configObj.secapEnabled,
         emailOpcional: configObj.emailOpcional
       };
-      await api('PUT', '/secap', globalSecap);
+      await api('PUT', '/controllers/secap', globalSecap);
     }
 
     selectedLogoBase64 = null;

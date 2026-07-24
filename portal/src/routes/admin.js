@@ -373,7 +373,7 @@ router.get('/api/users', requireAdmin,
 );
 
 router.get('/api/users/:cedula', requireAdmin,
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   async (req, res, next) => {
     try {
       const user = await db.getUserDetail(req.params.cedula);
@@ -384,7 +384,7 @@ router.get('/api/users/:cedula', requireAdmin,
 );
 
 router.patch('/api/users/:cedula/type', requireAdmin,
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   body('tipo_usuario').isIn(['institucional', 'externo']),
   async (req, res, next) => {
     try {
@@ -544,7 +544,7 @@ router.post('/api/users/bulk-delete', requireAdmin, requireRol('administrador', 
 );
 
 router.patch('/api/users/:cedula/active', requireAdmin,
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   body('active').isBoolean(),
   async (req, res, next) => {
     try {
@@ -603,7 +603,7 @@ router.patch('/api/users/:cedula/active', requireAdmin,
 );
 
 router.put('/api/users/:cedula/groups', requireAdmin,
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   body('groups').isArray(),
   async (req, res, next) => {
     try {
@@ -626,7 +626,7 @@ router.put('/api/users/:cedula/groups', requireAdmin,
 );
 
 router.delete('/api/users/:cedula', requireAdmin, requireRol('administrador', 'superadministrador'),
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   async (req, res, next) => {
     try {
       const cedula = req.params.cedula;
@@ -670,7 +670,7 @@ router.delete('/api/users/:cedula', requireAdmin, requireRol('administrador', 's
 );
 
 router.patch('/api/users/:cedula/max-devices', requireAdmin,
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   body('maxDevices').isInt({ min: 0 }).toInt(),
   async (req, res, next) => {
     try {
@@ -693,7 +693,7 @@ router.patch('/api/users/:cedula/max-devices', requireAdmin,
 );
 
 router.delete('/api/users/:cedula/devices/:mac', requireAdmin,
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   param('mac').isString().trim(),
   async (req, res, next) => {
     try {
@@ -733,7 +733,7 @@ router.delete('/api/users/:cedula/devices/:mac', requireAdmin,
 );
 
 router.post('/api/users/:cedula/devices', requireAdmin,
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   body('mac').isString().trim(),
   async (req, res, next) => {
     try {
@@ -803,7 +803,7 @@ router.post('/api/users/:cedula/devices', requireAdmin,
 );
 
 router.put('/api/users/:cedula/devices/:mac', requireAdmin,
-  param('cedula').isNumeric().isLength({ min: 10, max: 10 }),
+  param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
   param('mac').isString().trim(),
   body('newMac').isString().trim(),
   async (req, res, next) => {

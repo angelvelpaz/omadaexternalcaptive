@@ -870,7 +870,7 @@ router.post('/auth/ldap',
           terminosAceptados: 'Aceptado por Login LDAP',
           tipo_usuario: 'externo'
         });
-        await db.setUserMaxDevices(normalizedUsername, 0);
+        await db.setUserMaxDevices(normalizedUsername, 1);
       }
 
       const normalizedMac = mac.trim().toUpperCase().replace(/:/g, '-');

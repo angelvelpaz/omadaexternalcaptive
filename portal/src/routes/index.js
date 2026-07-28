@@ -631,8 +631,13 @@ router.post('/auth/login',
               ipAddress: clientIp,
               resultado: 'limit_reached'
             });
+            const userDevices = await db.getUserDevices(ced);
             return res.status(400).json({
-              error: `Límite de dispositivos alcanzado para esta cédula (Máximo ${maxAllowed} dispositivo${maxAllowed !== 1 ? 's' : ''}).`
+              error: `Límite de dispositivos alcanzado para esta cédula (Máximo ${maxAllowed} dispositivo${maxAllowed !== 1 ? 's' : ''}).`,
+              limitReached: true,
+              cedula: ced,
+              username: ced,
+              devices: userDevices.map(d => ({ id: d.id, mac_address: d.mac_address, created_at: d.created_at }))
             });
           }
           
@@ -910,8 +915,13 @@ router.post('/auth/ldap',
             ipAddress: clientIp,
             resultado: 'limit_reached'
           });
+          const userDevices = await db.getUserDevices(normalizedUsername);
           return res.status(400).json({
-            error: `Límite de dispositivos alcanzado para su usuario (Máximo ${maxAllowed} dispositivo${maxAllowed !== 1 ? 's' : ''}).`
+            error: `Límite de dispositivos alcanzado para su usuario (Máximo ${maxAllowed} dispositivo${maxAllowed !== 1 ? 's' : ''}).`,
+            limitReached: true,
+            cedula: normalizedUsername,
+            username: normalizedUsername,
+            devices: userDevices.map(d => ({ id: d.id, mac_address: d.mac_address, created_at: d.created_at }))
           });
         }
 
@@ -1037,5 +1047,120 @@ async function authorizeVendor(vendor, params, username, password) {
       return '/success';
   }
 }
+
+// ─── API: auto-liberación de dispositivos (autoservicio) ────────────────────
+router.post('/auth/self-release',
+  body('username').isString().trim().notEmpty(),
+  body('macToDelete').isString().trim().notEmpty(),
+  body('type').isString().trim().isIn(['cedula', 'ldap']),
+  async (req, res, next) => {
+    try {
+      const { username, password, macToDelete, type, vendor, vendorParams } = req.body;
+      const clientIp = req.ip || req.connection.remoteAddress;
+      const params = typeof vendorParams === 'object' ? vendorParams : {};
+      const newMac = (params.mac || params.clientMac || '').trim().toUpperCase().replace(/:/g, '-');
+      const cleanMacToDelete = macToDelete.trim().toUpperCase().replace(/:/g, '-');
+
+      if (!newMac) {
+        return res.status(400).json({ error: 'No se detectó la MAC del dispositivo actual.' });
+      }
+
+      // 1. Validar credenciales según el tipo
+      let user = await db.getUserByCedula(username.trim().toLowerCase());
+      if (!user) {
+        return res.status(404).json({ error: 'Usuario no encontrado.' });
+      }
+      if (!user.activo) {
+        return res.status(403).json({ error: 'Su usuario ha sido desactivado.' });
+      }
+
+      if (type === 'ldap') {
+        const ldapSvc = require('../services/ldap');
+        const authResult = await ldapSvc.authenticate({ username, password });
+        if (!authResult.success) {
+          return res.status(401).json({ error: 'Credenciales institucionales incorrectas.' });
+        }
+      } else {
+        // Para tipo cédula, validamos contra la cuenta local en RADIUS
+        const radiusOk = await radius.authenticate(user.cedula, user.radius_password);
+        if (!radiusOk) {
+          return res.status(401).json({ error: 'Autenticación fallida.' });
+        }
+      }
+
+      // 2. Verificar que la MAC a eliminar pertenezca al usuario
+      const devices = await db.getUserDevices(user.cedula);
+      const hasDevice = devices.some(d => d.mac_address.toUpperCase().replace(/:/g, '-') === cleanMacToDelete);
+      if (!hasDevice) {
+        return res.status(400).json({ error: 'El dispositivo seleccionado no pertenece a su usuario.' });
+      }
+
+      // 3. Eliminar dispositivo viejo de la base de datos
+      await db.deleteUserDevice(user.cedula, cleanMacToDelete);
+      console.log(`[SELF-RELEASE] Dispositivo viejo ${cleanMacToDelete} eliminado para usuario ${user.cedula}`);
+
+      // 4. Desautorizar (kick/unauth) el dispositivo viejo en el controlador de red
+      let detectedVendor = vendor || 'unknown';
+      if (detectedVendor === 'unknown' || !detectedVendor) {
+        if (process.env.OMADA_CONTROLLER_URL) detectedVendor = 'omada';
+        else if (process.env.UNIFI_CONTROLLER_URL) detectedVendor = 'unifi';
+      }
+
+      if (detectedVendor === 'omada' && process.env.OMADA_CONTROLLER_URL) {
+        const omadaSvc = require('../services/omada');
+        omadaSvc.unauthorizeClient({ clientMac: cleanMacToDelete }).catch(err => {
+          console.error(`[SELF-RELEASE] Error al desautorizar MAC vieja ${cleanMacToDelete} en Omada:`, err.message);
+        });
+      }
+
+      // 5. Registrar el nuevo dispositivo (esto también aplica su perfil de velocidad)
+      await db.registerUserDevice(user.cedula, newMac);
+      console.log(`[SELF-RELEASE] Nuevo dispositivo ${newMac} registrado para usuario ${user.cedula}`);
+
+      // 6. Autorizar el nuevo dispositivo
+      let redirectUrl = params.redirectUrl || '/success';
+      res.json({
+        success: true,
+        nombre: user.nombres,
+        redirectUrl: redirectUrl || '/success',
+        ...(detectedVendor === 'mikrotik' ? { radiusPassword: user.radius_password } : {}),
+      });
+
+      // Procesar la autorización en background
+      (async () => {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          const finalParams = { ...params };
+          if (!finalParams.clientMac) finalParams.clientMac = newMac;
+          if (!finalParams.mac) finalParams.mac = newMac;
+
+          await authorizeVendor(detectedVendor, finalParams, user.cedula, user.radius_password);
+          
+          await db.startAcctSession({
+            username: user.cedula,
+            macAddress: newMac,
+            ipAddress: clientIp,
+            vendor: detectedVendor
+          });
+          
+          await db.logAccess({
+            cedula: user.cedula,
+            vendor: detectedVendor,
+            macAddress: newMac,
+            ipAddress: clientIp,
+            resultado: 'success',
+          });
+          
+          console.log(`[SELF-RELEASE] Nuevo dispositivo ${newMac} autorizado exitosamente para ${user.cedula}`);
+        } catch (vendorErr) {
+          console.error(`[SELF-RELEASE] Error autorizando nuevo dispositivo en ${detectedVendor} (async):`, vendorErr.message);
+        }
+      })();
+
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 module.exports = router;

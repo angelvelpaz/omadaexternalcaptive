@@ -117,7 +117,8 @@ async function syncStats() {
                acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
                acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
                acctinputoctets, acctoutputoctets, callingstationid, framedipaddress, calledstationid
-             ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9, $10)`,
+             ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (acctuniqueid) DO NOTHING`,
             [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip, calledStationId]
           );
         }
@@ -127,7 +128,8 @@ async function syncStats() {
              acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
              acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
              acctinputoctets, acctoutputoctets, callingstationid, framedipaddress, calledstationid
-           ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9, $10)`,
+           ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (acctuniqueid) DO NOTHING`,
           [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip, calledStationId]
         );
       }

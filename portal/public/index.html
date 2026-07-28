@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Wi-Fi</title>
-  <script src="/static/js/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/css/tailwind-output.css">
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center p-4">
@@ -210,6 +210,32 @@
       <input type="hidden" id="mk-password" name="password">
     </form>
 
+  </div>
+
+  <!-- Modal de Autoservicio: Liberar Dispositivo -->
+  <div id="self-release-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative transform scale-95 transition-transform duration-300">
+      <h3 class="text-xl font-bold text-gray-800 mb-2">Límite de Dispositivos Alcanzado</h3>
+      <p class="text-gray-600 text-sm mb-4">Has alcanzado el límite permitido de equipos conectados. Selecciona un dispositivo para desvincularlo y conectar este:</p>
+      
+      <!-- Lista de dispositivos -->
+      <div id="self-release-list" class="space-y-3 mb-6 max-h-48 overflow-y-auto pr-1">
+        <!-- Generado dinámicamente -->
+      </div>
+      
+      <!-- Contraseña requerida (sólo si es LDAP) -->
+      <div id="self-release-pwd-container" class="hidden mb-4">
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Confirme su contraseña institucional:</label>
+        <input type="password" id="self-release-pwd" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500" placeholder="Contraseña institucional">
+      </div>
+
+      <div id="self-release-error" class="text-red-500 text-xs hidden mb-4 bg-red-50 p-3 rounded-xl"></div>
+      
+      <div class="flex space-x-3 justify-end">
+        <button id="btn-self-release-cancel" class="px-4 py-2 text-sm font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition">Cancelar</button>
+        <button id="btn-self-release-submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition" disabled>Desvincular y Conectar</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -419,7 +445,11 @@
         const data = await resp.json();
 
         if (!data.success) {
-          showError(data.error || 'Error de autenticación.');
+          if (data.limitReached) {
+            openSelfReleaseModal(data, 'cedula');
+          } else {
+            showError(data.error || 'Error de autenticación.');
+          }
           setLoading(false);
           // Ocultar overlay si falla
           const overlay = document.getElementById('autologin-overlay');
@@ -621,8 +651,12 @@
         const data = await resp.json();
 
         if (!data.success) {
-          ldapError.textContent = data.error || 'Autenticación LDAP fallida.';
-          ldapError.classList.remove('hidden');
+          if (data.limitReached) {
+            openSelfReleaseModal(data, 'ldap', password);
+          } else {
+            ldapError.textContent = data.error || 'Autenticación LDAP fallida.';
+            ldapError.classList.remove('hidden');
+          }
           btn.disabled = false;
           btnText.classList.remove('hidden');
           btnSpinner.classList.add('hidden');
@@ -636,6 +670,150 @@
         btn.disabled = false;
         btnText.classList.remove('hidden');
         btnSpinner.classList.add('hidden');
+      }
+    });
+
+    // ── Autoservicio de Liberación de Dispositivos ──────────────────────────────
+    let selfReleaseData = null;
+    let selfReleaseType = '';
+    let selfReleaseSelectedMac = '';
+    let selfReleasePassword = '';
+
+    function openSelfReleaseModal(data, type, pwd = '') {
+      selfReleaseData = data;
+      selfReleaseType = type;
+      selfReleasePassword = pwd;
+      selfReleaseSelectedMac = '';
+
+      const modal = document.getElementById('self-release-modal');
+      const listEl = document.getElementById('self-release-list');
+      const pwdContainer = document.getElementById('self-release-pwd-container');
+      const errorEl = document.getElementById('self-release-error');
+      const submitBtn = document.getElementById('btn-self-release-submit');
+
+      errorEl.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Desvincular y Conectar';
+      document.getElementById('self-release-pwd').value = '';
+
+      if (type === 'ldap') {
+        pwdContainer.classList.remove('hidden');
+      } else {
+        pwdContainer.classList.add('hidden');
+      }
+
+      listEl.innerHTML = '';
+      if (Array.isArray(data.devices) && data.devices.length > 0) {
+        data.devices.forEach(dev => {
+          const div = document.createElement('div');
+          div.className = 'flex items-center justify-between p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-blue-50 transition select-none';
+          
+          const dateStr = new Date(dev.created_at).toLocaleDateString('es-EC', {
+            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+          });
+
+          div.onclick = () => {
+            // Deseleccionar anteriores
+            Array.from(listEl.children).forEach(child => {
+              child.classList.remove('border-blue-500', 'bg-blue-50');
+              child.querySelector('.check-circle').classList.remove('bg-blue-600', 'border-blue-600');
+            });
+            // Seleccionar actual
+            div.classList.add('border-blue-500', 'bg-blue-50');
+            div.querySelector('.check-circle').classList.add('bg-blue-600', 'border-blue-600');
+            selfReleaseSelectedMac = dev.mac_address;
+            submitBtn.disabled = false;
+          };
+
+          div.innerHTML = `
+            <div class="flex-1">
+              <span class="text-sm font-mono text-gray-700 block">${dev.mac_address}</span>
+              <span class="text-xs text-gray-400">Registrado el ${dateStr}</span>
+            </div>
+            <div class="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center check-circle transition-all"></div>
+          `;
+          listEl.appendChild(div);
+        });
+      } else {
+        listEl.innerHTML = '<p class="text-gray-500 text-sm py-4 text-center">No se encontraron dispositivos registrados.</p>';
+      }
+
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('.transform').classList.remove('scale-95');
+      }, 10);
+    }
+
+    function closeSelfReleaseModal() {
+      const modal = document.getElementById('self-release-modal');
+      modal.classList.add('opacity-0');
+      modal.querySelector('.transform').classList.add('scale-95');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 300);
+    }
+
+    document.getElementById('btn-self-release-cancel').addEventListener('click', closeSelfReleaseModal);
+
+    document.getElementById('btn-self-release-submit').addEventListener('click', async () => {
+      if (!selfReleaseSelectedMac) return;
+
+      const submitBtn = document.getElementById('btn-self-release-submit');
+      const cancelBtn = document.getElementById('btn-self-release-cancel');
+      const errorEl = document.getElementById('self-release-error');
+      
+      let pwd = selfReleasePassword;
+      if (selfReleaseType === 'ldap') {
+        pwd = document.getElementById('self-release-pwd').value;
+        if (!pwd) {
+          errorEl.textContent = 'Debe ingresar su contraseña para confirmar.';
+          errorEl.classList.remove('hidden');
+          return;
+        }
+      }
+
+      submitBtn.disabled = true;
+      cancelBtn.disabled = true;
+      errorEl.classList.add('hidden');
+      submitBtn.textContent = 'Procesando...';
+
+      try {
+        const clientMac = getClientMac();
+        const urlParams = new URLSearchParams(window.location.search);
+        const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
+
+        const resp = await fetch('/auth/self-release', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: selfReleaseData.username,
+            password: pwd,
+            macToDelete: selfReleaseSelectedMac,
+            type: selfReleaseType,
+            vendor,
+            vendorParams: getVendorParams()
+          })
+        });
+
+        const resData = await resp.json();
+        if (!resData.success) {
+          errorEl.textContent = resData.error || 'Error al desvincular el dispositivo.';
+          errorEl.classList.remove('hidden');
+          submitBtn.disabled = false;
+          cancelBtn.disabled = false;
+          submitBtn.textContent = 'Desvincular y Conectar';
+          return;
+        }
+
+        closeSelfReleaseModal();
+        handleRedirect(resData, selfReleaseData.username);
+      } catch (err) {
+        errorEl.textContent = 'Error de conexión con el servidor.';
+        errorEl.classList.remove('hidden');
+        submitBtn.disabled = false;
+        cancelBtn.disabled = false;
+        submitBtn.textContent = 'Desvincular y Conectar';
       }
     });
   </script>

@@ -1193,20 +1193,39 @@ async function getUserDevices(cedula) {
 
 async function registerUserDevice(cedula, macAddress) {
   if (!macAddress) return;
+  const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
   await pool.query(
     `INSERT INTO dispositivos_usuario (cedula, mac_address)
      VALUES ($1, $2)
      ON CONFLICT (cedula, mac_address) DO NOTHING`,
-    [cedula, macAddress.trim().toUpperCase()]
+    [cedula, cleanMac]
   );
+
+  // Aplicar límite de velocidad en radreply según perfil del usuario (LDAP alfanumérico vs Cédula)
+  const isLdap = /^[a-zA-Z]/.test(cedula.trim());
+  await pool.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
+
+  if (isLdap) {
+    // 15 Mbps Bajada / 5 Mbps Subida para institucionales
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '15728640')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '5242880')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '15M/5M')`, [cleanMac]);
+  } else {
+    // 5 Mbps Bajada / 1 Mbps Subida para ciudadanos
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '5242880')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '1048576')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '5M/1M')`, [cleanMac]);
+  }
 }
 
 async function deleteUserDevice(cedula, macAddress) {
   if (!macAddress) return;
+  const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
   await pool.query(
     'DELETE FROM dispositivos_usuario WHERE cedula = $1 AND mac_address = $2',
-    [cedula, macAddress.trim().toUpperCase()]
+    [cedula, cleanMac]
   );
+  await pool.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
 }
 
 async function setUserMaxDevices(cedula, maxDevices) {

@@ -1201,8 +1201,9 @@ async function registerUserDevice(cedula, macAddress) {
     [cedula, cleanMac]
   );
 
-  // Aplicar límite de velocidad en radreply según perfil del usuario (LDAP alfanumérico vs Cédula)
+  // Aplicar límite de velocidad en radreply según perfil del usuario (LDAP alfanumérico vs Cédula vs Publicidad)
   const isLdap = /^[a-zA-Z]/.test(cedula.trim());
+  const isPublicity = cedula.trim() === '9999999999';
   await pool.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
 
   if (isLdap) {
@@ -1210,6 +1211,11 @@ async function registerUserDevice(cedula, macAddress) {
     await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '15728640')`, [cleanMac]);
     await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '5242880')`, [cleanMac]);
     await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '15M/5M')`, [cleanMac]);
+  } else if (isPublicity) {
+    // 3 Mbps Bajada / 1 Mbps Subida para usuarios de publicidad/acceso libre
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '3145728')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '1048576')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '3M/1M')`, [cleanMac]);
   } else {
     // 5 Mbps Bajada / 1 Mbps Subida para ciudadanos
     await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '5242880')`, [cleanMac]);

@@ -95,13 +95,13 @@
             <span>Dashboard</span>
           </button>
 
-          <!-- Gestión de Usuarios (Dropdown) -->
+          <!-- Usuarios y Equipos (Dropdown) -->
           <div class="relative nav-dropdown">
             <button class="dropdown-trigger flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 border-transparent transition-colors hover:text-gray-800" aria-haspopup="true" aria-expanded="false">
               <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
               </svg>
-              <span>Gestión de Usuarios</span>
+              <span>Usuarios y Equipos</span>
               <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
               </svg>
@@ -109,35 +109,17 @@
             <div class="dropdown-menu absolute left-0 mt-0.5 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-20" role="menu">
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="users" role="menuitem">Usuarios</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="devices" role="menuitem">Dispositivos</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="admins" role="menuitem">Administradores</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="groups" role="menuitem">Grupos RADIUS</button>
             </div>
           </div>
 
-          <!-- Infraestructura (Dropdown) -->
-          <div class="relative nav-dropdown">
-            <button class="dropdown-trigger flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 border-transparent transition-colors hover:text-gray-800" aria-haspopup="true" aria-expanded="false">
-              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-              </svg>
-              <span>Infraestructura</span>
-              <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
-            <div class="dropdown-menu absolute left-0 mt-0.5 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-20" role="menu">
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="controllers" role="menuitem">Controladores</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="external-db" role="menuitem">Base de Datos Externa</button>
-            </div>
-          </div>
-
-          <!-- Monitoreo (Dropdown) -->
+          <!-- Monitoreo y Reportes (Dropdown) -->
           <div class="relative nav-dropdown">
             <button class="dropdown-trigger flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 border-transparent transition-colors hover:text-gray-800" aria-haspopup="true" aria-expanded="false">
               <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
               </svg>
-              <span>Monitoreo</span>
+              <span>Monitoreo y Reportes</span>
               <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
               </svg>
@@ -148,14 +130,14 @@
             </div>
           </div>
 
-          <!-- Configuración (Dropdown) -->
+          <!-- Configuración y Sistema (Dropdown) -->
           <div class="relative nav-dropdown">
             <button class="dropdown-trigger flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 border-transparent transition-colors hover:text-gray-800" aria-haspopup="true" aria-expanded="false">
               <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
               </svg>
-              <span>Configuración</span>
+              <span>Configuración y Sistema</span>
               <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
               </svg>
@@ -163,6 +145,9 @@
             <div class="dropdown-menu absolute left-0 mt-0.5 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-20" role="menu">
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="branding" role="menuitem">Personalización</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="bandwidth" role="menuitem">Ancho de Banda</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="admins" role="menuitem">Administradores</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="controllers" role="menuitem">Controladores</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="external-db" role="menuitem">Base de Datos Externa</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ssl" role="menuitem">Certificado SSL</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="maintenance" role="menuitem">Mantenimiento</button>
             </div>
@@ -190,43 +175,28 @@
             Dashboard
           </button>
 
-          <!-- Gestión de Usuarios -->
+          <!-- Usuarios y Equipos -->
           <div class="space-y-1">
             <div class="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
               </svg>
-              <span>Gestión de Usuarios</span>
+              <span>Usuarios y Equipos</span>
             </div>
             <div class="pl-5 space-y-1">
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="users">Usuarios</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="devices">Dispositivos</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="admins">Administradores</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="groups">Grupos RADIUS</button>
             </div>
           </div>
 
-          <!-- Infraestructura -->
-          <div class="space-y-1">
-            <div class="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-              </svg>
-              <span>Infraestructura</span>
-            </div>
-            <div class="pl-5 space-y-1">
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="controllers">Controladores</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="external-db">Base de Datos Externa</button>
-            </div>
-          </div>
-
-          <!-- Monitoreo -->
+          <!-- Monitoreo y Reportes -->
           <div class="space-y-1">
             <div class="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
               </svg>
-              <span>Monitoreo</span>
+              <span>Monitoreo y Reportes</span>
             </div>
             <div class="pl-5 space-y-1">
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="reports">Reportes</button>
@@ -234,17 +204,20 @@
             </div>
           </div>
 
-          <!-- Configuración -->
+          <!-- Configuración y Sistema -->
           <div class="space-y-1">
             <div class="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31"/>
               </svg>
-              <span>Configuración</span>
+              <span>Configuración y Sistema</span>
             </div>
             <div class="pl-5 space-y-1">
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="branding">Personalización</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="bandwidth">Ancho de Banda</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="admins">Administradores</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="controllers">Controladores</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="external-db">Base de Datos Externa</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ssl">Certificado SSL</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="maintenance">Mantenimiento</button>
             </div>

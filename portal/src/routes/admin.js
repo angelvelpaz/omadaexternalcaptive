@@ -1353,6 +1353,68 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET — configuración de anchos de banda
+router.get('/api/bandwidth-profiles', requireAdmin, async (req, res, next) => {
+  try {
+    const config = await db.getControllerConfig('bandwidth_profiles') || {
+      ldap: { down_mb: 15, up_mb: 5 },
+      citizen: { down_mb: 5, up_mb: 1 },
+      publicity: { down_mb: 3, up_mb: 1 }
+    };
+    res.json(config);
+  } catch (err) { next(err); }
+});
+
+// PUT — guarda configuración de anchos de banda
+router.put('/api/bandwidth-profiles', requireAdmin, async (req, res, next) => {
+  try {
+    const input = req.body;
+    
+    // Validar datos numéricos
+    if (!input.ldap || !input.citizen || !input.publicity) {
+      return res.status(400).json({ error: 'Configuración de perfiles incompleta.' });
+    }
+
+    const validateProfile = (p) => {
+      const down = parseFloat(p.down_mb);
+      const up = parseFloat(p.up_mb);
+      return !isNaN(down) && down > 0 && !isNaN(up) && up > 0;
+    };
+
+    if (!validateProfile(input.ldap) || !validateProfile(input.citizen) || !validateProfile(input.publicity)) {
+      return res.status(400).json({ error: 'Los valores de velocidad deben ser números válidos mayores a cero.' });
+    }
+
+    const newCfg = {
+      ldap: {
+        down_mb: parseFloat(input.ldap.down_mb),
+        up_mb: parseFloat(input.ldap.up_mb)
+      },
+      citizen: {
+        down_mb: parseFloat(input.citizen.down_mb),
+        up_mb: parseFloat(input.citizen.up_mb)
+      },
+      publicity: {
+        down_mb: parseFloat(input.publicity.down_mb),
+        up_mb: parseFloat(input.publicity.up_mb)
+      }
+    };
+
+    await db.saveControllerConfig('bandwidth_profiles', newCfg);
+
+    // Auditoría
+    const clientIp = getClientIp(req);
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: clientIp,
+      accion: 'MODIFICAR_ANCHOS_DE_BANDA',
+      detalles: `Modificó perfiles de velocidad (LDAP: ${newCfg.ldap.down_mb}/${newCfg.ldap.up_mb}M, Ciudadano: ${newCfg.citizen.down_mb}/${newCfg.citizen.up_mb}M, Publicidad: ${newCfg.publicity.down_mb}/${newCfg.publicity.up_mb}M)`
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // SSID Config endpoints
 router.get('/api/ssids', requireAdmin, async (req, res, next) => {
   try {

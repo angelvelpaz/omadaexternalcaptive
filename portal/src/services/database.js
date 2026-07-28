@@ -1206,22 +1206,29 @@ async function registerUserDevice(cedula, macAddress) {
   const isPublicity = cedula.trim() === '9999999999';
   await pool.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
 
+  // Cargar configuración de anchos de banda dinámicos (con valores por defecto en Mbps)
+  const bwConfig = await getControllerConfig('bandwidth_profiles') || {
+    ldap: { down_mb: 15, up_mb: 5 },
+    citizen: { down_mb: 5, up_mb: 1 },
+    publicity: { down_mb: 3, up_mb: 1 }
+  };
+
+  let profile = bwConfig.citizen || { down_mb: 5, up_mb: 1 };
   if (isLdap) {
-    // 15 Mbps Bajada / 5 Mbps Subida para institucionales
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '15728640')`, [cleanMac]);
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '5242880')`, [cleanMac]);
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '15M/5M')`, [cleanMac]);
+    profile = bwConfig.ldap || { down_mb: 15, up_mb: 5 };
   } else if (isPublicity) {
-    // 3 Mbps Bajada / 1 Mbps Subida para usuarios de publicidad/acceso libre
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '3145728')`, [cleanMac]);
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '1048576')`, [cleanMac]);
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '3M/1M')`, [cleanMac]);
-  } else {
-    // 5 Mbps Bajada / 1 Mbps Subida para ciudadanos
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '5242880')`, [cleanMac]);
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '1048576')`, [cleanMac]);
-    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '5M/1M')`, [cleanMac]);
+    profile = bwConfig.publicity || { down_mb: 3, up_mb: 1 };
   }
+
+  // Convertir de megabits a bytes para WISPr (RADIUS)
+  const downBytes = Math.round(parseFloat(profile.down_mb || '5') * 1024 * 1024);
+  const upBytes = Math.round(parseFloat(profile.up_mb || '1') * 1024 * 1024);
+  // Formato MikroTik: "XM/YM"
+  const mikrotikRate = `${profile.down_mb || '5'}M/${profile.up_mb || '1'}M`;
+
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', $2)`, [cleanMac, String(downBytes)]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', $2)`, [cleanMac, String(upBytes)]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', $2)`, [cleanMac, mikrotikRate]);
 }
 
 async function deleteUserDevice(cedula, macAddress) {

@@ -286,7 +286,12 @@ router.post('/api/devices', requireAdmin,
       }
 
       await db.registerUserDevice(cedula, mac_address);
-      await db.logAdminAudit(req.adminUser, 'REGISTRAR_DISPOSITIVO', `Dispositivo ${mac_address} registrado para el usuario ${cedula}`);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'REGISTRAR_DISPOSITIVO',
+        detalles: `Dispositivo ${mac_address} registrado para el usuario ${cedula}`
+      });
       res.status(201).json({ success: true, message: 'Dispositivo registrado con éxito.' });
     } catch (err) { next(err); }
   }
@@ -319,7 +324,12 @@ router.put('/api/devices', requireAdmin,
       }
 
       await db.updateUserDevice(old_cedula, old_mac_address, new_cedula, new_mac_address);
-      await db.logAdminAudit(req.adminUser, 'MODIFICAR_DISPOSITIVO', `Dispositivo ${old_mac_address} de ${old_cedula} modificado a ${new_mac_address} de ${new_cedula}`);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'MODIFICAR_DISPOSITIVO',
+        detalles: `Dispositivo ${old_mac_address} de ${old_cedula} modificado a ${new_mac_address} de ${new_cedula}`
+      });
       res.json({ success: true, message: 'Dispositivo actualizado con éxito.' });
     } catch (err) { next(err); }
   }
@@ -335,8 +345,34 @@ router.delete('/api/devices', requireAdmin,
         return res.status(400).json({ error: 'Datos de dispositivo inválidos.' });
       }
       const { cedula, mac_address } = req.body;
+      
+      // 1. Eliminar de la base de datos local
       await db.deleteUserDevice(cedula, mac_address);
-      await db.logAdminAudit(req.adminUser, 'ELIMINAR_DISPOSITIVO', `Dispositivo ${mac_address} eliminado del usuario ${cedula}`);
+      
+      // Auditoría
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'ELIMINAR_DISPOSITIVO',
+        detalles: `Dispositivo ${mac_address} eliminado del usuario ${cedula}`
+      });
+      
+      // 2. Desautorizar y desconectar (kick) en Omada
+      try {
+        console.log(`[ADMIN-DEVICE] Desautorizando MAC ${mac_address} en Omada`);
+        await omadaSvc.unauthorizeClient({ clientMac: mac_address });
+      } catch (omadaErr) {
+        console.error(`[ADMIN-DEVICE] Error desautorizando MAC ${mac_address} en Omada:`, omadaErr.message);
+      }
+
+      // 3. Desautorizar en UniFi
+      try {
+        console.log(`[ADMIN-DEVICE] Intentando desautorizar MAC ${mac_address} en UniFi`);
+        await unifiSvc.unauthorizeGuest(mac_address);
+      } catch (unifiErr) {
+        console.error(`[ADMIN-DEVICE] Error desautorizando MAC ${mac_address} en UniFi:`, unifiErr.message);
+      }
+
       res.json({ success: true, message: 'Dispositivo eliminado con éxito.' });
     } catch (err) { next(err); }
   }

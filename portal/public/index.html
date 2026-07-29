@@ -26,7 +26,7 @@
 
   <div id="main-card" class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
     <!-- Logo y nombre del portal -->
-    <div class="text-center mb-8">
+    <div id="portal-header-block" class="text-center mb-8">
       <img id="portal-logo" src="/static/logo.svg" alt="Logo" class="h-16 mx-auto mb-3"
            onerror="this.style.display='none'">
       <h1 id="portal-name" class="text-2xl font-bold text-gray-800">Portal Wi-Fi</h1>
@@ -256,12 +256,25 @@
         document.getElementById('form-ldap').classList.add('hidden');
         const warningBox = document.getElementById('mac-warning-box');
         if (warningBox) warningBox.classList.add('hidden');
+        
+        // Ocultar bloque del encabezado para limpiar el centro de pantalla
+        const headerBlock = document.getElementById('portal-header-block');
+        if (headerBlock) headerBlock.classList.add('hidden');
         document.getElementById('welcome-text').classList.add('hidden');
+        
         document.getElementById('ad-access-container').classList.remove('hidden');
         
-        // Aplicar fondo publicitario de pantalla completa (1920x1080)
-        const adUrl = cfg.adImageUrl || '/static/ad_placeholder.jpg';
-        document.body.style.backgroundImage = `url('${adUrl}')`;
+        // Aplicar fondo publicitario adaptativo según el dispositivo (16:9 vs 9:16)
+        const updateBackground = () => {
+          const isMobile = window.innerWidth < 768;
+          const adUrl = (isMobile && cfg.adImageUrlMobile)
+            ? cfg.adImageUrlMobile
+            : (isMobile ? '/static/ad_placeholder_mobile.jpg' : (cfg.adImageUrl || '/static/ad_placeholder.jpg'));
+          document.body.style.backgroundImage = `url('${adUrl}')`;
+        };
+        updateBackground();
+        window.addEventListener('resize', updateBackground);
+        
         document.body.style.backgroundSize = "cover";
         document.body.style.backgroundPosition = "center";
         document.body.style.backgroundAttachment = "fixed";
@@ -271,12 +284,21 @@
         const adWrapper = document.getElementById('ad-image-wrapper');
         if (adWrapper) adWrapper.classList.add('hidden');
 
-        // Transformar la tarjeta en Glassmorphic translúcida
+        // Transformar la tarjeta principal en panel Glassmorphic ultra-compacto flotando al pie
         const mainCard = document.getElementById('main-card');
         if (mainCard) {
-          mainCard.classList.remove('bg-white');
-          mainCard.classList.add('bg-white/75', 'backdrop-blur-lg', 'border', 'border-white/30', 'shadow-2xl');
+          mainCard.className = "fixed bottom-6 left-1/2 transform -translate-x-1/2 w-[92%] max-w-sm " + 
+                               "bg-black/30 backdrop-blur-xl border border-white/10 p-5 rounded-2xl " + 
+                               "shadow-2xl transition-all duration-500 z-10 text-white";
         }
+        
+        // Estilizar elementos de términos para legibilidad sobre el fondo oscuro/translúcido
+        const style = document.createElement('style');
+        style.innerHTML = `
+          #ad-access-container label { color: rgba(255, 255, 255, 0.9) !important; font-weight: 500; }
+          #ad-access-container a { color: #93c5fd !important; text-decoration: underline; }
+        `;
+        document.head.appendChild(style);
       } else if (cfg.ldapEnabled) {
         document.getElementById('form-cedula').classList.add('hidden');
         document.getElementById('form-ldap').classList.remove('hidden');

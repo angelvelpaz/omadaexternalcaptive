@@ -1278,6 +1278,7 @@ router.get('/api/branding', requireAdmin, async (req, res, next) => {
       redirectSeconds: config.redirectSeconds !== undefined ? config.redirectSeconds : 3,
       disableRegistration: config.disableRegistration === true,
       adImageUrl:      config.adImageUrl || '',
+      adImageUrlMobile: config.adImageUrlMobile || '',
     });
   } catch (err) { next(err); }
 });
@@ -1361,6 +1362,28 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
       }
     }
 
+    let adImageUrlMobile = input.adImageUrlMobile || '';
+    if (input.adMobileBase64 && input.adMobileBase64.startsWith('data:image/')) {
+      const fs = require('fs');
+      const path = require('path');
+
+      const matches = input.adMobileBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        let ext = matches[1];
+        if (ext === 'svg+xml') ext = 'svg';
+        if (ext === 'jpeg') ext = 'jpg';
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        const publicDir = path.join(__dirname, '../../public');
+        const filename = `ad_upload_mobile.${ext}`;
+        const filepath = path.join(publicDir, filename);
+
+        fs.writeFileSync(filepath, buffer);
+        adImageUrlMobile = `/static/${filename}`;
+      }
+    }
+
     const newCfg = {
       portalName:      (input.portalName || '').trim() || 'Portal Wi-Fi',
       logoUrl:         logoUrl,
@@ -1374,6 +1397,7 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
       redirectSeconds: parseInt(input.redirectSeconds !== undefined ? input.redirectSeconds : '3'),
       disableRegistration: !!input.disableRegistration,
       adImageUrl:      adImageUrl,
+      adImageUrlMobile: adImageUrlMobile,
     };
     await db.saveControllerConfig('branding', newCfg);
 
@@ -1500,6 +1524,22 @@ router.post('/api/ssids', requireAdmin, async (req, res, next) => {
       }
     }
 
+    let adImageUrlMobile = configInput.adImageUrlMobile || '';
+    if (configInput.adMobileBase64 && configInput.adMobileBase64.startsWith('data:image/')) {
+      const matches = configInput.adMobileBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        let ext = matches[1];
+        if (ext === 'svg+xml') ext = 'svg';
+        if (ext === 'jpeg') ext = 'jpg';
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const filename = `ad_upload_mobile_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
+        const filepath = path.join(PUBLIC, filename);
+        fs.writeFileSync(filepath, buffer);
+        adImageUrlMobile = `/static/${filename}`;
+      }
+    }
+
     const savedConfig = {
       portalName:      (configInput.portalName || '').trim() || 'Portal Wi-Fi',
       logoUrl:         logoUrl,
@@ -1510,6 +1550,7 @@ router.post('/api/ssids', requireAdmin, async (req, res, next) => {
       inactiveMessage: (configInput.inactiveMessage || '').trim() || 'Su usuario ha sido desactivado.',
       redirectSeconds: parseInt(configInput.redirectSeconds !== undefined ? configInput.redirectSeconds : '3'),
       adImageUrl:      adImageUrl,
+      adImageUrlMobile: adImageUrlMobile,
       // LDAP
       ldapServerUrl:   (configInput.ldapServerUrl || '').trim(),
       ldapBindDN:      (configInput.ldapBindDN || '').trim(),

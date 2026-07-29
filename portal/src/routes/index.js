@@ -76,6 +76,7 @@ router.get('/auth/config', async (req, res, next) => {
     let activeAuthType = 'cedula';
     let disableRegistration = branding.disableRegistration === true;
     let adImageUrl = branding.adImageUrl || '';
+    let adImageUrlMobile = branding.adImageUrlMobile || '';
     let ldapEnabled = false;
 
     // Si hay un SSID provisto, buscar en ssid_config
@@ -113,6 +114,7 @@ router.get('/auth/config', async (req, res, next) => {
       if (activeAuthType === 'publicidad') {
         disableRegistration = true;
         adImageUrl = sc.adImageUrl || '';
+        adImageUrlMobile = sc.adImageUrlMobile || '';
       } else if (activeAuthType === 'ldap') {
         disableRegistration = false;
         ldapEnabled = true;
@@ -135,6 +137,7 @@ router.get('/auth/config', async (req, res, next) => {
       emailOpcional: secap.emailOpcional === true || secap.emailOpcional === 'true',
       disableRegistration: disableRegistration,
       adImageUrl: adImageUrl,
+      adImageUrlMobile: adImageUrlMobile,
       ldapEnabled: ldapEnabled,
       authType: activeAuthType
     });

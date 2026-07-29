@@ -112,6 +112,13 @@
           Verificando...
         </span>
       </button>
+
+      <!-- Botón para volver a Publicidad (oculto por defecto) -->
+      <div id="back-to-ad-container" class="mt-4 text-center hidden">
+        <button type="button" onclick="switchToAd()" class="text-xs text-gray-500 hover:text-gray-800 underline transition-colors cursor-pointer focus:outline-none">
+          ← Volver al Acceso Gratuito (Publicidad)
+        </button>
+      </div>
     </form>
 
     <!-- Formulario LDAP -->
@@ -202,6 +209,13 @@
           Conectando...
         </span>
       </button>
+
+      <!-- Opción para registrarse directamente -->
+      <div class="mt-4 text-center">
+        <button type="button" onclick="switchToRegistration()" class="text-xs text-blue-200 hover:text-white underline transition-colors cursor-pointer focus:outline-none bg-transparent border-none">
+          👤 ¿Quieres navegación ilimitada? Regístrate aquí
+        </button>
+      </div>
     </div>
 
     <!-- MikroTik auto-submit form (oculto) -->
@@ -326,6 +340,58 @@
         document.head.appendChild(style);
       }
     }).catch(() => {});
+
+    function switchToRegistration() {
+      // 1. Mostrar formulario de cédula y ocultar publicidad
+      document.getElementById('form-cedula').classList.remove('hidden');
+      document.getElementById('ad-access-container').classList.add('hidden');
+      
+      // 2. Mostrar advertencia de MAC
+      const warningBox = document.getElementById('mac-warning-box');
+      if (warningBox) warningBox.classList.remove('hidden');
+
+      // 3. Mostrar el botón para volver
+      document.getElementById('back-to-ad-container').classList.remove('hidden');
+
+      // 4. Mostrar el encabezado de marca
+      const headerBlock = document.getElementById('portal-header-block');
+      if (headerBlock) headerBlock.classList.remove('hidden');
+      const welcomeText = document.getElementById('welcome-text');
+      if (welcomeText) {
+        welcomeText.classList.remove('hidden');
+        welcomeText.textContent = 'Completa tu registro para navegación ilimitada';
+      }
+
+      // 5. Devolver la tarjeta a su estado original (blanca en centro)
+      const mainCard = document.getElementById('main-card');
+      if (mainCard) {
+        mainCard.className = "bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 transition-all duration-500";
+      }
+    }
+
+    function switchToAd() {
+      // 1. Ocultar formulario de cédula y mostrar publicidad
+      document.getElementById('form-cedula').classList.add('hidden');
+      document.getElementById('ad-access-container').classList.remove('hidden');
+
+      // 2. Ocultar advertencia de MAC
+      const warningBox = document.getElementById('mac-warning-box');
+      if (warningBox) warningBox.classList.add('hidden');
+
+      // 3. Ocultar el encabezado
+      const headerBlock = document.getElementById('portal-header-block');
+      if (headerBlock) headerBlock.classList.add('hidden');
+      const welcomeText = document.getElementById('welcome-text');
+      if (welcomeText) welcomeText.classList.add('hidden');
+
+      // 4. Devolver la tarjeta a su estado glassmorphic flotante
+      const mainCard = document.getElementById('main-card');
+      if (mainCard) {
+        mainCard.className = "fixed bottom-6 left-1/2 transform -translate-x-1/2 w-[92%] max-w-sm " + 
+                             "bg-black/30 backdrop-blur-xl border border-white/10 p-5 rounded-2xl " + 
+                             "shadow-2xl transition-all duration-500 z-10 text-white";
+      }
+    }
 
     // ── Parámetros del vendor (de la URL) ────────────────────────────────────
     const params = new URLSearchParams(window.location.search);

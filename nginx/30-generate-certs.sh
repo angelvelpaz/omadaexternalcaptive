@@ -6,7 +6,7 @@ if [ ! -f /etc/nginx/ssl/portal.crt ] || [ ! -f /etc/nginx/ssl/portal.key ]; the
       -newkey rsa:2048 \
       -keyout /etc/nginx/ssl/portal.key \
       -out    /etc/nginx/ssl/portal.crt \
-      -subj   "/C=EC/ST=Pastaza/L=Puyo/O=Portal Cautivo/CN=captiveportal" \
+      -subj   "/C=EC/ST=State/L=City/O=Portal Cautivo/CN=captiveportal" \
       -addext "subjectAltName=IP:127.0.0.1,DNS:localhost,DNS:captiveportal"
 fi
 

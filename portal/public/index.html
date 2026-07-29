@@ -211,7 +211,7 @@
       </button>
 
       <!-- Opción para registrarse directamente -->
-      <div class="mt-4 text-center">
+      <div id="ad-register-link-container" class="mt-4 text-center">
         <button type="button" onclick="switchToRegistration()" class="text-xs text-blue-200 hover:text-white underline transition-colors cursor-pointer focus:outline-none bg-transparent border-none">
           👤 ¿Quieres navegación ilimitada? Regístrate aquí
         </button>
@@ -313,6 +313,16 @@
           #ad-access-container a { color: #93c5fd !important; text-decoration: underline; }
         `;
         document.head.appendChild(style);
+
+        // Mostrar u ocultar el enlace directo a registro según configuración
+        const adRegisterLink = document.getElementById('ad-register-link-container');
+        if (adRegisterLink) {
+          if (cfg.adAllowDirectRegister === false) {
+            adRegisterLink.classList.add('hidden');
+          } else {
+            adRegisterLink.classList.remove('hidden');
+          }
+        }
       } else if (cfg.ldapEnabled) {
         document.getElementById('form-cedula').classList.add('hidden');
         document.getElementById('form-ldap').classList.remove('hidden');

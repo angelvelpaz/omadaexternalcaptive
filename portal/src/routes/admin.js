@@ -1279,6 +1279,8 @@ router.get('/api/branding', requireAdmin, async (req, res, next) => {
       disableRegistration: config.disableRegistration === true,
       adImageUrl:      config.adImageUrl || '',
       adImageUrlMobile: config.adImageUrlMobile || '',
+      adSessionMinutes: config.adSessionMinutes !== undefined ? config.adSessionMinutes : 30,
+      adAllowDirectRegister: config.adAllowDirectRegister !== false,
     });
   } catch (err) { next(err); }
 });
@@ -1398,6 +1400,8 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
       disableRegistration: !!input.disableRegistration,
       adImageUrl:      adImageUrl,
       adImageUrlMobile: adImageUrlMobile,
+      adSessionMinutes: parseInt(input.adSessionMinutes !== undefined ? input.adSessionMinutes : '30'),
+      adAllowDirectRegister: input.adAllowDirectRegister !== false,
     };
     await db.saveControllerConfig('branding', newCfg);
 
@@ -1551,6 +1555,8 @@ router.post('/api/ssids', requireAdmin, async (req, res, next) => {
       redirectSeconds: parseInt(configInput.redirectSeconds !== undefined ? configInput.redirectSeconds : '3'),
       adImageUrl:      adImageUrl,
       adImageUrlMobile: adImageUrlMobile,
+      adSessionMinutes: parseInt(configInput.adSessionMinutes !== undefined ? configInput.adSessionMinutes : '30'),
+      adAllowDirectRegister: configInput.adAllowDirectRegister !== false,
       // LDAP
       ldapServerUrl:   (configInput.ldapServerUrl || '').trim(),
       ldapBindDN:      (configInput.ldapBindDN || '').trim(),

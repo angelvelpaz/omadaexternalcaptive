@@ -77,6 +77,8 @@ router.get('/auth/config', async (req, res, next) => {
     let disableRegistration = branding.disableRegistration === true;
     let adImageUrl = branding.adImageUrl || '';
     let adImageUrlMobile = branding.adImageUrlMobile || '';
+    let adSessionMinutes = branding.adSessionMinutes !== undefined ? branding.adSessionMinutes : 30;
+    let adAllowDirectRegister = branding.adAllowDirectRegister !== false;
     let ldapEnabled = false;
 
     // Si hay un SSID provisto, buscar en ssid_config
@@ -115,6 +117,8 @@ router.get('/auth/config', async (req, res, next) => {
         disableRegistration = true;
         adImageUrl = sc.adImageUrl || '';
         adImageUrlMobile = sc.adImageUrlMobile || '';
+        adSessionMinutes = sc.adSessionMinutes !== undefined ? sc.adSessionMinutes : adSessionMinutes;
+        adAllowDirectRegister = sc.adAllowDirectRegister !== false;
       } else if (activeAuthType === 'ldap') {
         disableRegistration = false;
         ldapEnabled = true;
@@ -138,6 +142,8 @@ router.get('/auth/config', async (req, res, next) => {
       disableRegistration: disableRegistration,
       adImageUrl: adImageUrl,
       adImageUrlMobile: adImageUrlMobile,
+      adSessionMinutes: parseInt(adSessionMinutes),
+      adAllowDirectRegister: adAllowDirectRegister,
       ldapEnabled: ldapEnabled,
       authType: activeAuthType
     });
@@ -732,6 +738,28 @@ router.post('/auth/free-access',
         return res.status(400).json({ error: 'La dirección MAC es obligatoria.' });
       }
 
+      // Recuperar la duración configurada para la sesión publicitaria
+      let adSessionMinutes = 30;
+      const ssidParam = (params.ssid || '').trim();
+      let ssidConfig = null;
+      if (ssidParam) {
+        ssidConfig = await db.getSsidConfig(ssidParam);
+      }
+      if (!ssidConfig && ssidParam !== 'default') {
+        ssidConfig = await db.getSsidConfig('default');
+      }
+      if (ssidConfig && ssidConfig.config) {
+        const sc = ssidConfig.config;
+        if (sc.adSessionMinutes !== undefined) {
+          adSessionMinutes = parseInt(sc.adSessionMinutes);
+        }
+      } else {
+        const branding = await db.getControllerConfig('branding') || {};
+        if (branding.adSessionMinutes !== undefined) {
+          adSessionMinutes = parseInt(branding.adSessionMinutes);
+        }
+      }
+
       // 1. Asegurar que el usuario genérico 9999999999 existe
       let user = await db.getUserByCedula('9999999999');
       if (!user) {
@@ -785,7 +813,7 @@ router.post('/auth/free-access',
         try {
           await new Promise(resolve => setTimeout(resolve, 300));
           
-          await authorizeVendor(detectedVendor, finalParams, '9999999999', user.radius_password);
+          await authorizeVendor(detectedVendor, finalParams, '9999999999', user.radius_password, adSessionMinutes);
           
           await db.startAcctSession({
             username: '9999999999',
@@ -992,7 +1020,7 @@ router.post('/auth/ldap',
  *
  * @returns {string} URL a la que redirigir el browser del usuario
  */
-async function authorizeVendor(vendor, params, username, password) {
+async function authorizeVendor(vendor, params, username, password, customTimeLimit) {
   switch (vendor) {
     case 'mikrotik': {
       // MikroTik espera que el browser haga POST a link-login-only con username y password
@@ -1004,7 +1032,7 @@ async function authorizeVendor(vendor, params, username, password) {
     }
 
     case 'unifi': {
-      await unifi.authorizeGuest(params.clientMac, params.apMac);
+      await unifi.authorizeGuest(params.clientMac, params.apMac, customTimeLimit);
       return params.redirectUrl || '/success';
     }
 
@@ -1016,7 +1044,7 @@ async function authorizeVendor(vendor, params, username, password) {
           await omadaSvc.authorizeClient({
             clientMac:   params.clientMac,
             siteId:      params.siteId,
-            timeLimit:   parseInt(process.env.SESSION_DURATION_MINUTES || '480'),
+            timeLimit:   customTimeLimit !== undefined ? parseInt(customTimeLimit) : parseInt(process.env.SESSION_DURATION_MINUTES || '480'),
           });
 
           // Forzar la desconexión (kick) del cliente después de 500ms para limpiar la caché del AP y obligar a una reasociación automática

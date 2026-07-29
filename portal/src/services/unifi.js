@@ -28,7 +28,7 @@ function buildClient() {
  * @param {string} clientMac  - MAC del cliente (viene del param ?id= de UniFi)
  * @param {string} apMac      - MAC del AP (param ?ap=)
  */
-async function authorizeGuest(clientMac, apMac) {
+async function authorizeGuest(clientMac, apMac, customMinutes) {
   if (!CONTROLLER_URL) {
     throw new Error('UNIFI_CONTROLLER_URL no configurado');
   }
@@ -54,13 +54,15 @@ async function authorizeGuest(clientMac, apMac) {
 
   console.log(`[UNIFI] Login exitoso, autorizando MAC: ${clientMac}`);
 
+  const targetMinutes = customMinutes !== undefined ? parseInt(customMinutes) : SESSION_MINUTES;
+
   // 2. Autorizar cliente como guest
   const authResp = await client.post(
     `/api/s/${UNIFI_SITE}/cmd/stamgr`,
     {
       cmd: 'authorize-guest',
       mac: clientMac.toLowerCase(),
-      minutes: SESSION_MINUTES,
+      minutes: targetMinutes,
     },
     {
       headers: { Cookie: cookieHeader },
@@ -71,7 +73,7 @@ async function authorizeGuest(clientMac, apMac) {
     throw new Error('Autorización de guest en UniFi fallida: ' + JSON.stringify(authResp.data));
   }
 
-  console.log(`[UNIFI] Cliente ${clientMac} autorizado por ${SESSION_MINUTES} minutos`);
+  console.log(`[UNIFI] Cliente ${clientMac} autorizado por ${targetMinutes} minutos`);
   return true;
 }
 

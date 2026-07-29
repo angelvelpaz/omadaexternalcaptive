@@ -466,12 +466,16 @@ router.post('/auth/register',
       }
 
       let redirectUrl = params.redirectUrl || '/success';
+      if (vendor === 'mikrotik') {
+        redirectUrl = await authorizeVendor(vendor, params, ced, user.radius_password);
+      }
 
       // Retornar éxito INMEDIATAMENTE al cliente para respuesta ultra-rápida en pantalla (< 150 ms)
       res.json({
         success: true,
         nombre: user.nombres,
         redirectUrl: redirectUrl || '/success',
+        ...(vendor === 'mikrotik' ? { radiusPassword: user.radius_password } : {}),
       });
 
       // Procesar en background: BD externa institucional, RADIUS, controlador Omada y auditoría
@@ -510,7 +514,9 @@ router.post('/auth/register',
           await radius.authenticate(ced, user.radius_password);
 
           // Autorizar en controlador Omada / MikroTik
-          await authorizeVendor(vendor, params, ced, user.radius_password);
+          if (vendor !== 'mikrotik') {
+            await authorizeVendor(vendor, params, ced, user.radius_password);
+          }
           
           await db.startAcctSession({
             username: ced,
@@ -671,6 +677,9 @@ router.post('/auth/login',
 
       // Autorizar en el vendor
       let redirectUrl = finalParams.redirectUrl || '/success';
+      if (detectedVendor === 'mikrotik') {
+        redirectUrl = await authorizeVendor(detectedVendor, finalParams, ced, user.radius_password);
+      }
 
       // Retornar éxito inmediatamente al cliente para evitar reseteos de TCP durante el cambio de ACLs
       res.json({
@@ -686,7 +695,9 @@ router.post('/auth/login',
           // Un pequeño delay de 300ms permite que el cliente reciba la respuesta HTTP limpia
           await new Promise(resolve => setTimeout(resolve, 300));
           
-          await authorizeVendor(detectedVendor, finalParams, ced, user.radius_password);
+          if (detectedVendor !== 'mikrotik') {
+            await authorizeVendor(detectedVendor, finalParams, ced, user.radius_password);
+          }
           
           await db.startAcctSession({
             username: ced,
@@ -804,6 +815,9 @@ router.post('/auth/free-access',
       await db.updateTermsAcceptance('9999999999', 'Aceptado en Modo Publicitario');
 
       let redirectUrl = finalParams.redirectUrl || '/success';
+      if (detectedVendor === 'mikrotik') {
+        redirectUrl = await authorizeVendor(detectedVendor, finalParams, '9999999999', user.radius_password, adSessionMinutes);
+      }
 
       // 3. Responder de inmediato al cliente
       res.json({
@@ -818,7 +832,9 @@ router.post('/auth/free-access',
         try {
           await new Promise(resolve => setTimeout(resolve, 300));
           
-          await authorizeVendor(detectedVendor, finalParams, '9999999999', user.radius_password, adSessionMinutes);
+          if (detectedVendor !== 'mikrotik') {
+            await authorizeVendor(detectedVendor, finalParams, '9999999999', user.radius_password, adSessionMinutes);
+          }
           
           await db.startAcctSession({
             username: '9999999999',
@@ -974,6 +990,9 @@ router.post('/auth/ldap',
       await db.updateTermsAcceptance(normalizedUsername, 'Aceptado por Login LDAP');
 
       let redirectUrl = finalParams.redirectUrl || '/success';
+      if (detectedVendor === 'mikrotik') {
+        redirectUrl = await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+      }
 
       // 5. Responder al cliente
       res.json({
@@ -988,7 +1007,9 @@ router.post('/auth/ldap',
         try {
           await new Promise(resolve => setTimeout(resolve, 300));
           
-          await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+          if (detectedVendor !== 'mikrotik') {
+            await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+          }
           
           await db.startAcctSession({
             username: normalizedUsername,
@@ -1155,6 +1176,14 @@ router.post('/auth/self-release',
 
       // 6. Autorizar el nuevo dispositivo
       let redirectUrl = params.redirectUrl || '/success';
+      const finalParams = { ...params };
+      if (!finalParams.clientMac) finalParams.clientMac = newMac;
+      if (!finalParams.mac) finalParams.mac = newMac;
+
+      if (detectedVendor === 'mikrotik') {
+        redirectUrl = await authorizeVendor(detectedVendor, finalParams, user.cedula, user.radius_password);
+      }
+
       res.json({
         success: true,
         nombre: user.nombres,
@@ -1166,11 +1195,10 @@ router.post('/auth/self-release',
       (async () => {
         try {
           await new Promise(resolve => setTimeout(resolve, 300));
-          const finalParams = { ...params };
-          if (!finalParams.clientMac) finalParams.clientMac = newMac;
-          if (!finalParams.mac) finalParams.mac = newMac;
 
-          await authorizeVendor(detectedVendor, finalParams, user.cedula, user.radius_password);
+          if (detectedVendor !== 'mikrotik') {
+            await authorizeVendor(detectedVendor, finalParams, user.cedula, user.radius_password);
+          }
           
           await db.startAcctSession({
             username: user.cedula,

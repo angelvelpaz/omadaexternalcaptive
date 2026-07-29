@@ -760,6 +760,11 @@ router.post('/auth/free-access',
         }
       }
 
+      // Si el tiempo es 0 (ilimitado), heredamos el límite máximo global de sesión del portal
+      if (adSessionMinutes === 0) {
+        adSessionMinutes = parseInt(process.env.SESSION_DURATION_MINUTES || '480');
+      }
+
       // 1. Asegurar que el usuario genérico 9999999999 existe
       let user = await db.getUserByCedula('9999999999');
       if (!user) {

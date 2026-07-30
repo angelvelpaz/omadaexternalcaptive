@@ -371,6 +371,8 @@ async function checkActiveSessionsStatus() {
             const sid = sessionInfo.rows[0].acctsessionid;
             if (sid.startsWith('unifi')) {
               vendor = 'unifi';
+            } else {
+              vendor = 'radius';
             }
           }
 
@@ -381,6 +383,9 @@ async function checkActiveSessionsStatus() {
             } else if (vendor === 'unifi') {
               console.log(`[STATS-SYNC] Expulsando MAC UniFi ${cleanMac} del controlador.`);
               await unifiSvc.unauthorizeGuest(cleanMac);
+            } else if (vendor === 'radius') {
+              console.log(`[STATS-SYNC] Expulsando MAC RADIUS ${cleanMac} vía CoA.`);
+              await db.disconnectRadiusClient(mac);
             }
           } catch (kickErr) {
             console.error(`[STATS-SYNC] Error al expulsar MAC ${cleanMac}:`, kickErr.message);

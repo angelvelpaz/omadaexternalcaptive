@@ -1249,6 +1249,54 @@ async function deleteUserDevice(cedula, macAddress) {
   await pool.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
 }
 
+async function disconnectRadiusClient(macAddress) {
+  if (!macAddress) return;
+  const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
+  const colonMac = macAddress.trim().toUpperCase().replace(/-/g, ':');
+
+  try {
+    // 1. Buscar sesión activa en radacct
+    const query = `
+      SELECT nasipaddress::text as nasip, acctsessionid, username
+      FROM radacct
+      WHERE (callingstationid = $1 OR callingstationid = $2 OR username = $1 OR username = $2)
+        AND acctstoptime IS NULL
+      ORDER BY acctstarttime DESC
+      LIMIT 1
+    `;
+    const res = await pool.query(query, [cleanMac, colonMac]);
+    if (res.rows.length === 0) {
+      console.log(`[RADIUS-CoA] No active session found in radacct for MAC: ${cleanMac}`);
+      return false;
+    }
+
+    const { nasip, acctsessionid, username } = res.rows[0];
+    console.log(`[RADIUS-CoA] Active session found. NAS IP: ${nasip}, Session ID: ${acctsessionid}. Sending disconnect...`);
+
+    const secret = process.env.RADIUS_SECRET || 'shared_secret_muy_seguro';
+    const { exec } = require('child_process');
+
+    // Construir comando radclient
+    const payload = `Acct-Session-Id = "${acctsessionid}", User-Name = "${username}", Calling-Station-Id = "${colonMac}"`;
+    const cmd = `echo '${payload}' | radclient -t 1 -r 2 -x ${nasip}:3799 disconnect ${secret}`;
+
+    return new Promise((resolve) => {
+      exec(cmd, (err, stdout, stderr) => {
+        if (err) {
+          console.error(`[RADIUS-CoA] radclient error: ${err.message}. Output: ${stdout}, Stderr: ${stderr}`);
+          resolve(false);
+        } else {
+          console.log(`[RADIUS-CoA] Disconnect sent successfully to ${nasip}:3799. Response: ${stdout}`);
+          resolve(true);
+        }
+      });
+    });
+  } catch (err) {
+    console.error('[RADIUS-CoA] Error in disconnectRadiusClient:', err.message);
+    return false;
+  }
+}
+
 async function setUserMaxDevices(cedula, maxDevices) {
   await pool.query(
     'UPDATE usuarios_portal SET max_dispositivos = $2 WHERE cedula = $1',
@@ -1948,7 +1996,7 @@ module.exports = {
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,
-  getRandomMacStats, getRandomMacPreview, purgeRandomMacs, runScheduledMaintenance,
+  getRandomMacStats, getRandomMacPreview, purgeRandomMacs, runScheduledMaintenance, disconnectRadiusClient,
   // administradores y auditoría
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,

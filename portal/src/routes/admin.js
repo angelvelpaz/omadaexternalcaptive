@@ -510,6 +510,9 @@ router.post('/api/users/bulk-active', requireAdmin,
                   console.error(`[OMADA] Error al bloquear MAC ${mac} en desactivación en lote:`, err.message);
                 });
               }
+              db.disconnectRadiusClient(mac).catch(err => {
+                console.error(`[RADIUS-CoA] Error al desautorizar MAC ${mac} en desactivación en lote:`, err.message);
+              });
             }
           }
         }).catch(err => {
@@ -572,6 +575,10 @@ router.post('/api/users/bulk-delete', requireAdmin, requireRol('administrador', 
             console.error(`[UNIFI] Error al desautorizar MAC ${mac} en borrado en lote:`, err.message);
           });
         }
+        // RADIUS CoA
+        db.disconnectRadiusClient(mac).catch(err => {
+          console.error(`[RADIUS-CoA] Error al desautorizar MAC ${mac} en borrado en lote:`, err.message);
+        });
       }
 
       res.json({ success: true });
@@ -627,6 +634,10 @@ router.patch('/api/users/:cedula/active', requireAdmin,
                 console.error(`[UNIFI] Error al desautorizar MAC ${mac} en desactivación:`, err.message);
               });
             }
+            // RADIUS CoA
+            db.disconnectRadiusClient(mac).catch(err => {
+              console.error(`[RADIUS-CoA] Error al desautorizar MAC ${mac} en desactivación:`, err.message);
+            });
           }
         }
       }).catch(err => {
@@ -698,6 +709,10 @@ router.delete('/api/users/:cedula', requireAdmin, requireRol('administrador', 's
         try {
           await unifiSvc.unauthorizeGuest(mac);
         } catch (unifiErr) {}
+        // RADIUS CoA
+        try {
+          await db.disconnectRadiusClient(mac);
+        } catch (radiusErr) {}
       }
 
       res.json({ ok: true });

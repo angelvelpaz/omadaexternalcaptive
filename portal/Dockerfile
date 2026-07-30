@@ -10,7 +10,7 @@ RUN npm prune --omit=dev
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
-RUN apk add --no-cache tini
+RUN apk add --no-cache tini freeradius-utils
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/public/css/tailwind-output.css ./public/css/tailwind-output.css
 COPY package.json ./

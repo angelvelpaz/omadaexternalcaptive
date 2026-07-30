@@ -1191,7 +1191,7 @@ async function getUserDevices(cedula) {
   return res.rows;
 }
 
-async function registerUserDevice(cedula, macAddress) {
+async function registerUserDevice(cedula, macAddress, customTimeLimit = null) {
   if (!macAddress) return;
   const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
   await pool.query(
@@ -1226,9 +1226,17 @@ async function registerUserDevice(cedula, macAddress) {
   // Formato MikroTik: "XM/YM"
   const mikrotikRate = `${profile.down_mb || '5'}M/${profile.up_mb || '1'}M`;
 
+  // Calcular la duración de la sesión en segundos (RADIUS Session-Timeout)
+  let sessionMinutes = parseInt(process.env.SESSION_DURATION_MINUTES || '480');
+  if (customTimeLimit !== null && customTimeLimit !== undefined) {
+    sessionMinutes = parseInt(customTimeLimit);
+  }
+  const sessionSeconds = sessionMinutes * 60;
+
   await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', $2)`, [cleanMac, String(downBytes)]);
   await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', $2)`, [cleanMac, String(upBytes)]);
   await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', $2)`, [cleanMac, mikrotikRate]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Session-Timeout', ':=', $2)`, [cleanMac, String(sessionSeconds)]);
 }
 
 async function deleteUserDevice(cedula, macAddress) {

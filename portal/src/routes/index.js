@@ -658,6 +658,9 @@ router.post('/auth/login',
           
           // Registrar el nuevo dispositivo
           await db.registerUserDevice(ced, normalizedMac);
+        } else {
+          // Si ya está registrado, refrescar reglas de RADIUS (incluyendo límite de tiempo de sesión)
+          await db.registerUserDevice(ced, normalizedMac);
         }
       }
 
@@ -799,11 +802,8 @@ router.post('/auth/free-access',
       if (!finalParams.clientMac) finalParams.clientMac = normalizedMac;
       if (!finalParams.mac) finalParams.mac = normalizedMac;
 
-      // 2. Asociar el dispositivo al usuario genérico si no está registrado
-      const isReg = await db.isDeviceRegistered('9999999999', normalizedMac);
-      if (!isReg) {
-        await db.registerUserDevice('9999999999', normalizedMac);
-      }
+      // 2. Asociar el dispositivo al usuario genérico y actualizar reglas en RADIUS (incluyendo límite de tiempo)
+      await db.registerUserDevice('9999999999', normalizedMac, adSessionMinutes);
 
       // Autenticar vía RADIUS (para garantizar consistencia con FreeRADIUS)
       const radiusOk = await radius.authenticate('9999999999', user.radius_password);

@@ -41,6 +41,13 @@ server default {
         }
     }
 
+    # ── Pre-Accounting ────────────────────────────────────────────────────────
+    # Genera el identificador único de sesión (Acct-Unique-Session-Id)
+    preacct {
+        preprocess
+        acct_unique
+    }
+
     # ── Accounting ────────────────────────────────────────────────────────────
     accounting {
         sql

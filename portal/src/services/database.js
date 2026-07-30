@@ -1271,14 +1271,15 @@ async function disconnectRadiusClient(macAddress) {
     }
 
     const { nasip, acctsessionid, username } = res.rows[0];
-    console.log(`[RADIUS-CoA] Active session found. NAS IP: ${nasip}, Session ID: ${acctsessionid}. Sending disconnect...`);
+    const cleanNasIp = nasip ? nasip.split('/')[0] : '';
+    console.log(`[RADIUS-CoA] Active session found. NAS IP: ${cleanNasIp}, Session ID: ${acctsessionid}. Sending disconnect...`);
 
     const secret = process.env.RADIUS_SECRET || 'shared_secret_muy_seguro';
     const { exec } = require('child_process');
 
     // Construir comando radclient
     const payload = `Acct-Session-Id = "${acctsessionid}", User-Name = "${username}", Calling-Station-Id = "${colonMac}"`;
-    const cmd = `echo '${payload}' | radclient -t 1 -r 2 -x ${nasip}:3799 disconnect ${secret}`;
+    const cmd = `echo '${payload}' | radclient -t 1 -r 2 -x ${cleanNasIp}:3799 disconnect ${secret}`;
 
     return new Promise((resolve) => {
       exec(cmd, (err, stdout, stderr) => {
@@ -1286,7 +1287,7 @@ async function disconnectRadiusClient(macAddress) {
           console.error(`[RADIUS-CoA] radclient error: ${err.message}. Output: ${stdout}, Stderr: ${stderr}`);
           resolve(false);
         } else {
-          console.log(`[RADIUS-CoA] Disconnect sent successfully to ${nasip}:3799. Response: ${stdout}`);
+          console.log(`[RADIUS-CoA] Disconnect sent successfully to ${cleanNasIp}:3799. Response: ${stdout}`);
           resolve(true);
         }
       });

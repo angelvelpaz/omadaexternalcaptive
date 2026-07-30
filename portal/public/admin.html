@@ -856,6 +856,13 @@
             <p class="text-[10px] text-gray-400 mt-1">Define cuántos segundos esperará el usuario en la pantalla de "Conectado exitosamente" antes de redirigirse a su destino. Por defecto es <span class="font-semibold text-gray-600">3 segundos</span> (use <span class="font-mono">0</span> para redirección instantánea).</p>
           </div>
 
+          <!-- Duración de Sesión Global -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Duración global de la sesión (minutos)</label>
+            <input type="number" id="cfg-branding-sessionDurationMinutes" placeholder="480" min="1" max="14400" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="text-[10px] text-gray-400 mt-1">Tiempo de conexión máxima para usuarios normales (cédula, LDAP) antes de pedir re-autenticación (defecto: 480 minutos / 8 horas).</p>
+          </div>
+
           <!-- Términos y Condiciones -->
           <div>
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Términos y Condiciones de Uso (Texto Plano)</label>
@@ -4369,6 +4376,7 @@ function applyProfileFields(authType, config) {
   
   document.getElementById('cfg-branding-ipWhitelist').value = config.ipWhitelist || '0.0.0.0';
   document.getElementById('cfg-branding-redirectSeconds').value = config.redirectSeconds !== undefined ? config.redirectSeconds : '3';
+  document.getElementById('cfg-branding-sessionDurationMinutes').value = config.sessionDurationMinutes !== undefined ? config.sessionDurationMinutes : '480';
 
   document.getElementById('cfg-branding-secapEnabled').checked = config.secapEnabled === true;
   document.getElementById('cfg-branding-emailOpcional').checked = config.emailOpcional === true;
@@ -4527,6 +4535,7 @@ document.getElementById('form-branding').addEventListener('submit', async (e) =>
     inactiveMessage: document.getElementById('cfg-branding-inactiveMessage').value.trim(),
     ipWhitelist:     document.getElementById('cfg-branding-ipWhitelist').value.trim(),
     redirectSeconds: document.getElementById('cfg-branding-redirectSeconds').value.trim(),
+    sessionDurationMinutes: document.getElementById('cfg-branding-sessionDurationMinutes').value.trim(),
     
     // SECAP
     secapEnabled:    document.getElementById('cfg-branding-secapEnabled').checked,

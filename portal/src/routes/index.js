@@ -135,7 +135,7 @@ router.get('/auth/config', async (req, res, next) => {
       welcomeText: branding.welcomeText || 'Ingrese su número de cédula para conectarse',
       termsText: branding.termsText || '',
       termsUpdatedAt: branding.termsUpdatedAt || '2026-07-09T14:50:00.000Z',
-      sessionMinutes: parseInt(process.env.SESSION_DURATION_MINUTES || '480'),
+      sessionMinutes: branding.sessionDurationMinutes !== undefined ? parseInt(branding.sessionDurationMinutes) : parseInt(process.env.SESSION_DURATION_MINUTES || '480'),
       redirectSeconds: parseInt(branding.redirectSeconds !== undefined ? branding.redirectSeconds : '3'),
       secapEnabled: secap.activo === true || secap.activo === 'true',
       emailOpcional: secap.emailOpcional === true || secap.emailOpcional === 'true',
@@ -776,7 +776,8 @@ router.post('/auth/free-access',
 
       // Si el tiempo es 0 (ilimitado), heredamos el límite máximo global de sesión del portal
       if (adSessionMinutes === 0) {
-        adSessionMinutes = parseInt(process.env.SESSION_DURATION_MINUTES || '480');
+        const branding = await db.getControllerConfig('branding') || {};
+        adSessionMinutes = branding.sessionDurationMinutes !== undefined ? parseInt(branding.sessionDurationMinutes) : parseInt(process.env.SESSION_DURATION_MINUTES || '480');
       }
 
       // 1. Asegurar que el usuario genérico 9999999999 existe
@@ -1058,7 +1059,12 @@ async function authorizeVendor(vendor, params, username, password, customTimeLim
     }
 
     case 'unifi': {
-      await unifi.authorizeGuest(params.clientMac, params.apMac, customTimeLimit);
+      let limit = customTimeLimit;
+      if (limit === undefined || limit === null) {
+        const branding = await db.getControllerConfig('branding') || {};
+        limit = branding.sessionDurationMinutes !== undefined ? parseInt(branding.sessionDurationMinutes) : parseInt(process.env.SESSION_DURATION_MINUTES || '480');
+      }
+      await unifi.authorizeGuest(params.clientMac, params.apMac, limit);
       return params.redirectUrl || '/success';
     }
 
@@ -1067,10 +1073,15 @@ async function authorizeVendor(vendor, params, username, password, customTimeLim
       let lastErr;
       for (let i = 1; i <= attempts; i++) {
         try {
+          let limit = customTimeLimit;
+          if (limit === undefined || limit === null) {
+            const branding = await db.getControllerConfig('branding') || {};
+            limit = branding.sessionDurationMinutes !== undefined ? parseInt(branding.sessionDurationMinutes) : parseInt(process.env.SESSION_DURATION_MINUTES || '480');
+          }
           await omadaSvc.authorizeClient({
             clientMac:   params.clientMac,
             siteId:      params.siteId,
-            timeLimit:   customTimeLimit !== undefined ? parseInt(customTimeLimit) : parseInt(process.env.SESSION_DURATION_MINUTES || '480'),
+            timeLimit:   parseInt(limit),
           });
 
           // Forzar la desconexión (kick) del cliente después de 500ms para limpiar la caché del AP y obligar a una reasociación automática

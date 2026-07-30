@@ -138,6 +138,7 @@
     <form id="form-mikrotik" method="POST" class="hidden">
       <input type="hidden" id="mk-username" name="username">
       <input type="hidden" id="mk-password" name="password">
+      <input type="hidden" id="mk-dst" name="dst">
     </form>
   </div>
 
@@ -443,6 +444,12 @@
         mkForm.action = mkUrl;
         document.getElementById('mk-username').value = mkUser;
         document.getElementById('mk-password').value = mkPass;
+        
+        // Redirigir al destino original solicitado por el usuario (o por defecto a google.com)
+        const params = new URLSearchParams(window.location.search);
+        const origUrl = params.get('link-orig') || params.get('dst') || 'http://www.google.com';
+        document.getElementById('mk-dst').value = origUrl;
+
         mkForm.submit();
       } else {
         const successUrl = '/success?nombre=' + encodeURIComponent(data.nombre || '') +

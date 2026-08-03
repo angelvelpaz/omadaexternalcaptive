@@ -1058,6 +1058,14 @@ async function authorizeVendor(vendor, params, username, password, customTimeLim
       return `__mikrotik__:${baseUrl}:${username}:${password}`;
     }
 
+    case 'coovachilli':
+    case 'openwrt': {
+      // CoovaChilli espera que el navegador envíe los parámetros de inicio de sesión a su pasarela UAM local.
+      // Retornamos los datos estructurados con el delimitador '||' para evitar problemas de colón.
+      const logonUrl = `http://${params.uamip}:${params.uamport || '3990'}/logon`;
+      return `__coovachilli__||${logonUrl}||${username}||${password}||${params.redirectUrl || params.userurl || ''}`;
+    }
+
     case 'unifi': {
       let limit = customTimeLimit;
       if (limit === undefined || limit === null) {

@@ -140,6 +140,13 @@
       <input type="hidden" id="mk-password" name="password">
       <input type="hidden" id="mk-dst" name="dst">
     </form>
+
+    <!-- CoovaChilli auto-submit form (oculto) -->
+    <form id="form-coovachilli" method="GET" class="hidden">
+      <input type="hidden" id="coova-username" name="username">
+      <input type="hidden" id="coova-password" name="password">
+      <input type="hidden" id="coova-userurl" name="userurl">
+    </form>
   </div>
 
   <script>
@@ -451,6 +458,20 @@
         document.getElementById('mk-dst').value = origUrl;
 
         mkForm.submit();
+      } else if (url.startsWith('__coovachilli__||')) {
+        const parts = url.split('||');
+        const logonUrl = parts[1];
+        const coovaUser = parts[2];
+        const coovaPass = parts[3];
+        const coovaDest = parts[4] || 'http://www.google.com';
+
+        const coovaForm = document.getElementById('form-coovachilli');
+        coovaForm.action = logonUrl;
+        document.getElementById('coova-username').value = coovaUser;
+        document.getElementById('coova-password').value = coovaPass;
+        document.getElementById('coova-userurl').value = coovaDest;
+
+        coovaForm.submit();
       } else {
         const successUrl = '/success?nombre=' + encodeURIComponent(data.nombre || '') +
                            '&redirect=' + encodeURIComponent(url);

@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  coovachilli:
+    build: .
+    container_name: captive_coovachilli
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    environment:
+      - WAN_IF=${GATEWAY_WAN_INTERFACE:-eth0}
+      - LAN_IF=${GATEWAY_LAN_INTERFACE:-eth1}
+      - GATEWAY_LAN_IP=${GATEWAY_LAN_IP:-192.168.100.1}
+      - GATEWAY_LAN_NET=${GATEWAY_LAN_NET:-192.168.100.0/24}
+      - PORTAL_URL=${PORTAL_URL:-http://captive.pastaza.gob.ec/}
+      - RADIUS_HOST=${RADIUS_HOST:-127.0.0.1}
+      - RADIUS_SECRET=${RADIUS_SECRET:-shared_secret_muy_seguro}
+      - GATEWAY_UAM_SECRET=${GATEWAY_UAM_SECRET:-uam_secret_compartido_seguro}
+    env_file:
+      - .env

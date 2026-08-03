@@ -225,6 +225,13 @@
       <input type="hidden" id="mk-dst" name="dst">
     </form>
 
+    <!-- CoovaChilli auto-submit form (oculto) -->
+    <form id="form-coovachilli" method="GET" class="hidden">
+      <input type="hidden" id="coova-username" name="username">
+      <input type="hidden" id="coova-password" name="password">
+      <input type="hidden" id="coova-userurl" name="userurl">
+    </form>
+
   </div>
 
   <!-- Modal de Autoservicio: Liberar Dispositivo -->
@@ -410,7 +417,8 @@
     function detectVendor() {
       if (params.has('link-login') || params.has('link-login-only')) return 'mikrotik';
       if (params.has('cmd') && params.has('id')) return 'unifi';
-      if (params.has('clientMac')) return 'omada';
+      if (params.has('clientMac') && !params.has('uamip')) return 'omada';
+      if (params.has('uamip') && params.has('uamport')) return 'coovachilli';
       return 'unknown';
     }
 
@@ -442,6 +450,15 @@
             vid: params.get('vid') || '1',
             siteId: params.get('siteId') || params.get('site') || 'default',
             redirectUrl: params.get('redirectUrl') || params.get('originUrl') || '',
+          };
+        case 'coovachilli':
+          return {
+            clientMac: params.get('mac') || '',
+            clientIp: params.get('ip') || '',
+            uamip: params.get('uamip') || '',
+            uamport: params.get('uamport') || '',
+            challenge: params.get('challenge') || '',
+            redirectUrl: params.get('userurl') || params.get('res') || '',
           };
         default:
           return { redirectUrl: params.get('url') || '' };
@@ -615,6 +632,26 @@
         document.getElementById('mk-dst').value = origUrl;
 
         mkForm.submit();
+      } else if (url.startsWith('__coovachilli__||')) {
+        // CoovaChilli: auto-submit form GET
+        const parts = url.split('||');
+        // parts[0] = '__coovachilli__'
+        // parts[1] = logonUrl
+        // parts[2] = username
+        // parts[3] = password
+        // parts[4] = userurl
+        const logonUrl = parts[1];
+        const coovaUser = parts[2];
+        const coovaPass = parts[3];
+        const coovaDest = parts[4] || 'http://www.google.com';
+
+        const coovaForm = document.getElementById('form-coovachilli');
+        coovaForm.action = logonUrl;
+        document.getElementById('coova-username').value = coovaUser;
+        document.getElementById('coova-password').value = coovaPass;
+        document.getElementById('coova-userurl').value = coovaDest;
+
+        coovaForm.submit();
       } else {
         const successUrl = '/success?nombre=' + encodeURIComponent(data.nombre || '') +
                            '&redirect=' + encodeURIComponent(url);

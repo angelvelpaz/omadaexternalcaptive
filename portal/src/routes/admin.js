@@ -1078,6 +1078,15 @@ function buildControllerResponse(vendor, dbCfg) {
       fromEnv:       false,
     };
   }
+  if (vendor === 'coovachilli') {
+    const secret = cfg.secret || '';
+    return {
+      secret:     controllerTest.masked(secret),
+      activo:     cfg.activo !== undefined ? (cfg.activo === true || cfg.activo === 'true') : true,
+      configured: true,
+      fromEnv:    false,
+    };
+  }
   return {};
 }
 
@@ -1126,13 +1135,18 @@ function buildControllerConfig(vendor, dbCfg) {
       emailOpcional: cfg.emailOpcional !== undefined ? (cfg.emailOpcional === true || cfg.emailOpcional === 'true') : false,
     };
   }
+  if (vendor === 'coovachilli') {
+    return {
+      secret:  cfg.secret || '',
+    };
+  }
   return {};
 }
 
 // GET — configuración actual (secretos enmascarados)
 router.get('/api/controllers', requireAdmin, async (req, res, next) => {
   try {
-    const vendors = ['freeradius', 'unifi', 'omada', 'mikrotik', 'secap'];
+    const vendors = ['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap'];
     const result  = {};
     for (const vendor of vendors) {
       const dbCfg = await db.getControllerConfig(vendor);
@@ -1144,7 +1158,7 @@ router.get('/api/controllers', requireAdmin, async (req, res, next) => {
 
 // PUT — guarda configuración en DB
 router.put('/api/controllers/:vendor', requireAdmin,
-  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'secap']),
+  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -1205,6 +1219,11 @@ router.put('/api/controllers/:vendor', requireAdmin,
           activo:        input.activo !== undefined ? (input.activo === true || input.activo === 'true' || input.activo === '1') : false,
           emailOpcional: input.emailOpcional !== undefined ? (input.emailOpcional === true || input.emailOpcional === 'true' || input.emailOpcional === '1') : false,
         };
+      } else if (vendor === 'coovachilli') {
+        newCfg = {
+          secret:  getVal(input.secret, existing.secret),
+          activo:  activoVal,
+        };
       }
 
       await db.saveControllerConfig(vendor, newCfg);
@@ -1252,7 +1271,7 @@ router.post('/api/controllers/ldap/test', requireAdmin, async (req, res, next) =
 });
 
 router.post('/api/controllers/:vendor/test', requireAdmin,
-  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'secap']),
+  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -1270,6 +1289,9 @@ router.post('/api/controllers/:vendor/test', requireAdmin,
         case 'mikrotik':   result = await controllerTest.testMikrotik(cfg);   break;
         case 'secap':
           result = { ok: true, message: 'Servicio SECAP configurado con éxito.' };
+          break;
+        case 'coovachilli':
+          result = { ok: true, message: 'Controlador CoovaChilli / OpenWrt activo a través de RADIUS.' };
           break;
       }
       res.json({ ...result, testedAt: new Date().toISOString() });

@@ -3173,7 +3173,7 @@ async function deleteGroup(groupname) {
 
 // ── Controladores ─────────────────────────────────────────────────────────────
 
-const VENDOR_LABELS = { freeradius: 'FreeRADIUS', unifi: 'UniFi', omada: 'TP-Link Omada', mikrotik: 'MikroTik RouterOS', secap: 'Validación de Cédula (SECAP)' };
+const VENDOR_LABELS = { freeradius: 'FreeRADIUS', unifi: 'UniFi', omada: 'TP-Link Omada', mikrotik: 'MikroTik RouterOS', coovachilli: 'CoovaChilli / OpenWrt', secap: 'Validación de Cédula (SECAP)' };
 
 const VENDOR_ICONS = {
   freeradius: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3195,6 +3195,10 @@ const VENDOR_ICONS = {
   secap: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
       d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+  </svg>`,
+  coovachilli: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+      d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
   </svg>`,
 };
 
@@ -3317,6 +3321,30 @@ function buildEditForm(vendor, cfg) {
         </div>
       </div>`;
   }
+  if (vendor === 'coovachilli') {
+    return `
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Clave Secreta UAM (uamsecret)</label>
+          <input type="password" class="${FIELD_CLASS}" id="cfg-${vendor}-secret"
+            placeholder="${cfg.secret ? 'Dejar en blanco para no cambiar' : 'UAM Secret compartido'}">
+          <p class="text-[10px] text-gray-400 mt-0.5">Debe coincidir con el valor 'uamsecret' configurado en CoovaChilli.</p>
+        </div>
+      </div>
+      <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 mt-3 text-xs text-blue-800 space-y-2">
+        <h5 class="font-bold uppercase tracking-wider text-[10px] text-blue-600">Guía de Configuración en OpenWrt (CoovaChilli)</h5>
+        <p class="font-medium">Siga estos pasos para integrar OpenWrt CoovaChilli con este Portal:</p>
+        <ol class="list-decimal pl-4 space-y-1">
+          <li>Instale los paquetes <code class="bg-blue-100/50 px-1 py-0.5 rounded font-mono">coova-chilli</code> y <code class="bg-blue-100/50 px-1 py-0.5 rounded font-mono">kmod-tun</code> en el router.</li>
+          <li>Configure el archivo <code class="bg-blue-100/50 px-1 py-0.5 rounded font-mono">/etc/config/chilli</code> apuntando los servidores RADIUS a la IP de este servidor (puerto 1812, shared secret de FreeRADIUS).</li>
+          <li>Defina el UAM Server en la configuración del router:
+            <br>
+            <code class="bg-blue-100/50 px-1.5 py-0.5 rounded font-mono text-[10px] select-all break-all">${window.location.origin}/index.html</code>
+          </li>
+          <li>Agregue la IP y dominio de este portal al **Walled Garden** (<code class="bg-blue-100/50 px-1 py-0.5 rounded font-mono">uamallowed</code>) del router para permitir acceso pre-autenticación.</li>
+        </ol>
+      </div>`;
+  }
   return '';
 }
 
@@ -3360,6 +3388,8 @@ function renderControllerCard(vendor, cfg) {
     summary = `<span class="text-gray-500">Verificación Registro Civil:</span> <span class="font-semibold text-blue-600">Activo</span>
                <span class="text-gray-400 mx-1">·</span>
                <span class="text-gray-500">Correo opcional:</span> <span class="font-semibold">${cfg.emailOpcional ? 'Sí' : 'No'}</span>`;
+  } else if (vendor === 'coovachilli') {
+    summary = `<span class="text-gray-500">UAM Secret:</span> <span class="font-mono">${cfg.secret ? '••••••••' : '<span class="text-amber-600">no configurado</span>'}</span>`;
   }
 
   return `
@@ -3435,7 +3465,7 @@ async function loadControllers() {
     const cfg = await api('GET', '/controllers');
     // Guardar config actual para acceso posterior en formularios
     window._ctrlCfg = cfg;
-    container.innerHTML = ['freeradius', 'unifi', 'omada', 'mikrotik', 'secap']
+    container.innerHTML = ['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap']
       .map(v => renderControllerCard(v, cfg[v]))
       .join('');
   } catch (err) {
@@ -3486,6 +3516,8 @@ async function saveControllerConfig(vendor) {
     body = { url: get('url'), user: get('user'), pass: get('pass') };
   } else if (vendor === 'secap') {
     body = { emailOpcional: get('emailOpcional') };
+  } else if (vendor === 'coovachilli') {
+    body = { secret: get('secret') };
   }
 
   btn.disabled = true;

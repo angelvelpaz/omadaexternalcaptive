@@ -134,3 +134,15 @@ CREATE TABLE IF NOT EXISTS dispositivos_usuario (
 CREATE INDEX IF NOT EXISTS idx_dispositivos_usuario_cedula ON dispositivos_usuario(cedula);
 CREATE INDEX IF NOT EXISTS idx_dispositivos_usuario_mac ON dispositivos_usuario(mac_address);
 
+-- ─── Tabla de dispositivos en lista blanca administrativa (MAC Bypass) ──────────
+CREATE TABLE IF NOT EXISTS mac_bypass (
+    id            SERIAL PRIMARY KEY,
+    mac_address   VARCHAR(17) UNIQUE NOT NULL,
+    propietario   VARCHAR(100) NOT NULL,
+    alias         VARCHAR(100),
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    activo        BOOLEAN DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_mac_bypass_mac ON mac_bypass(mac_address);
+

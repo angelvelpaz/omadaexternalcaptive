@@ -109,6 +109,7 @@
             <div class="dropdown-menu absolute left-0 mt-0.5 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-20" role="menu">
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="users" role="menuitem">Usuarios</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="devices" role="menuitem">Dispositivos</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="mac-bypass" role="menuitem">MAC Bypass</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="groups" role="menuitem">Grupos RADIUS</button>
             </div>
           </div>
@@ -186,6 +187,7 @@
             <div class="pl-5 space-y-1">
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="users">Usuarios</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="devices">Dispositivos</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="mac-bypass">MAC Bypass</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="groups">Grupos RADIUS</button>
             </div>
           </div>
@@ -478,6 +480,47 @@
             <button id="btn-devices-prev" class="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Ant</button>
             <button id="btn-devices-next" class="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Sig →</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB MAC BYPASS (EXCLUSIONES) ── -->
+    <div id="tab-mac-bypass" class="tab-content hidden">
+      <!-- Búsqueda y controles -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
+        <input type="text" id="mac-bypass-search" placeholder="Buscar por MAC, propietario o alias..."
+          class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800"
+          oninput="filterMacBypass()">
+        <button onclick="openCreateMacBypassModal()"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Agregar MAC Bypass
+        </button>
+      </div>
+
+      <!-- Tabla de dispositivos en bypass -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                <th class="p-4">Dirección MAC</th>
+                <th class="p-4">Propietario / Responsable</th>
+                <th class="p-4">Alias / Etiqueta</th>
+                <th class="p-4">Fecha Registro</th>
+                <th class="p-4">Estado</th>
+                <th class="p-4 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="mac-bypass-tbody" class="divide-y divide-gray-100">
+              <!-- Cargado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
+          <span id="mac-bypass-count">0 dispositivos</span>
         </div>
       </div>
     </div>
@@ -1403,7 +1446,43 @@
   </main>
 </div>
 
-<!-- ── MODAL DETALLE USUARIO ── -->
+<!-- ── MODAL AGREGAR MAC BYPASS ── -->
+<div id="modal-create-mac-bypass" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-900 to-indigo-900 text-white">
+      <h3 class="font-bold text-lg leading-tight">Agregar Dispositivo a MAC Bypass</h3>
+      <button onclick="closeCreateMacBypassModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <form id="form-create-mac-bypass" onsubmit="submitCreateMacBypass(event)" class="p-6 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dirección MAC</label>
+        <input type="text" id="bypass-mac" placeholder="xx:xx:xx:xx:xx:xx" required
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Propietario / Responsable</label>
+        <input type="text" id="bypass-propietario" placeholder="Nombre de la persona o departamento" required
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Alias / Etiqueta</label>
+        <input type="text" id="bypass-alias" placeholder="Ej: Laptop de Juan, Impresora 3F"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <p id="bypass-error" class="text-red-500 text-xs hidden"></p>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeCreateMacBypassModal()"
+          class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+          Cancelar
+        </button>
+        <button type="submit"
+          class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+          Agregar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 <div id="user-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-start justify-center p-4 pt-10 overflow-y-auto">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
     <div class="flex items-center justify-between p-5 border-b">
@@ -1710,6 +1789,7 @@ function switchTab(tab) {
   if (tab === 'dashboard') loadDashboard();
   else if (tab === 'users') loadUsers();
   else if (tab === 'devices') loadDevices(0);
+  else if (tab === 'mac-bypass') loadMacBypass();
   else if (tab === 'groups') loadGroups();
   else if (tab === 'controllers') loadControllers();
   else if (tab === 'reports') loadReports();
@@ -2190,6 +2270,131 @@ async function applyBulkUserActive(active) {
     loadUsers();
   } catch (err) {
     alert(`Error al ${actionText.toLowerCase()} usuarios en lote: ` + err.message);
+  }
+}
+
+// ── MAC Bypass (Exclusiones) ──────────────────────────────────────────────────
+let macBypassList = [];
+
+async function loadMacBypass() {
+  const tbody = document.getElementById('mac-bypass-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando exclusiones...</td></tr>';
+  
+  try {
+    macBypassList = await api('GET', '/mac-bypass');
+    renderMacBypassTable(macBypassList);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-500 font-medium">Error al cargar la lista: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function renderMacBypassTable(list) {
+  const tbody = document.getElementById('mac-bypass-tbody');
+  tbody.innerHTML = '';
+  
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">No hay dispositivos registrados en bypass.</td></tr>';
+    document.getElementById('mac-bypass-count').textContent = '0 dispositivos';
+    return;
+  }
+  
+  list.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-50/50 transition-colors';
+    
+    const dateStr = new Date(d.created_at).toLocaleString('es-EC');
+    const badge = d.activo
+      ? '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Activo</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">Inactivo</span>';
+      
+    tr.innerHTML = `
+      <td class="p-4 font-mono font-semibold text-gray-700">${esc(d.mac_address)}</td>
+      <td class="p-4 text-gray-800 font-medium">${esc(d.propietario)}</td>
+      <td class="p-4 text-gray-500">${esc(d.alias || '—')}</td>
+      <td class="p-4 text-gray-400 text-xs">${dateStr}</td>
+      <td class="p-4">${badge}</td>
+      <td class="p-4 text-right space-x-2">
+        <button onclick="toggleMacBypassActive(${d.id}, ${!d.activo})"
+          class="text-xs font-semibold px-2.5 py-1.5 rounded transition-colors ${d.activo ? 'border border-amber-300 hover:bg-amber-50 text-amber-700' : 'bg-green-600 hover:bg-green-700 text-white'}">
+          ${d.activo ? 'Desactivar' : 'Activar'}
+        </button>
+        <button onclick="deleteMacBypass(${d.id}, '${esc(d.mac_address)}')"
+          class="text-xs font-semibold border border-red-300 hover:bg-red-50 text-red-700 px-2.5 py-1.5 rounded transition-colors">
+          Eliminar
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  document.getElementById('mac-bypass-count').textContent = `${list.length} dispositivo${list.length === 1 ? '' : 's'}`;
+}
+
+function filterMacBypass() {
+  const term = document.getElementById('mac-bypass-search').value.toLowerCase().trim();
+  if (!term) {
+    renderMacBypassTable(macBypassList);
+    return;
+  }
+  const filtered = macBypassList.filter(d => 
+    d.mac_address.toLowerCase().includes(term) ||
+    d.propietario.toLowerCase().includes(term) ||
+    (d.alias && d.alias.toLowerCase().includes(term))
+  );
+  renderMacBypassTable(filtered);
+}
+
+function openCreateMacBypassModal() {
+  document.getElementById('form-create-mac-bypass').reset();
+  document.getElementById('bypass-error').classList.add('hidden');
+  const modal = document.getElementById('modal-create-mac-bypass');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeCreateMacBypassModal() {
+  const modal = document.getElementById('modal-create-mac-bypass');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function submitCreateMacBypass(e) {
+  e.preventDefault();
+  const macAddress = document.getElementById('bypass-mac').value.trim();
+  const propietario = document.getElementById('bypass-propietario').value.trim();
+  const alias = document.getElementById('bypass-alias').value.trim();
+  const errorEl = document.getElementById('bypass-error');
+  
+  errorEl.classList.add('hidden');
+  
+  try {
+    await api('POST', '/mac-bypass', { macAddress, propietario, alias });
+    closeCreateMacBypassModal();
+    await loadMacBypass();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  }
+}
+
+async function toggleMacBypassActive(id, newStatus) {
+  try {
+    await api('PUT', `/mac-bypass/${id}/active`, { activo: newStatus });
+    await loadMacBypass();
+  } catch (err) {
+    alert('Error al modificar el estado: ' + err.message);
+  }
+}
+
+async function deleteMacBypass(id, mac) {
+  if (!confirm(`¿Está seguro de eliminar el dispositivo ${mac} de la lista de bypass? Dejará de navegar inmediatamente.`)) {
+    return;
+  }
+  try {
+    await api('DELETE', `/mac-bypass/${id}`);
+    await loadMacBypass();
+  } catch (err) {
+    alert('Error al eliminar el dispositivo: ' + err.message);
   }
 }
 

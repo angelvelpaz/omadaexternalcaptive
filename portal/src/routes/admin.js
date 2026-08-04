@@ -1638,6 +1638,112 @@ router.delete('/api/ssids/:ssidName', requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── RUTAS PARA LISTA BLANCA DE DISPOSITIVOS (MAC BYPASS) ─────────────────────
+
+// GET - Listar todos los bypass
+router.get('/api/mac-bypass', requireAdmin, async (req, res, next) => {
+  try {
+    const list = await db.listMacBypass();
+    res.json(list);
+  } catch (err) { next(err); }
+});
+
+// POST - Registrar nueva MAC en bypass
+router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
+  try {
+    const { macAddress, propietario, alias } = req.body;
+    if (!macAddress || !propietario) {
+      return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
+    }
+
+    // Limpiar MAC
+    const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
+    if (!/^([0-9A-F]{2}-){5}[0-9A-F]{2}$/.test(cleanMac)) {
+      return res.status(400).json({ error: 'Formato de dirección MAC inválido (debe ser xx:xx:xx:xx:xx:xx o xx-xx-xx-xx-xx-xx).' });
+    }
+
+    // Verificar si ya existe en la lista de bypass o en dispositivos de usuario
+    const exists = await db.getMacBypassByMac(cleanMac);
+    if (exists) {
+      return res.status(400).json({ error: 'Esta dirección MAC ya está registrada en la lista de exclusiones (MAC Bypass).' });
+    }
+
+    const newDevice = await db.createMacBypass(cleanMac, propietario, alias);
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'REGISTRAR_MAC_BYPASS',
+      detalles: `Registró dispositivo en bypass: MAC ${cleanMac}, Propietario: ${propietario}`
+    });
+
+    res.json(newDevice);
+  } catch (err) { next(err); }
+});
+
+// PUT - Cambiar estado activo
+router.put('/api/mac-bypass/:id/active', requireAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { activo } = req.body;
+
+    const device = await db.getMacBypassById(id);
+    if (!device) {
+      return res.status(404).json({ error: 'Dispositivo no encontrado.' });
+    }
+
+    const updated = await db.updateMacBypassStatus(id, activo);
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'MODIFICAR_ESTADO_MAC_BYPASS',
+      detalles: `Cambió estado de MAC ${device.mac_address} a activo=${activo}`
+    });
+
+    // Si se desactiva, enviar desconexión inmediata al router (CoA)
+    if (!activo) {
+      try {
+        await db.disconnectRadiusClient(device.mac_address);
+      } catch (coaErr) {
+        console.warn(`[CoA] Error de desconexión al desactivar MAC bypass ${device.mac_address}:`, coaErr.message);
+      }
+    }
+
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// DELETE - Eliminar de la lista de bypass
+router.delete('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const device = await db.getMacBypassById(id);
+    if (!device) {
+      return res.status(404).json({ error: 'Dispositivo no encontrado.' });
+    }
+
+    await db.deleteMacBypass(id);
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'ELIMINAR_MAC_BYPASS',
+      detalles: `Eliminó dispositivo de bypass: MAC ${device.mac_address}`
+    });
+
+    // Enviar desconexión inmediata al router (CoA)
+    try {
+      await db.disconnectRadiusClient(device.mac_address);
+    } catch (coaErr) {
+      console.warn(`[CoA] Error de desconexión al eliminar MAC bypass ${device.mac_address}:`, coaErr.message);
+    }
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 function sanitizePem(pemText) {
   if (!pemText) return '';
   return pemText

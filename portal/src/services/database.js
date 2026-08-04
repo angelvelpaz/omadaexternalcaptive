@@ -1982,6 +1982,71 @@ async function deleteSsidConfig(ssidName) {
   );
 }
 
+async function listMacBypass() {
+  const result = await pool.query(
+    'SELECT id, mac_address, propietario, alias, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
+  );
+  return result.rows;
+}
+
+async function getMacBypassById(id) {
+  const result = await pool.query(
+    'SELECT id, mac_address, propietario, alias, created_at, activo FROM mac_bypass WHERE id = $1',
+    [id]
+  );
+  return result.rows[0] || null;
+}
+
+async function getMacBypassByMac(mac) {
+  if (!mac) return null;
+  const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
+  const colonMac = mac.trim().toUpperCase().replace(/-/g, ':');
+  const result = await pool.query(
+    'SELECT id, mac_address, propietario, alias, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
+    [cleanMac, colonMac]
+  );
+  return result.rows[0] || null;
+}
+
+async function createMacBypass(mac, propietario, alias) {
+  if (!mac) throw new Error('La dirección MAC es obligatoria');
+  const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
+  
+  const result = await pool.query(
+    'INSERT INTO mac_bypass (mac_address, propietario, alias, activo) VALUES ($1, $2, $3, true) RETURNING *',
+    [cleanMac, propietario.trim(), (alias || '').trim()]
+  );
+
+  // Configurar atributos de ancho de banda predeterminados para la MAC en radreply (15M/5M)
+  await pool.query(`DELETE FROM radreply WHERE username = $1`, [cleanMac]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '15728640')`, [cleanMac]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '5242880')`, [cleanMac]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '15M/5M')`, [cleanMac]);
+
+  return result.rows[0];
+}
+
+async function updateMacBypassStatus(id, activo) {
+  const result = await pool.query(
+    'UPDATE mac_bypass SET activo = $2 WHERE id = $1 RETURNING *',
+    [id, activo === true || activo === 'true']
+  );
+  return result.rows[0];
+}
+
+async function deleteMacBypass(id) {
+  const device = await getMacBypassById(id);
+  if (device) {
+    const cleanMac = device.mac_address.trim().toUpperCase().replace(/:/g, '-');
+    await pool.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
+  }
+  const result = await pool.query(
+    'DELETE FROM mac_bypass WHERE id = $1 RETURNING *',
+    [id]
+  );
+  return result.rows[0];
+}
+
 module.exports = {
   connect,
   getPool,
@@ -2004,4 +2069,6 @@ module.exports = {
   deleteAdmin, getAdminAuditLogs, updateAdminRol,
   // ssid configurations
   getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
+  // mac bypass admin
+  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypassStatus, deleteMacBypass,
 };

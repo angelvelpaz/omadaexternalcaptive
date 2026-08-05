@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS mac_bypass (
     propietario   VARCHAR(100) NOT NULL,
     alias         VARCHAR(100),
     ppsk          VARCHAR(64),
+    vlan_id       INTEGER,
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     activo        BOOLEAN DEFAULT TRUE
 );

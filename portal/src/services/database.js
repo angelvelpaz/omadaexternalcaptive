@@ -1984,14 +1984,14 @@ async function deleteSsidConfig(ssidName) {
 
 async function listMacBypass() {
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, ppsk, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
   );
   return result.rows;
 }
 
 async function getMacBypassById(id) {
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, ppsk, created_at, activo FROM mac_bypass WHERE id = $1',
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass WHERE id = $1',
     [id]
   );
   return result.rows[0] || null;
@@ -2002,20 +2002,22 @@ async function getMacBypassByMac(mac) {
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const colonMac = mac.trim().toUpperCase().replace(/-/g, ':');
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, ppsk, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
     [cleanMac, colonMac]
   );
   return result.rows[0] || null;
 }
 
-async function createMacBypass(mac, propietario, alias, ppsk) {
+async function createMacBypass(mac, propietario, alias, ppsk, vlanId) {
   if (!mac) throw new Error('La dirección MAC es obligatoria');
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
+  const cleanVlan = vlanId ? parseInt(vlanId) : null;
+  const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
   
   const result = await pool.query(
-    'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, activo) VALUES ($1, $2, $3, $4, true) RETURNING *',
-    [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk]
+    'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, vlan_id, activo) VALUES ($1, $2, $3, $4, $5, true) RETURNING *',
+    [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan]
   );
 
   // Configurar atributos de ancho de banda predeterminados para la MAC en radreply (15M/5M)
@@ -2023,6 +2025,13 @@ async function createMacBypass(mac, propietario, alias, ppsk) {
   await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '15728640')`, [cleanMac]);
   await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '5242880')`, [cleanMac]);
   await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '15M/5M')`, [cleanMac]);
+
+  // Si se configuró VLAN, añadir los atributos a radreply para que RADIUS los devuelva
+  if (dbVlan !== null) {
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Type', ':=', 'VLAN')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Medium-Type', ':=', 'IEEE-802')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Private-Group-ID', ':=', $2)`, [cleanMac, String(dbVlan)]);
+  }
 
   return result.rows[0];
 }

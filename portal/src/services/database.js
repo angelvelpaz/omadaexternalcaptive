@@ -1255,12 +1255,14 @@ async function disconnectRadiusClient(macAddress) {
   const colonMac = macAddress.trim().toUpperCase().replace(/-/g, ':');
 
   try {
-    // 1. Buscar sesión activa en radacct
+    // 1. Buscar sesión activa en radacct (filtrando IPs locales de loopback que no admiten CoA)
     const query = `
       SELECT nasipaddress::text as nasip, acctsessionid, username
       FROM radacct
       WHERE (callingstationid = $1 OR callingstationid = $2 OR username = $1 OR username = $2)
         AND acctstoptime IS NULL
+        AND nasipaddress::text != '127.0.0.1'
+        AND nasipaddress::text != '::1'
       ORDER BY acctstarttime DESC
       LIMIT 1
     `;

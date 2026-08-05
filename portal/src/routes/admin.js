@@ -1710,7 +1710,7 @@ router.put('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
 
     // Hotspot dynamic disconnect client (CoA) if MAC changed or configuration updated
     try {
-      await disconnectRadiusClient(cleanMac);
+      await db.disconnectRadiusClient(cleanMac);
     } catch (coaErr) {
       console.warn(`[CoA] Error de desconexión al actualizar MAC bypass ${cleanMac}:`, coaErr.message);
     }

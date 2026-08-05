@@ -1141,13 +1141,24 @@ function buildControllerConfig(vendor, dbCfg) {
       secret:  cfg.secret || '',
     };
   }
+  if (vendor === 'ldap') {
+    return {
+      ldapServerUrl:       cfg.ldapServerUrl || '',
+      ldapBindDN:          cfg.ldapBindDN || '',
+      ldapBindCredentials: cfg.ldapBindCredentials ? '********' : '',
+      ldapSearchBase:      cfg.ldapSearchBase || '',
+      ldapAllowedGroup:    cfg.ldapAllowedGroup || '',
+      configured:          !!(cfg.ldapServerUrl && cfg.ldapBindDN && cfg.ldapSearchBase),
+      activo:              cfg.activo !== false,
+    };
+  }
   return {};
 }
 
 // GET — configuración actual (secretos enmascarados)
 router.get('/api/controllers', requireAdmin, async (req, res, next) => {
   try {
-    const vendors = ['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap'];
+    const vendors = ['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap', 'ldap'];
     const result  = {};
     for (const vendor of vendors) {
       const dbCfg = await db.getControllerConfig(vendor);

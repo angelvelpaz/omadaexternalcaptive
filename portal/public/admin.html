@@ -500,12 +500,31 @@
         </button>
       </div>
 
+      <!-- Barra de acciones en lote para MAC Bypass -->
+      <div id="mac-bypass-bulk-bar" class="hidden bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 flex items-center justify-between transition-all">
+        <div class="flex items-center gap-2 text-blue-800 text-sm font-semibold">
+          <span id="mac-bypass-selected-count">0 seleccionados</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="bulkEditPpskBypass()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+            🔑 Definir PPSK en Lote
+          </button>
+          <button onclick="clearBypassSelection()" class="px-3.5 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-50 transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+
       <!-- Tabla de dispositivos en bypass -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse text-sm">
             <thead>
               <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                <th class="p-4 w-10">
+                  <input type="checkbox" id="bypass-select-all" onclick="toggleAllBypasses(this)"
+                    class="rounded text-blue-600 focus:ring-blue-500 cursor-pointer">
+                </th>
                 <th class="p-4">Dirección MAC</th>
                 <th class="p-4">Propietario / Responsable</th>
                 <th class="p-4">Alias / Etiqueta</th>
@@ -2302,13 +2321,19 @@ let editingBypassId = null;
 
 async function loadMacBypass() {
   const tbody = document.getElementById('mac-bypass-tbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando exclusiones...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando exclusiones...</td></tr>';
   
+  // Limpiar selecciones
+  const selectAllEl = document.getElementById('bypass-select-all');
+  if (selectAllEl) selectAllEl.checked = false;
+  const bulkBar = document.getElementById('mac-bypass-bulk-bar');
+  if (bulkBar) bulkBar.classList.add('hidden');
+
   try {
     macBypassList = await api('GET', '/mac-bypass');
     renderMacBypassTable(macBypassList);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-medium">Error al cargar la lista: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar la lista: ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -2318,7 +2343,7 @@ function renderMacBypassTable(list) {
   tbody.innerHTML = '';
   
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400">No hay dispositivos registrados en bypass.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay dispositivos registrados en bypass.</td></tr>';
     document.getElementById('mac-bypass-count').textContent = '0 dispositivos';
     return;
   }
@@ -2344,6 +2369,9 @@ function renderMacBypassTable(list) {
       : '<span class="text-gray-400 italic text-xs">Nativa</span>';
 
     tr.innerHTML = `
+      <td class="p-4">
+        <input type="checkbox" value="${d.id}" class="bypass-select-item rounded text-blue-600 focus:ring-blue-500 cursor-pointer" onclick="updateBypassSelectionState()">
+      </td>
       <td class="p-4 font-mono font-semibold text-gray-700">${esc(d.mac_address)}</td>
       <td class="p-4 text-gray-800 font-medium">${esc(d.propietario)}</td>
       <td class="p-4 text-gray-500">${esc(d.alias || '—')}</td>
@@ -2384,6 +2412,64 @@ function filterMacBypass() {
     (d.alias && d.alias.toLowerCase().includes(term))
   );
   renderMacBypassTable(filtered);
+}
+
+function toggleAllBypasses(masterCb) {
+  const checkboxes = document.querySelectorAll('.bypass-select-item');
+  for (const cb of checkboxes) {
+    cb.checked = masterCb.checked;
+  }
+  updateBypassSelectionState();
+}
+
+function updateBypassSelectionState() {
+  const checkboxes = document.querySelectorAll('.bypass-select-item');
+  let count = 0;
+  for (const cb of checkboxes) {
+    if (cb.checked) count++;
+  }
+
+  const bulkBar = document.getElementById('mac-bypass-bulk-bar');
+  const countEl = document.getElementById('mac-bypass-selected-count');
+  
+  if (count > 0) {
+    countEl.textContent = `${count} dispositivo${count === 1 ? '' : 's'} seleccionado${count === 1 ? '' : 's'}`;
+    bulkBar.classList.remove('hidden');
+  } else {
+    bulkBar.classList.add('hidden');
+  }
+}
+
+function clearBypassSelection() {
+  const masterCb = document.getElementById('bypass-select-all');
+  if (masterCb) masterCb.checked = false;
+  
+  const checkboxes = document.querySelectorAll('.bypass-select-item');
+  for (const cb of checkboxes) {
+    cb.checked = false;
+  }
+  updateBypassSelectionState();
+}
+
+async function bulkEditPpskBypass() {
+  const checkboxes = document.querySelectorAll('.bypass-select-item');
+  const selected = [];
+  for (const cb of checkboxes) {
+    if (cb.checked) selected.push(parseInt(cb.value));
+  }
+
+  if (selected.length === 0) return;
+
+  const newPpsk = prompt(`Ingrese la nueva clave PPSK para los ${selected.length} dispositivos seleccionados (Dejar vacío para MAB sin clave):`);
+  if (newPpsk === null) return; // user cancelled
+
+  try {
+    await api('POST', '/mac-bypass/bulk-ppsk', { ids: selected, ppsk: newPpsk });
+    alert('Claves PPSK actualizadas y comandos de desconexión (CoA) enviados con éxito.');
+    await loadMacBypass();
+  } catch (err) {
+    alert('Error al actualizar claves PPSK en lote: ' + err.message);
+  }
 }
 
 function openCreateMacBypassModal() {

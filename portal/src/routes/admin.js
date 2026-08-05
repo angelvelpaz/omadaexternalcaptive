@@ -1789,6 +1789,44 @@ router.delete('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST - Actualizar clave PPSK en lote
+router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, async (req, res, next) => {
+  try {
+    const { ids, ppsk } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Debe seleccionar al menos un dispositivo.' });
+    }
+    
+    const cleanPpsk = ppsk ? String(ppsk).trim() : null;
+
+    // Ejecutar actualización
+    await db.bulkUpdateMacBypassPpsk(ids, cleanPpsk);
+
+    // Intentar desconexión de red (CoA) en segundo plano para cada uno
+    for (const id of ids) {
+      db.getMacBypassById(id).then(dev => {
+        if (dev) {
+          db.disconnectRadiusClient(dev.mac_address).catch(coaErr => {
+            console.warn(`[CoA] Error al desconectar ID ${id} en bulk PPSK:`, coaErr.message);
+          });
+        }
+      }).catch(err => {
+        console.error(`[DB] Error al buscar dispositivo ID ${id} para CoA:`, err.message);
+      });
+    }
+
+    // Registrar auditoría
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'ACTUALIZAR_PPSK_BYPASS_LOTE',
+      detalles: `Actualizó clave PPSK en lote para ${ids.length} dispositivos.`
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // GET - Resolver nombre de propietario desde servidores externos (SECAP o LDAP)
 router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next) => {
   try {

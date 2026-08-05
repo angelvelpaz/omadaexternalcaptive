@@ -595,6 +595,24 @@
 
     <!-- ── TAB USUARIOS LDAP ── -->
     <div id="tab-ldap-users" class="tab-content hidden">
+      <!-- Tarjeta de Configuración de Grupo LDAP -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h2 class="text-base font-bold text-gray-800 mb-2">Configuración del Grupo Autorizado</h2>
+        <p class="text-xs text-gray-500 mb-4">Especifique el DN completo (Distinguished Name) del grupo de seguridad del Active Directory cuyos miembros tendrán permiso de acceso.</p>
+        <div class="flex flex-col sm:flex-row gap-4 items-end">
+          <div class="flex-1 w-full">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre Distinguido del Grupo (Group DN)</label>
+            <input type="text" id="ldap-group-allowed-dn" placeholder="CN=Acceso Wifi,OU=Grupos,DC=empresa,DC=local" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <button onclick="saveLdapGroupDN()" id="btn-save-ldap-group" class="w-full sm:w-auto px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer whitespace-nowrap">
+              💾 Guardar Grupo
+            </button>
+          </div>
+        </div>
+        <p id="save-ldap-group-result" class="text-xs font-medium mt-2 hidden"></p>
+      </div>
+
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 overflow-hidden">
         <div class="flex justify-between items-center mb-4">
           <div>
@@ -933,49 +951,6 @@
               </div>
             </div>
 
-            <!-- Grupo LDAP -->
-            <div id="cfg-group-ldap" class="hidden space-y-4 bg-gray-50 p-4 border border-gray-150 rounded-xl">
-              <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Configuración del Servidor LDAP / Active Directory</h4>
-              
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Servidor URL</label>
-                  <input type="text" id="cfg-ldap-serverUrl" placeholder="ldaps://192.168.10.10:636" class="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                  <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Base de Búsqueda (Search Base DN)</label>
-                  <input type="text" id="cfg-ldap-searchBase" placeholder="OU=Usuarios,DC=empresa,DC=local" class="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                  <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Bind DN de Lectura</label>
-                  <input type="text" id="cfg-ldap-bindDN" placeholder="CN=Lector LDAP,CN=Users,DC=empresa,DC=local" class="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                  <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Contraseña Bind</label>
-                  <input type="password" id="cfg-ldap-bindCredentials" placeholder="••••••••" class="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div class="md:col-span-2">
-                  <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Grupo de Seguridad Requerido (Opcional CN)</label>
-                  <input type="text" id="cfg-ldap-allowedGroup" placeholder="CN=Acceso Wifi,OU=Grupos,DC=empresa,DC=local" class="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <p class="text-[9px] text-gray-400 mt-1">Si se llena, solo los usuarios miembros de este grupo o que lo contengan en su campo 'memberOf' podrán logearse.</p>
-                </div>
-              </div>
-
-              <!-- Prueba de Conexión LDAP -->
-              <div class="border-t border-gray-200 pt-3 mt-2">
-                <h5 class="text-[10px] font-bold text-gray-600 uppercase mb-2">Diagnóstico: Probar Autenticación LDAP</h5>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                  <input type="text" id="cfg-ldap-test-user" placeholder="Usuario de prueba" class="text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none">
-                  <input type="password" id="cfg-ldap-test-pass" placeholder="Contraseña de prueba" class="text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none">
-                </div>
-                <div class="flex items-center gap-3">
-                  <button type="button" id="btn-ldap-test-conn" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors cursor-pointer">
-                    Probar Autenticación
-                  </button>
-                  <span id="ldap-test-status" class="text-xs font-semibold text-gray-500"></span>
-                </div>
-              </div>
-            </div>
           </div>
 
           <!-- Mensaje de Usuario Desactivado -->
@@ -1916,7 +1891,7 @@ function switchTab(tab) {
   else if (tab === 'groups') loadGroups();
   else if (tab === 'controllers') loadControllers();
   else if (tab === 'live-sessions') loadActiveSessions();
-  else if (tab === 'ldap-users') loadLdapUsers();
+  else if (tab === 'ldap-users') loadLdapGroupDN().then(() => loadLdapUsers());
   else if (tab === 'reports') loadReports();
   else if (tab === 'branding') loadBranding();
   else if (tab === 'bandwidth') loadBandwidthProfiles();
@@ -3703,7 +3678,7 @@ async function deleteGroup(groupname) {
 
 // ── Controladores ─────────────────────────────────────────────────────────────
 
-const VENDOR_LABELS = { freeradius: 'FreeRADIUS', unifi: 'UniFi', omada: 'TP-Link Omada', mikrotik: 'MikroTik RouterOS', coovachilli: 'CoovaChilli / OpenWrt', secap: 'Validación de Cédula (SECAP)' };
+const VENDOR_LABELS = { freeradius: 'FreeRADIUS', unifi: 'UniFi', omada: 'TP-Link Omada', mikrotik: 'MikroTik RouterOS', coovachilli: 'CoovaChilli / OpenWrt', secap: 'Validación de Cédula (SECAP)', ldap: 'Directorio LDAP / Active Directory' };
 
 const VENDOR_ICONS = {
   freeradius: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3729,6 +3704,10 @@ const VENDOR_ICONS = {
   coovachilli: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
       d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+  </svg>`,
+  ldap: `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
   </svg>`,
 };
 
@@ -3875,6 +3854,46 @@ function buildEditForm(vendor, cfg) {
         </ol>
       </div>`;
   }
+  if (vendor === 'ldap') {
+    return `
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-medium text-gray-600 mb-1">Servidor URL</label>
+          <input class="${FIELD_CLASS}" id="cfg-${vendor}-ldapServerUrl" value="${esc(cfg.ldapServerUrl || '')}" placeholder="ldap://192.168.10.10:389">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-medium text-gray-600 mb-1">Base de Búsqueda (Search Base DN)</label>
+          <input class="${FIELD_CLASS}" id="cfg-${vendor}-ldapSearchBase" value="${esc(cfg.ldapSearchBase || '')}" placeholder="OU=Usuarios,DC=empresa,DC=local">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Bind DN de Lectura</label>
+          <input class="${FIELD_CLASS}" id="cfg-${vendor}-ldapBindDN" value="${esc(cfg.ldapBindDN || '')}" placeholder="CN=Lector LDAP,CN=Users,DC=empresa,DC=local">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Contraseña Bind</label>
+          <input type="password" class="${FIELD_CLASS}" id="cfg-${vendor}-ldapBindCredentials"
+            placeholder="${cfg.ldapBindCredentials ? 'Dejar en blanco para no cambiar' : 'Contraseña Bind'}">
+        </div>
+      </div>
+      <div class="border-t border-gray-150 pt-4 mt-3">
+        <h5 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Probar Conexión</h5>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Usuario de Prueba (sAMAccountName)</label>
+            <input class="${FIELD_CLASS}" id="test-${vendor}-user" placeholder="ej: juan.perez">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Contraseña de Prueba</label>
+            <input type="password" class="${FIELD_CLASS}" id="test-${vendor}-pass" placeholder="Contraseña del usuario">
+          </div>
+        </div>
+        <button type="button" onclick="testLdapConnectionGlobal()"
+          class="mt-3 bg-gray-800 hover:bg-gray-900 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+          🧪 Probar Conexión
+        </button>
+        <p id="test-ldap-global-result" class="text-xs font-medium mt-2 hidden"></p>
+      </div>`;
+  }
   return '';
 }
 
@@ -3920,6 +3939,10 @@ function renderControllerCard(vendor, cfg) {
                <span class="text-gray-500">Correo opcional:</span> <span class="font-semibold">${cfg.emailOpcional ? 'Sí' : 'No'}</span>`;
   } else if (vendor === 'coovachilli') {
     summary = `<span class="text-gray-500">UAM Secret:</span> <span class="font-mono">${cfg.secret ? '••••••••' : '<span class="text-amber-600">no configurado</span>'}</span>`;
+  } else if (vendor === 'ldap') {
+    summary = `<span class="text-gray-500">Servidor URL:</span> <span class="font-mono">${cfg.ldapServerUrl ? esc(cfg.ldapServerUrl) : '<span class="text-amber-600">no configurado</span>'}</span>
+               <span class="text-gray-400 mx-1">·</span>
+               <span class="text-gray-500">Search Base:</span> <span class="font-mono text-xs">${cfg.ldapSearchBase ? esc(cfg.ldapSearchBase) : '—'}</span>`;
   }
 
   return `
@@ -3995,8 +4018,8 @@ async function loadControllers() {
     const cfg = await api('GET', '/controllers');
     // Guardar config actual para acceso posterior en formularios
     window._ctrlCfg = cfg;
-    container.innerHTML = ['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap']
-      .map(v => renderControllerCard(v, cfg[v]))
+    container.innerHTML = ['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap', 'ldap']
+      .map(v => renderControllerCard(v, cfg[v] || {}))
       .join('');
   } catch (err) {
     container.innerHTML = `<p class="text-red-500 text-sm text-center py-8">${esc(err.message)}</p>`;
@@ -4048,6 +4071,13 @@ async function saveControllerConfig(vendor) {
     body = { emailOpcional: get('emailOpcional') };
   } else if (vendor === 'coovachilli') {
     body = { secret: get('secret') };
+  } else if (vendor === 'ldap') {
+    body = {
+      ldapServerUrl: get('ldapServerUrl'),
+      ldapBindDN: get('ldapBindDN'),
+      ldapBindCredentials: get('ldapBindCredentials'),
+      ldapSearchBase: get('ldapSearchBase')
+    };
   }
 
   btn.disabled = true;
@@ -4884,10 +4914,7 @@ async function loadSsidProfileDetails() {
   const selector = document.getElementById('cfg-branding-ssid-selector');
   const ssid = selector.value;
   const btnDelete = document.getElementById('btn-ssid-delete');
-  
-  document.getElementById('cfg-ldap-test-user').value = '';
-  document.getElementById('cfg-ldap-test-pass').value = '';
-  document.getElementById('ldap-test-status').textContent = '';
+
 
   if (ssid === 'default') {
     btnDelete.classList.add('hidden');
@@ -4898,6 +4925,7 @@ async function loadSsidProfileDetails() {
     } else {
       const globalBranding = await api('GET', '/branding');
       const controllers = await api('GET', '/controllers');
+      window._ctrlCfg = controllers;
       const globalSecap = controllers.secap || {};
       
       const config = {
@@ -4961,11 +4989,6 @@ function applyProfileFields(authType, config) {
 
   document.getElementById('cfg-branding-adAllowDirectRegister').checked = config.adAllowDirectRegister !== false;
 
-  document.getElementById('cfg-ldap-serverUrl').value = config.ldapServerUrl || '';
-  document.getElementById('cfg-ldap-searchBase').value = config.ldapSearchBase || '';
-  document.getElementById('cfg-ldap-bindDN').value = config.ldapBindDN || '';
-  document.getElementById('cfg-ldap-bindCredentials').value = config.ldapBindCredentials || '';
-  document.getElementById('cfg-ldap-allowedGroup').value = config.ldapAllowedGroup || '';
 }
 
 // Escuchar cambios de SSID
@@ -5112,11 +5135,11 @@ document.getElementById('form-branding').addEventListener('submit', async (e) =>
     adAllowDirectRegister: document.getElementById('cfg-branding-adAllowDirectRegister').checked,
     
     // LDAP
-    ldapServerUrl:   document.getElementById('cfg-ldap-serverUrl').value.trim(),
-    ldapSearchBase:  document.getElementById('cfg-ldap-searchBase').value.trim(),
-    ldapBindDN:      document.getElementById('cfg-ldap-bindDN').value.trim(),
-    ldapBindCredentials: document.getElementById('cfg-ldap-bindCredentials').value,
-    ldapAllowedGroup: document.getElementById('cfg-ldap-allowedGroup').value.trim(),
+    ldapServerUrl:   (window._ctrlCfg && window._ctrlCfg.ldap ? window._ctrlCfg.ldap.ldapServerUrl : '') || '',
+    ldapSearchBase:  (window._ctrlCfg && window._ctrlCfg.ldap ? window._ctrlCfg.ldap.ldapSearchBase : '') || '',
+    ldapBindDN:      (window._ctrlCfg && window._ctrlCfg.ldap ? window._ctrlCfg.ldap.ldapBindDN : '') || '',
+    ldapBindCredentials: (window._ctrlCfg && window._ctrlCfg.ldap ? window._ctrlCfg.ldap.ldapBindCredentials : '') || '',
+    ldapAllowedGroup: (window._ctrlCfg && window._ctrlCfg.ldap ? window._ctrlCfg.ldap.ldapAllowedGroup : '') || '',
   };
 
   btn.disabled = true;
@@ -6265,6 +6288,104 @@ function renderLdapUsersTable(list) {
   });
   
   document.getElementById('ldap-users-count').textContent = `${list.length} usuario${list.length === 1 ? '' : 's'} encontrado${list.length === 1 ? '' : 's'} en Active Directory`;
+}
+
+async function loadLdapGroupDN() {
+  try {
+    const cfg = await api('GET', '/controllers');
+    // Guardar en cache global de controllers
+    window._ctrlCfg = cfg;
+    const ldapCfg = cfg.ldap || {};
+    const input = document.getElementById('ldap-group-allowed-dn');
+    if (input) {
+      input.value = ldapCfg.ldapAllowedGroup || '';
+    }
+  } catch (err) {
+    console.error('Error al cargar grupo LDAP:', err);
+  }
+}
+
+async function saveLdapGroupDN() {
+  const btn = document.getElementById('btn-save-ldap-group');
+  const resultEl = document.getElementById('save-ldap-group-result');
+  const groupDN = document.getElementById('ldap-group-allowed-dn').value.trim();
+  
+  resultEl.className = 'text-xs font-medium mt-2 hidden';
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  
+  try {
+    const currentCfg = window._ctrlCfg && window._ctrlCfg.ldap ? window._ctrlCfg.ldap : {};
+    
+    const body = {
+      ldapServerUrl: currentCfg.ldapServerUrl || '',
+      ldapBindDN: currentCfg.ldapBindDN || '',
+      ldapBindCredentials: currentCfg.ldapBindCredentials || '',
+      ldapSearchBase: currentCfg.ldapSearchBase || '',
+      ldapAllowedGroup: groupDN
+    };
+    
+    await api('PUT', '/controllers/ldap', body);
+    
+    // Actualizar cache local
+    if (!window._ctrlCfg) window._ctrlCfg = {};
+    window._ctrlCfg.ldap = { ...currentCfg, ldapAllowedGroup: groupDN };
+    
+    resultEl.textContent = '✓ Grupo guardado correctamente.';
+    resultEl.className = 'text-xs font-semibold mt-2 text-green-600';
+    
+    // Recargar la lista de miembros
+    await loadLdapUsers();
+  } catch (err) {
+    resultEl.textContent = 'Error: ' + err.message;
+    resultEl.className = 'text-xs font-semibold mt-2 text-red-600';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar Grupo';
+  }
+}
+
+async function testLdapConnectionGlobal() {
+  const resultEl = document.getElementById('test-ldap-global-result');
+  resultEl.className = 'text-xs font-medium mt-2 hidden';
+  
+  const serverUrl = document.getElementById('cfg-ldap-ldapServerUrl').value.trim();
+  const bindDN = document.getElementById('cfg-ldap-ldapBindDN').value.trim();
+  const bindCredentials = document.getElementById('cfg-ldap-ldapBindCredentials').value.trim();
+  const searchBase = document.getElementById('cfg-ldap-ldapSearchBase').value.trim();
+  const testUser = document.getElementById('test-ldap-user').value.trim();
+  const testPassword = document.getElementById('test-ldap-pass').value.trim();
+  
+  if (!serverUrl || !bindDN || !searchBase || !testUser || !testPassword) {
+    resultEl.textContent = 'Complete todos los campos del servidor y las credenciales de prueba.';
+    resultEl.className = 'text-xs font-semibold mt-2 text-red-600';
+    return;
+  }
+  
+  resultEl.textContent = '⏳ Probando conexión...';
+  resultEl.className = 'text-xs font-semibold mt-2 text-gray-500';
+  
+  try {
+    const res = await api('POST', '/controllers/ldap/test', {
+      serverUrl,
+      bindDN,
+      bindCredentials,
+      searchBase,
+      testUser,
+      testPassword
+    });
+    
+    if (res.success) {
+      resultEl.textContent = '✓ ' + res.message;
+      resultEl.className = 'text-xs font-semibold mt-2 text-green-600';
+    } else {
+      resultEl.textContent = '❌ Falló: ' + res.error;
+      resultEl.className = 'text-xs font-semibold mt-2 text-red-600';
+    }
+  } catch (err) {
+    resultEl.textContent = '❌ Error de red: ' + err.message;
+    resultEl.className = 'text-xs font-semibold mt-2 text-red-600';
+  }
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────

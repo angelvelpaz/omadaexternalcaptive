@@ -1159,7 +1159,7 @@ router.get('/api/controllers', requireAdmin, async (req, res, next) => {
 
 // PUT — guarda configuración en DB
 router.put('/api/controllers/:vendor', requireAdmin,
-  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap']),
+  param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap', 'ldap']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -1224,6 +1224,15 @@ router.put('/api/controllers/:vendor', requireAdmin,
         newCfg = {
           secret:  getVal(input.secret, existing.secret),
           activo:  activoVal,
+        };
+      } else if (vendor === 'ldap') {
+        newCfg = {
+          ldapServerUrl:       getVal(input.ldapServerUrl, existing.ldapServerUrl),
+          ldapBindDN:          getVal(input.ldapBindDN, existing.ldapBindDN),
+          ldapBindCredentials: getVal(input.ldapBindCredentials, existing.ldapBindCredentials),
+          ldapSearchBase:      getVal(input.ldapSearchBase, existing.ldapSearchBase),
+          ldapAllowedGroup:    getVal(input.ldapAllowedGroup, existing.ldapAllowedGroup),
+          activo:              activoVal,
         };
       }
 

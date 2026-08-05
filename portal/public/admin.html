@@ -491,8 +491,13 @@
         <input type="text" id="mac-bypass-search" placeholder="Buscar por MAC, propietario o alias..."
           class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800"
           oninput="filterMacBypass()">
+        <select id="mac-bypass-vlan-filter" onchange="filterMacBypass()"
+          class="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-700 bg-white cursor-pointer min-w-[160px]">
+          <option value="">Todas las VLANs</option>
+          <option value="native">VLAN Nativa</option>
+        </select>
         <button onclick="openCreateMacBypassModal()"
-          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1">
+          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 shrink-0">
           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
           </svg>
@@ -2331,9 +2336,32 @@ async function loadMacBypass() {
 
   try {
     macBypassList = await api('GET', '/mac-bypass');
-    renderMacBypassTable(macBypassList);
+    populateMacBypassVlanFilter(macBypassList);
+    filterMacBypass();
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar la lista: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+// Llenar el selector de filtro de VLAN de forma dinámica
+function populateMacBypassVlanFilter(list) {
+  const select = document.getElementById('mac-bypass-vlan-filter');
+  if (!select) return;
+  const currentValue = select.value;
+  select.innerHTML = '<option value="">Todas las VLANs</option><option value="native">VLAN Nativa</option>';
+  
+  // Obtener VLANs únicas ordenadas
+  const vlans = [...new Set(list.map(d => d.vlan_id).filter(v => v !== null && v !== undefined))].sort((a, b) => a - b);
+  
+  vlans.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = `VLAN ${v}`;
+    select.appendChild(opt);
+  });
+  
+  if (currentValue && [...select.options].some(o => o.value === currentValue)) {
+    select.value = currentValue;
   }
 }
 
@@ -2400,17 +2428,29 @@ function renderMacBypassTable(list) {
   document.getElementById('mac-bypass-count').textContent = `${list.length} dispositivo${list.length === 1 ? '' : 's'}`;
 }
 
+// Filtrar por texto y por VLAN
 function filterMacBypass() {
   const term = document.getElementById('mac-bypass-search').value.toLowerCase().trim();
-  if (!term) {
-    renderMacBypassTable(macBypassList);
-    return;
+  const vlanFilter = document.getElementById('mac-bypass-vlan-filter').value;
+  
+  let filtered = macBypassList;
+
+  // 1. Filtrar por VLAN
+  if (vlanFilter === 'native') {
+    filtered = filtered.filter(d => !d.vlan_id);
+  } else if (vlanFilter !== '') {
+    filtered = filtered.filter(d => String(d.vlan_id) === String(vlanFilter));
   }
-  const filtered = macBypassList.filter(d => 
-    d.mac_address.toLowerCase().includes(term) ||
-    d.propietario.toLowerCase().includes(term) ||
-    (d.alias && d.alias.toLowerCase().includes(term))
-  );
+
+  // 2. Filtrar por búsqueda de texto
+  if (term) {
+    filtered = filtered.filter(d => 
+      d.mac_address.toLowerCase().includes(term) ||
+      d.propietario.toLowerCase().includes(term) ||
+      (d.alias && d.alias.toLowerCase().includes(term))
+    );
+  }
+  
   renderMacBypassTable(filtered);
 }
 

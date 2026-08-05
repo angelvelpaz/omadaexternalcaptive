@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS mac_bypass (
     mac_address   VARCHAR(17) UNIQUE NOT NULL,
     propietario   VARCHAR(100) NOT NULL,
     alias         VARCHAR(100),
+    ppsk          VARCHAR(64),
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     activo        BOOLEAN DEFAULT TRUE
 );

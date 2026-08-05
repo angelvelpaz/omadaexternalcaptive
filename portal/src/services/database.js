@@ -1984,14 +1984,14 @@ async function deleteSsidConfig(ssidName) {
 
 async function listMacBypass() {
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
+    'SELECT id, mac_address, propietario, alias, ppsk, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
   );
   return result.rows;
 }
 
 async function getMacBypassById(id) {
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, created_at, activo FROM mac_bypass WHERE id = $1',
+    'SELECT id, mac_address, propietario, alias, ppsk, created_at, activo FROM mac_bypass WHERE id = $1',
     [id]
   );
   return result.rows[0] || null;
@@ -2002,19 +2002,20 @@ async function getMacBypassByMac(mac) {
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const colonMac = mac.trim().toUpperCase().replace(/-/g, ':');
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
+    'SELECT id, mac_address, propietario, alias, ppsk, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
     [cleanMac, colonMac]
   );
   return result.rows[0] || null;
 }
 
-async function createMacBypass(mac, propietario, alias) {
+async function createMacBypass(mac, propietario, alias, ppsk) {
   if (!mac) throw new Error('La dirección MAC es obligatoria');
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
+  const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   
   const result = await pool.query(
-    'INSERT INTO mac_bypass (mac_address, propietario, alias, activo) VALUES ($1, $2, $3, true) RETURNING *',
-    [cleanMac, propietario.trim(), (alias || '').trim()]
+    'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, activo) VALUES ($1, $2, $3, $4, true) RETURNING *',
+    [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk]
   );
 
   // Configurar atributos de ancho de banda predeterminados para la MAC en radreply (15M/5M)

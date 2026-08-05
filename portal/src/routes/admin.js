@@ -1652,7 +1652,7 @@ router.get('/api/mac-bypass', requireAdmin, async (req, res, next) => {
 // POST - Registrar nueva MAC en bypass
 router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
   try {
-    const { macAddress, propietario, alias } = req.body;
+    const { macAddress, propietario, alias, ppsk } = req.body;
     if (!macAddress || !propietario) {
       return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
     }
@@ -1669,7 +1669,7 @@ router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'Esta dirección MAC ya está registrada en la lista de exclusiones (MAC Bypass).' });
     }
 
-    const newDevice = await db.createMacBypass(cleanMac, propietario, alias);
+    const newDevice = await db.createMacBypass(cleanMac, propietario, alias, ppsk);
 
     await db.logAdminAudit({
       username: req.adminUser,

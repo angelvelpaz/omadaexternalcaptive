@@ -2141,10 +2141,19 @@ async function deleteMacBypass(id) {
   );
   return result.rows[0];
 }
+async function getUsersLocalStatus(usernames) {
+  if (!usernames || usernames.length === 0) return [];
+  const result = await pool.query(
+    'SELECT cedula, activo FROM usuarios_portal WHERE LOWER(cedula) = ANY($1)',
+    [usernames]
+  );
+  return result.rows;
+}
 
 module.exports = {
   connect,
   getPool,
+  getUsersLocalStatus,
   startAcctSession,
   closeExpiredSessions,
   userExists, getUserByCedula, createUser, logAccess, updateTermsAcceptance,

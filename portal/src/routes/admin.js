@@ -1938,11 +1938,11 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
     const usernames = members.map(m => String(m.username).toLowerCase());
     let localUsers = [];
     if (usernames.length > 0) {
-      const dbResult = await db.pool.query(
-        'SELECT cedula, activo FROM usuarios_portal WHERE LOWER(cedula) = ANY($1)',
-        [usernames]
-      );
-      localUsers = dbResult.rows;
+      try {
+        localUsers = await db.getUsersLocalStatus(usernames);
+      } catch (dbErr) {
+        console.error('[LDAP-Members] Error al consultar estados locales en la base de datos:', dbErr.message);
+      }
     }
     const localActiveMap = new Map();
     localUsers.forEach(u => {

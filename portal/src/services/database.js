@@ -2036,6 +2036,32 @@ async function createMacBypass(mac, propietario, alias, ppsk, vlanId) {
   return result.rows[0];
 }
 
+async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId) {
+  const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
+  const cleanPpsk = ppsk ? String(ppsk).trim() : null;
+  const cleanVlan = vlanId ? parseInt(vlanId) : null;
+  const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
+
+  const result = await pool.query(
+    'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6 WHERE id = $1 RETURNING *',
+    [id, cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan]
+  );
+
+  // Actualizar atributos de radreply para el nuevo/actual MAC address
+  await pool.query(`DELETE FROM radreply WHERE username = $1`, [cleanMac]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '15728640')`, [cleanMac]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '5242880')`, [cleanMac]);
+  await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '15M/5M')`, [cleanMac]);
+
+  if (dbVlan !== null) {
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Type', ':=', 'VLAN')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Medium-Type', ':=', 'IEEE-802')`, [cleanMac]);
+    await pool.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Private-Group-ID', ':=', $2)`, [cleanMac, String(dbVlan)]);
+  }
+
+  return result.rows[0];
+}
+
 async function updateMacBypassStatus(id, activo) {
   const result = await pool.query(
     'UPDATE mac_bypass SET activo = $2 WHERE id = $1 RETURNING *',
@@ -2080,5 +2106,5 @@ module.exports = {
   // ssid configurations
   getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
   // mac bypass admin
-  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypassStatus, deleteMacBypass,
+  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, updateMacBypassStatus, deleteMacBypass,
 };

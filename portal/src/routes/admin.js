@@ -1682,6 +1682,50 @@ router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// PUT - Actualizar un bypass (Editar propietario, alias, ppsk, vlan_id, mac_address)
+router.put('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { macAddress, propietario, alias, ppsk, vlanId } = req.body;
+    
+    if (!macAddress || !propietario) {
+      return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
+    }
+
+    const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
+    if (!/^([0-9A-F]{2}-){5}[0-9A-F]{2}$/.test(cleanMac)) {
+      return res.status(400).json({ error: 'Formato de dirección MAC inválido (debe ser xx:xx:xx:xx:xx:xx o xx-xx-xx-xx-xx-xx).' });
+    }
+
+    // Verificar si la MAC ya existe en otro registro (distinto al actual)
+    const existing = await db.getMacBypassByMac(cleanMac);
+    if (existing && String(existing.id) !== String(id)) {
+      return res.status(400).json({ error: 'Esta dirección MAC ya está registrada en otra exclusión (MAC Bypass).' });
+    }
+
+    const updated = await db.updateMacBypass(id, cleanMac, propietario, alias, ppsk, vlanId);
+    if (!updated) {
+      return res.status(404).json({ error: 'Registro no encontrado.' });
+    }
+
+    // Hotspot dynamic disconnect client (CoA) if MAC changed or configuration updated
+    try {
+      await disconnectRadiusClient(cleanMac);
+    } catch (coaErr) {
+      console.warn(`[CoA] Error de desconexión al actualizar MAC bypass ${cleanMac}:`, coaErr.message);
+    }
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'ACTUALIZAR_MAC_BYPASS',
+      detalles: `Actualizó dispositivo en bypass ID ${id}: MAC ${cleanMac}, Propietario: ${propietario}`
+    });
+
+    res.json({ ok: true, device: updated });
+  } catch (err) { next(err); }
+});
+
 // PUT - Cambiar estado activo
 router.put('/api/mac-bypass/:id/active', requireAdmin, async (req, res, next) => {
   try {

@@ -1452,7 +1452,7 @@
 <div id="modal-create-mac-bypass" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
     <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-900 to-indigo-900 text-white">
-      <h3 class="font-bold text-lg leading-tight">Agregar Dispositivo a MAC Bypass</h3>
+      <h3 id="modal-mac-title" class="font-bold text-lg leading-tight">Agregar Dispositivo a MAC Bypass</h3>
       <button onclick="closeCreateMacBypassModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
     </div>
     <form id="form-create-mac-bypass" onsubmit="submitCreateMacBypass(event)" class="p-6 space-y-4">
@@ -1498,7 +1498,7 @@
           class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
           Cancelar
         </button>
-        <button type="submit"
+        <button type="submit" id="btn-mac-submit"
           class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
           Agregar
         </button>
@@ -2298,6 +2298,7 @@ async function applyBulkUserActive(active) {
 
 // ── MAC Bypass (Exclusiones) ──────────────────────────────────────────────────
 let macBypassList = [];
+let editingBypassId = null;
 
 async function loadMacBypass() {
   const tbody = document.getElementById('mac-bypass-tbody');
@@ -2355,6 +2356,10 @@ function renderMacBypassTable(list) {
           class="text-xs font-semibold px-2.5 py-1.5 rounded transition-colors ${d.activo ? 'border border-amber-300 hover:bg-amber-50 text-amber-700' : 'bg-green-600 hover:bg-green-700 text-white'}">
           ${d.activo ? 'Desactivar' : 'Activar'}
         </button>
+        <button onclick="editMacBypass(${d.id})"
+          class="text-xs font-semibold border border-blue-300 hover:bg-blue-50 text-blue-700 px-2.5 py-1.5 rounded transition-colors">
+          Editar
+        </button>
         <button onclick="deleteMacBypass(${d.id}, '${esc(d.mac_address)}')"
           class="text-xs font-semibold border border-red-300 hover:bg-red-50 text-red-700 px-2.5 py-1.5 rounded transition-colors">
           Eliminar
@@ -2382,9 +2387,12 @@ function filterMacBypass() {
 }
 
 function openCreateMacBypassModal() {
+  editingBypassId = null;
   document.getElementById('form-create-mac-bypass').reset();
   document.getElementById('bypass-error').classList.add('hidden');
   document.getElementById('bypass-propietario').placeholder = 'Nombre completo resuelto';
+  document.getElementById('modal-mac-title').textContent = 'Agregar Dispositivo a MAC Bypass';
+  document.getElementById('btn-mac-submit').textContent = 'Agregar';
   const modal = document.getElementById('modal-create-mac-bypass');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -2394,6 +2402,27 @@ function closeCreateMacBypassModal() {
   const modal = document.getElementById('modal-create-mac-bypass');
   modal.classList.add('hidden');
   modal.classList.remove('flex');
+}
+
+function editMacBypass(id) {
+  const item = macBypassList.find(x => x.id === id);
+  if (!item) return;
+
+  editingBypassId = id;
+  document.getElementById('bypass-error').classList.add('hidden');
+  document.getElementById('bypass-mac').value = item.mac_address;
+  document.getElementById('bypass-identifier').value = item.propietario;
+  document.getElementById('bypass-propietario').value = item.propietario;
+  document.getElementById('bypass-alias').value = item.alias || '';
+  document.getElementById('bypass-ppsk').value = item.ppsk || '';
+  document.getElementById('bypass-vlan').value = item.vlan_id || '';
+
+  document.getElementById('modal-mac-title').textContent = 'Editar Dispositivo a MAC Bypass';
+  document.getElementById('btn-mac-submit').textContent = 'Guardar';
+
+  const modal = document.getElementById('modal-create-mac-bypass');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
 }
 
 async function submitCreateMacBypass(e) {
@@ -2408,7 +2437,11 @@ async function submitCreateMacBypass(e) {
   errorEl.classList.add('hidden');
   
   try {
-    await api('POST', '/mac-bypass', { macAddress, propietario, alias, ppsk, vlanId });
+    if (editingBypassId) {
+      await api('PUT', `/mac-bypass/${editingBypassId}`, { macAddress, propietario, alias, ppsk, vlanId });
+    } else {
+      await api('POST', '/mac-bypass', { macAddress, propietario, alias, ppsk, vlanId });
+    }
     closeCreateMacBypassModal();
     await loadMacBypass();
   } catch (err) {

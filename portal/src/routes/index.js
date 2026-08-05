@@ -875,19 +875,25 @@ router.post('/auth/ldap',
       const clientIp = req.ip || req.connection.remoteAddress;
       const params = typeof vendorParams === 'object' ? vendorParams : {};
 
-      // 1. Resolver configuración LDAP según SSID
-      const ssidParam = (ssid || '').trim();
-      let ssidConfig = null;
-      if (ssidParam) ssidConfig = await db.getSsidConfig(ssidParam);
-      if (!ssidConfig && ssidParam !== 'default') ssidConfig = await db.getSsidConfig('default');
+      // 1. Resolver configuración LDAP según tabla global controller_config
+      let ldapUrl = process.env.LDAP_SERVER_URL;
+      let ldapBindDN = process.env.LDAP_BIND_DN;
+      let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
+      let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
+      let ldapAllowedGroup = process.env.LDAP_ALLOWED_GROUP;
 
-      const sc = ssidConfig ? (ssidConfig.config || {}) : {};
-      
-      const ldapUrl = sc.ldapServerUrl || process.env.LDAP_SERVER_URL;
-      const ldapBindDN = sc.ldapBindDN || process.env.LDAP_BIND_DN;
-      const ldapBindPassword = sc.ldapBindCredentials || process.env.LDAP_BIND_PASSWORD;
-      const ldapSearchBase = sc.ldapSearchBase || process.env.LDAP_SEARCH_BASE;
-      const ldapAllowedGroup = sc.ldapAllowedGroup || process.env.LDAP_ALLOWED_GROUP;
+      try {
+        const ldapConfig = await db.getControllerConfig('ldap');
+        if (ldapConfig) {
+          if (ldapConfig.ldapServerUrl) ldapUrl = ldapConfig.ldapServerUrl;
+          if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
+          if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
+          if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
+          if (ldapConfig.ldapAllowedGroup) ldapAllowedGroup = ldapConfig.ldapAllowedGroup;
+        }
+      } catch (dbErr) {
+        console.warn('[LDAP-Auth] No se pudo leer la configuración global de LDAP:', dbErr.message);
+      }
 
       if (!ldapUrl || !ldapBindDN || !ldapSearchBase) {
         return res.status(400).json({ error: 'La autenticación LDAP no está configurada para esta red o servidor.' });

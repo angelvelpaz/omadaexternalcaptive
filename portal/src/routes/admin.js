@@ -1896,17 +1896,18 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
     let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
     let ldapAllowedGroup = process.env.LDAP_ALLOWED_GROUP;
 
-    // Cargar config del SSID 'default'
+    // Cargar config global del controlador ldap
     try {
-      const defaultSsid = await db.getSsidConfig('default');
-      const sc = (defaultSsid && defaultSsid.config) ? defaultSsid.config : {};
-      if (sc.ldapServerUrl) ldapServerUrl = sc.ldapServerUrl;
-      if (sc.ldapBindDN) ldapBindDN = sc.ldapBindDN;
-      if (sc.ldapBindCredentials) ldapBindPassword = sc.ldapBindCredentials;
-      if (sc.ldapSearchBase) ldapSearchBase = sc.ldapSearchBase;
-      if (sc.ldapAllowedGroup) ldapAllowedGroup = sc.ldapAllowedGroup;
+      const ldapConfig = await db.getControllerConfig('ldap');
+      if (ldapConfig) {
+        if (ldapConfig.ldapServerUrl) ldapServerUrl = ldapConfig.ldapServerUrl;
+        if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
+        if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
+        if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
+        if (ldapConfig.ldapAllowedGroup) ldapAllowedGroup = ldapConfig.ldapAllowedGroup;
+      }
     } catch (dbErr) {
-      console.warn('[LDAP-Members] No se pudo leer la configuración por defecto de SSID:', dbErr.message);
+      console.warn('[LDAP-Members] No se pudo leer la configuración global de LDAP:', dbErr.message);
     }
 
     if (!ldapServerUrl || !ldapBindDN || !ldapSearchBase || !ldapAllowedGroup) {
@@ -1966,16 +1967,17 @@ router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next)
     let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
     let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
 
-    // Intentar cargar la configuración por defecto del SSID 'default'
+    // Cargar config global del controlador ldap
     try {
-      const defaultSsid = await db.getSsidConfig('default');
-      const sc = (defaultSsid && defaultSsid.config) ? defaultSsid.config : {};
-      if (sc.ldapServerUrl) ldapServerUrl = sc.ldapServerUrl;
-      if (sc.ldapBindDN) ldapBindDN = sc.ldapBindDN;
-      if (sc.ldapBindCredentials) ldapBindPassword = sc.ldapBindCredentials;
-      if (sc.ldapSearchBase) ldapSearchBase = sc.ldapSearchBase;
+      const ldapConfig = await db.getControllerConfig('ldap');
+      if (ldapConfig) {
+        if (ldapConfig.ldapServerUrl) ldapServerUrl = ldapConfig.ldapServerUrl;
+        if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
+        if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
+        if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
+      }
     } catch (dbErr) {
-      console.warn('[Resolve-Owner] No se pudo leer la configuración por defecto de SSID:', dbErr.message);
+      console.warn('[Resolve-Owner] No se pudo leer la configuración global de LDAP:', dbErr.message);
     }
 
     if (!ldapServerUrl || !ldapBindDN || !ldapSearchBase) {

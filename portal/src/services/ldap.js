@@ -180,7 +180,80 @@ function searchUser({ url, bindDN, bindPassword, searchBase, username }) {
   });
 }
 
+function getGroupMembers({ url, bindDN, bindPassword, searchBase, allowedGroup }) {
+  return new Promise((resolve, reject) => {
+    let client;
+    try {
+      client = ldap.createClient({
+        url: url,
+        tlsOptions: { rejectUnauthorized: false },
+        connectTimeout: 5000,
+        timeout: 5000
+      });
+    } catch (err) {
+      return reject(new Error('No se pudo crear el cliente LDAP: ' + err.message));
+    }
+
+    client.on('error', (err) => {
+      console.error('[LDAP-Group-Members] Error:', err.message);
+    });
+
+    client.bind(bindDN, bindPassword, (err) => {
+      if (err) {
+        client.destroy();
+        return reject(new Error('Fallo de conexión Bind LDAP: ' + err.message));
+      }
+
+      // En Active Directory buscamos usuarios miembros del grupo allowedGroup
+      const filter = `(&(objectClass=user)(memberOf=${allowedGroup}))`;
+      const opts = {
+        filter: filter,
+        scope: 'sub',
+        attributes: ['sAMAccountName', 'givenName', 'sn', 'mail', 'cn']
+      };
+
+      client.search(searchBase, opts, (err, res) => {
+        if (err) {
+          client.destroy();
+          return reject(new Error('Error en búsqueda LDAP de grupo: ' + err.message));
+        }
+
+        const members = [];
+
+        res.on('searchEntry', (entry) => {
+          const obj = {};
+          const attrs = entry.pojo.attributes || [];
+          attrs.forEach(attr => {
+            if (attr.values && attr.values.length > 0) {
+              obj[attr.type] = attr.values.length === 1 ? attr.values[0] : attr.values;
+            } else {
+              obj[attr.type] = [];
+            }
+          });
+          members.push({
+            username: obj.sAMAccountName || obj.cn || '',
+            nombres: obj.givenName || obj.cn || '',
+            apellidos: obj.sn || '',
+            email: obj.mail || ''
+          });
+        });
+
+        res.on('error', (err) => {
+          client.destroy();
+          return reject(new Error('Error en stream de búsqueda de grupo: ' + err.message));
+        });
+
+        res.on('end', () => {
+          client.destroy();
+          resolve(members);
+        });
+      });
+    });
+  });
+}
+
 module.exports = {
   authenticate,
-  searchUser
+  searchUser,
+  getGroupMembers
 };

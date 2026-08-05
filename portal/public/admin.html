@@ -111,6 +111,7 @@
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="devices" role="menuitem">Dispositivos</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="mac-bypass" role="menuitem">PPSK / MAC Bypass</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="groups" role="menuitem">Grupos RADIUS</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ldap-users" role="menuitem">Usuarios LDAP</button>
             </div>
           </div>
 
@@ -190,6 +191,7 @@
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="devices">Dispositivos</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="mac-bypass">PPSK / MAC Bypass</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="groups">Grupos RADIUS</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ldap-users">Usuarios LDAP</button>
             </div>
           </div>
 
@@ -589,6 +591,40 @@
 
       <!-- Lista de grupos -->
       <div id="groups-list" class="space-y-4"></div>
+    </div>
+
+    <!-- ── TAB USUARIOS LDAP ── -->
+    <div id="tab-ldap-users" class="tab-content hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 overflow-hidden">
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Miembros del Grupo de Active Directory</h2>
+            <p class="text-xs text-gray-500 mt-1">Lista en vivo de usuarios pertenecientes al grupo autorizado de seguridad configurado en el servidor LDAP.</p>
+          </div>
+          <button onclick="loadLdapUsers()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+            🔄 Sincronizar / Actualizar
+          </button>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                <th class="p-4">Usuario (sAMAccountName)</th>
+                <th class="p-4">Nombre Completo</th>
+                <th class="p-4">Correo Electrónico</th>
+                <th class="p-4">Estado de Conexión</th>
+              </tr>
+            </thead>
+            <tbody id="ldap-users-tbody" class="divide-y divide-gray-100">
+              <!-- Cargado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
+          <span id="ldap-users-count">0 usuarios encontrados en Active Directory</span>
+        </div>
+      </div>
     </div>
 
     <!-- ── TAB CONTROLADORES ── -->
@@ -1880,6 +1916,7 @@ function switchTab(tab) {
   else if (tab === 'groups') loadGroups();
   else if (tab === 'controllers') loadControllers();
   else if (tab === 'live-sessions') loadActiveSessions();
+  else if (tab === 'ldap-users') loadLdapUsers();
   else if (tab === 'reports') loadReports();
   else if (tab === 'branding') loadBranding();
   else if (tab === 'bandwidth') loadBandwidthProfiles();
@@ -6178,6 +6215,56 @@ async function kickSession(mac) {
   } catch (err) {
     alert('Error al enviar comando: ' + err.message);
   }
+}
+
+// ── Usuarios LDAP / Active Directory ──
+async function loadLdapUsers() {
+  const tbody = document.getElementById('ldap-users-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Sincronizando con Active Directory...</td></tr>';
+  
+  try {
+    const list = await api('GET', '/ldap/group-members');
+    if (list.error) {
+      tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-amber-600 font-semibold">⚠️ ${esc(list.error)}</td></tr>`;
+      document.getElementById('ldap-users-count').textContent = '0 usuarios autorizados';
+      return;
+    }
+    renderLdapUsersTable(list);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-500 font-medium">Error de conexión LDAP: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function renderLdapUsersTable(list) {
+  const tbody = document.getElementById('ldap-users-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">No se encontraron usuarios en el grupo de Active Directory.</td></tr>';
+    document.getElementById('ldap-users-count').textContent = '0 usuarios en Active Directory';
+    return;
+  }
+  
+  list.forEach(u => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-50/50 transition-colors';
+    
+    const statusBadge = u.isConnected
+      ? '<span class="px-2.5 py-1 inline-flex items-center gap-1.5 text-xs font-semibold bg-green-50 text-green-700 rounded-full border border-green-200"><span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></span>Conectado</span>'
+      : '<span class="px-2.5 py-1 inline-flex items-center gap-1.5 text-xs font-semibold bg-gray-50 text-gray-500 rounded-full border border-gray-200">Desconectado</span>';
+      
+    tr.innerHTML = `
+      <td class="p-4 font-mono font-semibold text-gray-700">${esc(u.username)}</td>
+      <td class="p-4 text-gray-800 font-medium">${esc(u.nombres)} ${esc(u.apellidos)}</td>
+      <td class="p-4 text-gray-500 font-mono text-xs">${esc(u.email || '—')}</td>
+      <td class="p-4">${statusBadge}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  document.getElementById('ldap-users-count').textContent = `${list.length} usuario${list.length === 1 ? '' : 's'} encontrado${list.length === 1 ? '' : 's'} en Active Directory`;
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────

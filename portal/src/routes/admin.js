@@ -1856,6 +1856,56 @@ router.post('/api/active-sessions/kick', requireAdmin, async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
+// GET - Obtener miembros del grupo de Active Directory (LDAP) configurado
+router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
+  try {
+    let ldapServerUrl = process.env.LDAP_SERVER_URL;
+    let ldapBindDN = process.env.LDAP_BIND_DN;
+    let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
+    let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
+    let ldapAllowedGroup = process.env.LDAP_ALLOWED_GROUP;
+
+    // Cargar config del SSID 'default'
+    try {
+      const defaultSsid = await db.getSsidConfig('default');
+      const sc = (defaultSsid && defaultSsid.config) ? defaultSsid.config : {};
+      if (sc.ldapServerUrl) ldapServerUrl = sc.ldapServerUrl;
+      if (sc.ldapBindDN) ldapBindDN = sc.ldapBindDN;
+      if (sc.ldapBindCredentials) ldapBindPassword = sc.ldapBindCredentials;
+      if (sc.ldapSearchBase) ldapSearchBase = sc.ldapSearchBase;
+      if (sc.ldapAllowedGroup) ldapAllowedGroup = sc.ldapAllowedGroup;
+    } catch (dbErr) {
+      console.warn('[LDAP-Members] No se pudo leer la configuración por defecto de SSID:', dbErr.message);
+    }
+
+    if (!ldapServerUrl || !ldapBindDN || !ldapSearchBase || !ldapAllowedGroup) {
+      return res.json({ error: 'La conexión LDAP o el Grupo Autorizado no están configurados.' });
+    }
+
+    // Obtener miembros del grupo AD
+    const members = await ldapSvc.getGroupMembers({
+      url: ldapServerUrl,
+      bindDN: ldapBindDN,
+      bindPassword: ldapBindPassword,
+      searchBase: ldapSearchBase,
+      allowedGroup: ldapAllowedGroup
+    });
+
+    // Obtener sesiones activas para cruzar conexión
+    const activeSessions = await db.getActiveSessions();
+    const activeUsernames = new Set(activeSessions.map(s => String(s.username).toLowerCase()));
+
+    const result = members.map(m => ({
+      ...m,
+      isConnected: activeUsernames.has(String(m.username).toLowerCase())
+    }));
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al consultar miembros de AD: ' + err.message });
+  }
+});
+
 // GET - Resolver nombre de propietario desde servidores externos (SECAP o LDAP)
 router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next) => {
   try {

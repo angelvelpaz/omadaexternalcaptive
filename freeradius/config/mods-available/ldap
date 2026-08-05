@@ -1,0 +1,63 @@
+# -*- text -*-
+#
+#  Lightweight Directory Access Protocol (LDAP)
+#  Configurado dinámicamente desde la base de datos PostgreSQL del Portal Cautivo.
+#
+
+ldap {
+	# Servidor AD/LDAP dinámico de la base de datos
+	server = "%{sql:SELECT COALESCE(config->>'ldapServerUrl', 'localhost') FROM controller_config WHERE vendor = 'ldap' LIMIT 1}"
+
+	# Puerto por defecto (será ignorado si server es una URI ldap:// o ldaps://)
+	port = 389
+
+	# Usuario de enlace (Bind DN)
+	identity = "%{sql:SELECT COALESCE(config->>'ldapBindDN', '') FROM controller_config WHERE vendor = 'ldap' LIMIT 1}"
+	password = "%{sql:SELECT COALESCE(config->>'ldapBindCredentials', '') FROM controller_config WHERE vendor = 'ldap' LIMIT 1}"
+
+	# DN base de búsqueda
+	base_dn = "%{sql:SELECT COALESCE(config->>'ldapSearchBase', 'dc=example,dc=org') FROM controller_config WHERE vendor = 'ldap' LIMIT 1}"
+
+	# Opciones de conexión y tiempos de espera
+	sasl {
+	}
+
+	# Parámetros TLS / Certificados
+	tls {
+		start_tls = no
+		require_cert = never
+	}
+
+	# Configuración de búsqueda de usuarios
+	user {
+		base_dn = "${..base_dn}"
+		filter = "(|(sAMAccountName=%{%{Stripped-User-Name}:-%{User-Name}})(userPrincipalName=%{%{Stripped-User-Name}:-%{User-Name}}))"
+		scope = 'sub'
+	}
+
+	# Configuración de búsqueda de grupos
+	group {
+		base_dn = "${..base_dn}"
+		filter = '(objectClass=group)'
+		scope = 'sub'
+		name_attribute = cn
+		membership_filter = "(|(&(objectClass=group)(member=%{control:Ldap-UserDn}))(&(objectClass=user)(sAMAccountName=%{%{Stripped-User-Name}:-%{User-Name}})))"
+		name = "%{sql:SELECT COALESCE(config->>'ldapAllowedGroup', '') FROM controller_config WHERE vendor = 'ldap' LIMIT 1}"
+	}
+
+	# Mapeo de contraseñas de LDAP
+	update {
+		control:Password-With-Header	+= 'userPassword'
+	}
+
+	# Configuración del pool de conexiones
+	pool {
+		start = 5
+		min = 4
+		max = 30
+		spare = 3
+		uses = 0
+		lifetime = 0
+		idle_timeout = 60
+	}
+}

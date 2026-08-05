@@ -29,6 +29,9 @@ server default {
         # Buscar usuario en SQL (radcheck)
         sql
 
+        # Si no se encuentra en SQL local, consultar LDAP/Active Directory
+        ldap
+
         # Si el usuario tiene Cleartext-Password en radcheck, usar PAP
         pap
     }
@@ -38,6 +41,11 @@ server default {
     authenticate {
         Auth-Type PAP {
             pap
+        }
+
+        # Autenticación contra LDAP
+        Auth-Type LDAP {
+            ldap
         }
     }
 

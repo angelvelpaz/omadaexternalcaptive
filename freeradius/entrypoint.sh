@@ -9,10 +9,6 @@ RADDB=/etc/raddb
 
 echo "[FREERADIUS] Procesando configuración con variables de entorno..."
 
-# Procesar cada archivo .template en raddb
-# IMPORTANTE: especificar las variables exactas para que envsubst NO toque
-# las referencias internas de FreeRADIUS del tipo ${thread[pool].x}
-
 if [ -f "$RADDB/clients.conf.template" ]; then
   envsubst '${RADIUS_SECRET}' \
     < "$RADDB/clients.conf.template" \
@@ -26,6 +22,77 @@ if [ -f "$RADDB/mods-available/sql.template" ]; then
     > "$RADDB/mods-available/sql"
   echo "[FREERADIUS] Generado: $RADDB/mods-available/sql"
 fi
+
+# Esperar a que la base de datos PostgreSQL esté en línea
+echo "[FREERADIUS] Esperando a la base de datos en $POSTGRES_HOST:5432..."
+until PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c '\q' >/dev/null 2>&1; do
+  sleep 1
+done
+echo "[FREERADIUS] Base de datos conectada. Extrayendo parámetros de Active Directory (LDAP)..."
+
+# Extraer parámetros de configuración de LDAP desde la tabla de base de datos
+LDAP_URL=$(PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "SELECT config->>'ldapServerUrl' FROM controller_config WHERE vendor='ldap' LIMIT 1" 2>/dev/null || true)
+LDAP_BIND_DN=$(PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "SELECT config->>'ldapBindDN' FROM controller_config WHERE vendor='ldap' LIMIT 1" 2>/dev/null || true)
+LDAP_PASS=$(PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "SELECT config->>'ldapBindCredentials' FROM controller_config WHERE vendor='ldap' LIMIT 1" 2>/dev/null || true)
+LDAP_BASE=$(PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "SELECT config->>'ldapSearchBase' FROM controller_config WHERE vendor='ldap' LIMIT 1" 2>/dev/null || true)
+LDAP_GROUP=$(PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "SELECT config->>'ldapAllowedGroup' FROM controller_config WHERE vendor='ldap' LIMIT 1" 2>/dev/null || true)
+
+# Usar valores de fallback por defecto en caso de que aún no existan registros en la base de datos
+LDAP_URL="${LDAP_URL:-localhost}"
+LDAP_BIND_DN="${LDAP_BIND_DN:-cn=admin,dc=example,dc=org}"
+LDAP_PASS="${LDAP_PASS:-password}"
+LDAP_BASE="${LDAP_BASE:-dc=example,dc=org}"
+LDAP_GROUP="${LDAP_GROUP:-}"
+
+echo "[FREERADIUS] Generando archivo mods-available/ldap..."
+cat <<EOF > "$RADDB/mods-available/ldap"
+# Generado dinámicamente al iniciar desde la base de datos PostgreSQL
+ldap {
+	server = '${LDAP_URL}'
+	port = 389
+	identity = '${LDAP_BIND_DN}'
+	password = '${LDAP_PASS}'
+	base_dn = '${LDAP_BASE}'
+
+	sasl {
+	}
+
+	tls {
+		start_tls = no
+		require_cert = never
+	}
+
+	user {
+		base_dn = "\${..base_dn}"
+		filter = "(|(sAMAccountName=%{%{Stripped-User-Name}:-%{User-Name}})(userPrincipalName=%{%{Stripped-User-Name}:-%{User-Name}}))"
+		scope = 'sub'
+	}
+
+	group {
+		base_dn = "\${..base_dn}"
+		filter = '(objectClass=group)'
+		scope = 'sub'
+		name_attribute = cn
+		membership_filter = "(|(&(objectClass=group)(member=%{control:Ldap-UserDn}))(&(objectClass=user)(sAMAccountName=%{%{Stripped-User-Name}:-%{User-Name}})))"
+		name = '${LDAP_GROUP}'
+	}
+
+	update {
+		control:Password-With-Header	+= 'userPassword'
+	}
+
+	# start=0 y min=0 para permitir que FreeRADIUS inicie incluso si el servidor LDAP está offline
+	pool {
+		start = 0
+		min = 0
+		max = 30
+		spare = 3
+		uses = 0
+		lifetime = 0
+		idle_timeout = 60
+	}
+}
+EOF
 
 # Ajustar permisos
 chown -R freerad:freerad "$RADDB"

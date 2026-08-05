@@ -107,6 +107,80 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
   });
 }
 
+function searchUser({ url, bindDN, bindPassword, searchBase, username }) {
+  return new Promise((resolve, reject) => {
+    let client;
+    try {
+      client = ldap.createClient({
+        url: url,
+        tlsOptions: { rejectUnauthorized: false },
+        connectTimeout: 5000,
+        timeout: 5000
+      });
+    } catch (err) {
+      return reject(new Error('No se pudo crear el cliente LDAP: ' + err.message));
+    }
+
+    client.on('error', (err) => {
+      console.error('[LDAP-Search] Error del cliente:', err.message);
+    });
+
+    client.bind(bindDN, bindPassword, (err) => {
+      if (err) {
+        client.destroy();
+        return reject(new Error('Fallo de conexión Bind LDAP Administrador: ' + err.message));
+      }
+
+      const filter = `(|(sAMAccountName=${username})(userPrincipalName=${username}))`;
+      const opts = {
+        filter: filter,
+        scope: 'sub',
+        attributes: ['givenName', 'sn', 'mail', 'cn']
+      };
+
+      client.search(searchBase, opts, (err, res) => {
+        if (err) {
+          client.destroy();
+          return reject(new Error('Error en búsqueda LDAP: ' + err.message));
+        }
+
+        let userEntry = null;
+
+        res.on('searchEntry', (entry) => {
+          const obj = {};
+          const attrs = entry.pojo.attributes || [];
+          attrs.forEach(attr => {
+            if (attr.values && attr.values.length > 0) {
+              obj[attr.type] = attr.values.length === 1 ? attr.values[0] : attr.values;
+            } else {
+              obj[attr.type] = [];
+            }
+          });
+          userEntry = obj;
+        });
+
+        res.on('error', (err) => {
+          client.destroy();
+          return reject(new Error('Error en el stream de búsqueda LDAP: ' + err.message));
+        });
+
+        res.on('end', (result) => {
+          client.destroy();
+          if (!userEntry) {
+            return resolve(null);
+          }
+          resolve({
+            nombres: userEntry.givenName || userEntry.cn || username,
+            apellidos: userEntry.sn || '',
+            email: userEntry.mail || `${username}@ldap.local`
+          });
+        });
+      });
+    });
+  });
+}
+
 module.exports = {
-  authenticate
+  authenticate,
+  searchUser
 };

@@ -10,6 +10,7 @@ const controllerTest = require('../services/controllerTest');
 const omadaSvc       = require('../services/omada');
 const unifiSvc       = require('../services/unifi');
 const ldapSvc        = require('../services/ldap');
+const axios          = require('axios');
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin_secret_cambia_esto';
 const PUBLIC = path.join(__dirname, '../../public');
@@ -1743,6 +1744,109 @@ router.delete('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
+
+// GET - Resolver nombre de propietario desde servidores externos (SECAP o LDAP)
+router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next) => {
+  try {
+    const identifier = String(req.query.identifier || '').trim();
+    if (!identifier) {
+      return res.status(400).json({ error: 'El identificador (cédula o usuario) es obligatorio.' });
+    }
+
+    // 1. Si son 10 dígitos, consultar SECAP (Registro Civil)
+    if (/^\d{10}$/.test(identifier)) {
+      const result = await querySecapCivilRegistry(identifier);
+      if (result.success) {
+        return res.json({
+          source: 'secap',
+          nombres: result.nombres,
+          apellidos: result.apellidos,
+          nombreCompleto: `${result.nombres} ${result.apellidos}`.trim()
+        });
+      } else {
+        return res.status(400).json({ error: result.error || 'Cédula no encontrada en el Registro Civil.' });
+      }
+    }
+
+    // 2. Si es texto, consultar LDAP / Active Directory
+    let ldapServerUrl = process.env.LDAP_SERVER_URL;
+    let ldapBindDN = process.env.LDAP_BIND_DN;
+    let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
+    let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
+
+    // Intentar cargar la configuración por defecto del SSID 'default'
+    try {
+      const defaultSsid = await db.getSsidConfig('default');
+      const sc = (defaultSsid && defaultSsid.config) ? defaultSsid.config : {};
+      if (sc.ldapServerUrl) ldapServerUrl = sc.ldapServerUrl;
+      if (sc.ldapBindDN) ldapBindDN = sc.ldapBindDN;
+      if (sc.ldapBindCredentials) ldapBindPassword = sc.ldapBindCredentials;
+      if (sc.ldapSearchBase) ldapSearchBase = sc.ldapSearchBase;
+    } catch (dbErr) {
+      console.warn('[Resolve-Owner] No se pudo leer la configuración por defecto de SSID:', dbErr.message);
+    }
+
+    if (!ldapServerUrl || !ldapBindDN || !ldapSearchBase) {
+      return res.status(400).json({ error: 'El servidor LDAP no está configurado en el sistema.' });
+    }
+
+    try {
+      const result = await ldapSvc.searchUser({
+        url: ldapServerUrl,
+        bindDN: ldapBindDN,
+        bindPassword: ldapBindPassword,
+        searchBase: ldapSearchBase,
+        username: identifier
+      });
+
+      if (result) {
+        return res.json({
+          source: 'ldap',
+          nombres: result.nombres,
+          apellidos: result.apellidos,
+          nombreCompleto: `${result.nombres} ${result.apellidos}`.trim()
+        });
+      } else {
+        return res.status(404).json({ error: 'Usuario no encontrado en el servidor LDAP.' });
+      }
+    } catch (ldapErr) {
+      return res.status(500).json({ error: 'Error al conectar con el servidor LDAP: ' + ldapErr.message });
+    }
+  } catch (err) { next(err); }
+});
+
+async function querySecapCivilRegistry(cedula) {
+  try {
+    const response = await axios.post(
+      'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php',
+      new URLSearchParams({ documento: cedula, tipo: '1' }).toString(),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 6000
+      }
+    );
+    
+    if (response.data && response.data.respuesta === 1) {
+      return {
+        success: true,
+        nombres: (response.data.nombres || '').trim(),
+        apellidos: (response.data.apellidos || '').trim()
+      };
+    }
+    return {
+      success: false,
+      error: response.data?.error || 'No se encontraron datos en el Registro Civil.'
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: 'Error al conectar con la API de SECAP: ' + err.message
+    };
+  }
+}
 
 function sanitizePem(pemText) {
   if (!pemText) return '';

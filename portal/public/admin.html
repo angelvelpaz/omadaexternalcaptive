@@ -1460,8 +1460,19 @@
           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
       </div>
       <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Identificador (Cédula o Usuario LDAP)</label>
+        <div class="flex gap-2">
+          <input type="text" id="bypass-identifier" placeholder="Cédula (10 dígitos) o Usuario LDAP" required
+            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+          <button type="button" onclick="resolveMacBypassOwner()" id="btn-resolve-bypass-owner"
+            class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5">
+            🔍 Buscar
+          </button>
+        </div>
+      </div>
+      <div>
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Propietario / Responsable</label>
-        <input type="text" id="bypass-propietario" placeholder="Nombre de la persona o departamento" required
+        <input type="text" id="bypass-propietario" placeholder="Nombre completo resuelto" required
           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
       </div>
       <div>
@@ -2347,6 +2358,7 @@ function filterMacBypass() {
 function openCreateMacBypassModal() {
   document.getElementById('form-create-mac-bypass').reset();
   document.getElementById('bypass-error').classList.add('hidden');
+  document.getElementById('bypass-propietario').placeholder = 'Nombre completo resuelto';
   const modal = document.getElementById('modal-create-mac-bypass');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -2374,6 +2386,39 @@ async function submitCreateMacBypass(e) {
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.classList.remove('hidden');
+  }
+}
+
+async function resolveMacBypassOwner() {
+  const identifier = document.getElementById('bypass-identifier').value.trim();
+  const errorEl = document.getElementById('bypass-error');
+  const propietarioInput = document.getElementById('bypass-propietario');
+  const btn = document.getElementById('btn-resolve-bypass-owner');
+  
+  errorEl.classList.add('hidden');
+  if (!identifier) {
+    errorEl.textContent = 'Ingrese una cédula o usuario para buscar.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Buscando...';
+  propietarioInput.placeholder = 'Consultando en servidor externo...';
+  
+  try {
+    const data = await api('GET', '/mac-bypass/resolve-owner?identifier=' + encodeURIComponent(identifier));
+    propietarioInput.value = data.nombreCompleto;
+    errorEl.innerHTML = `<span class="text-green-600 font-semibold">✓ Resuelto con éxito desde ${data.source === 'secap' ? 'Registro Civil' : 'Directorio LDAP'}.</span>`;
+    errorEl.classList.remove('hidden');
+  } catch (err) {
+    propietarioInput.value = '';
+    propietarioInput.placeholder = 'Nombre completo resuelto';
+    errorEl.textContent = err.message || 'No se pudo resolver el propietario.';
+    errorEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Buscar';
   }
 }
 

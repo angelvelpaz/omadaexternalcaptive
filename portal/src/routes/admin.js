@@ -1088,6 +1088,19 @@ function buildControllerResponse(vendor, dbCfg) {
       fromEnv:    false,
     };
   }
+  if (vendor === 'ldap') {
+    const bindCredentials = cfg.ldapBindCredentials || '';
+    return {
+      ldapServerUrl:       cfg.ldapServerUrl || '',
+      ldapBindDN:          cfg.ldapBindDN || '',
+      ldapBindCredentials: controllerTest.masked(bindCredentials),
+      ldapSearchBase:      cfg.ldapSearchBase || '',
+      ldapAllowedGroup:    cfg.ldapAllowedGroup || '',
+      configured:          !!(cfg.ldapServerUrl && cfg.ldapBindDN && cfg.ldapSearchBase),
+      activo:              cfg.activo !== false,
+      fromEnv:             false,
+    };
+  }
   return {};
 }
 
@@ -1145,11 +1158,9 @@ function buildControllerConfig(vendor, dbCfg) {
     return {
       ldapServerUrl:       cfg.ldapServerUrl || '',
       ldapBindDN:          cfg.ldapBindDN || '',
-      ldapBindCredentials: cfg.ldapBindCredentials ? '********' : '',
+      ldapBindCredentials: cfg.ldapBindCredentials || '',
       ldapSearchBase:      cfg.ldapSearchBase || '',
       ldapAllowedGroup:    cfg.ldapAllowedGroup || '',
-      configured:          !!(cfg.ldapServerUrl && cfg.ldapBindDN && cfg.ldapSearchBase),
-      activo:              cfg.activo !== false,
     };
   }
   return {};

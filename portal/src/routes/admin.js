@@ -1827,6 +1827,35 @@ router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
+// GET - Obtener sesiones activas en tiempo real
+router.get('/api/active-sessions', requireAdmin, async (req, res, next) => {
+  try {
+    const sessions = await db.getActiveSessions();
+    res.json(sessions);
+  } catch (err) { next(err); }
+});
+
+// POST - Expulsar / Desconectar un usuario activo (Kick / CoA)
+router.post('/api/active-sessions/kick', requireAdmin, async (req, res, next) => {
+  try {
+    const { mac } = req.body;
+    if (!mac) {
+      return res.status(400).json({ error: 'La dirección MAC es obligatoria.' });
+    }
+
+    const success = await db.disconnectRadiusClient(mac);
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'EXPULSAR_SESION_ACTIVA',
+      detalles: `Envió desconexión CoA para el dispositivo MAC: ${mac}`
+    });
+
+    res.json({ ok: true, success });
+  } catch (err) { next(err); }
+});
+
 // GET - Resolver nombre de propietario desde servidores externos (SECAP o LDAP)
 router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next) => {
   try {

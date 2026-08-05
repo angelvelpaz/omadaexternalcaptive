@@ -1249,6 +1249,26 @@ async function deleteUserDevice(cedula, macAddress) {
   await pool.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
 }
 
+async function getActiveSessions() {
+  const query = `
+    SELECT 
+      r.radacctid,
+      r.username,
+      r.callingstationid AS mac_address,
+      r.framedipaddress AS ip_address,
+      r.nasipaddress::text AS nas_ip,
+      r.acctstarttime AS start_time,
+      r.acctsessiontime AS session_time,
+      r.acctinputoctets AS upload,
+      r.acctoutputoctets AS download
+    FROM radacct r
+    WHERE r.acctstoptime IS NULL
+    ORDER BY r.acctstarttime DESC
+  `;
+  const result = await pool.query(query);
+  return result.rows;
+}
+
 async function disconnectRadiusClient(macAddress) {
   if (!macAddress) return;
   const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
@@ -2137,7 +2157,7 @@ module.exports = {
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,
-  getRandomMacStats, getRandomMacPreview, purgeRandomMacs, runScheduledMaintenance, disconnectRadiusClient,
+  getRandomMacStats, getRandomMacPreview, purgeRandomMacs, runScheduledMaintenance, getActiveSessions, disconnectRadiusClient,
   // administradores y auditoría
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,

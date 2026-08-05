@@ -1925,18 +1925,117 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
 
     // Obtener sesiones activas para cruzar conexión
     const activeSessions = await db.getActiveSessions();
-    const activeUsernames = new Set(activeSessions.map(s => String(s.username).toLowerCase()));
+    const activeSessionsMap = new Map();
+    activeSessions.forEach(s => {
+      activeSessionsMap.set(String(s.username).toLowerCase(), {
+        macAddress: s.mac_address,
+        ipAddress: s.ip_address,
+        startTime: s.start_time
+      });
+    });
 
-    const result = members.map(m => ({
-      ...m,
-      isConnected: activeUsernames.has(String(m.username).toLowerCase())
-    }));
+    // Consultar estado local de estos usuarios
+    const usernames = members.map(m => String(m.username).toLowerCase());
+    let localUsers = [];
+    if (usernames.length > 0) {
+      const dbResult = await db.pool.query(
+        'SELECT cedula, activo FROM usuarios_portal WHERE LOWER(cedula) = ANY($1)',
+        [usernames]
+      );
+      localUsers = dbResult.rows;
+    }
+    const localActiveMap = new Map();
+    localUsers.forEach(u => {
+      localActiveMap.set(String(u.cedula).toLowerCase(), u.activo === true);
+    });
+
+    const result = members.map(m => {
+      const lowerUser = String(m.username).toLowerCase();
+      const session = activeSessionsMap.get(lowerUser);
+      return {
+        ...m,
+        activo: localActiveMap.has(lowerUser) ? localActiveMap.get(lowerUser) : true,
+        isConnected: !!session,
+        session: session || null
+      };
+    });
 
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Error al consultar miembros de AD: ' + err.message });
   }
 });
+
+// PUT - Activar/Desactivar localmente un usuario de LDAP/AD
+router.put('/api/ldap/users/:username/status', requireAdmin,
+  body('active').isBoolean(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'El parámetro active debe ser un booleano.' });
+
+      const { username } = req.params;
+      const { active } = req.body;
+      const normalized = username.trim().toLowerCase();
+
+      // 1. Verificar si el usuario ya existe en la BD local
+      let user = await db.getUserByCedula(normalized);
+      if (!user) {
+        // Buscar info en LDAP para poblar datos reales si es posible
+        let userDetails = { nombres: username, apellidos: '', email: `${username}@ldap.local` };
+        try {
+          const ldapConfig = await db.getControllerConfig('ldap');
+          if (ldapConfig) {
+            const adUser = await ldapSvc.searchUser({
+              url: ldapConfig.ldapServerUrl,
+              bindDN: ldapConfig.ldapBindDN,
+              bindPassword: ldapConfig.ldapBindCredentials,
+              searchBase: ldapConfig.ldapSearchBase,
+              username: normalized
+            });
+            if (adUser) {
+              userDetails = adUser;
+            }
+          }
+        } catch (ldapErr) {
+          console.warn('[LDAP-Status] No se pudo resolver datos en AD:', ldapErr.message);
+        }
+
+        user = await db.createUser({
+          cedula: normalized,
+          nombres: userDetails.nombres,
+          apellidos: userDetails.apellidos,
+          email: userDetails.email,
+          terminosAceptados: 'Bloqueado Localmente por Admin',
+          tipo_usuario: 'externo'
+        });
+        await db.setUserMaxDevices(normalized, 1);
+      }
+
+      // 2. Modificar estado
+      await db.bulkUpdateUserActive([normalized], active);
+
+      // Auditoría
+      const clientIp = getClientIp(req);
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: active ? 'ACTIVAR_USUARIO_LDAP' : 'DESACTIVAR_USUARIO_LDAP',
+        detalles: `Modificó estado de usuario LDAP ${normalized} a activo=${active}`
+      });
+
+      // Si se desactiva, expulsar sus sesiones activas de red
+      if (!active) {
+        const userDevices = await db.getUserDevices(normalized);
+        for (const d of userDevices) {
+          await db.disconnectRadiusClient(d.mac_address).catch(() => {});
+        }
+      }
+
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  }
+);
 
 // GET - Resolver nombre de propietario desde servidores externos (SECAP o LDAP)
 router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next) => {

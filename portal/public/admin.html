@@ -623,6 +623,18 @@
             🔄 Sincronizar / Actualizar
           </button>
         </div>
+
+        <!-- Buscador de Usuarios LDAP -->
+        <div class="mb-4 flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <input type="text" id="ldap-search-input" placeholder="Buscar por nombre, usuario o correo..." 
+              oninput="onLdapSearchInput(this.value)"
+              class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
+              🔍
+            </div>
+          </div>
+        </div>
         
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse text-sm">
@@ -643,6 +655,11 @@
         </div>
         <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
           <span id="ldap-users-count">0 usuarios encontrados en Active Directory</span>
+          <div class="flex items-center gap-2" id="ldap-pagination-controls">
+            <button onclick="changeLdapPage(-1)" id="btn-ldap-prev" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
+            <span id="ldap-page-info" class="text-xs font-medium">Página 1 de 1</span>
+            <button onclick="changeLdapPage(1)" id="btn-ldap-next" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Siguiente</button>
+          </div>
         </div>
       </div>
     </div>
@@ -6243,36 +6260,105 @@ async function kickSession(mac) {
 }
 
 // ── Usuarios LDAP / Active Directory ──
+// Variables globales para la paginación y búsqueda en LDAP
+window._ldapUsersList = [];
+window._ldapCurrentPage = 1;
+window._ldapSearchQuery = '';
+
 async function loadLdapUsers() {
   const tbody = document.getElementById('ldap-users-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Sincronizando con Active Directory...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Sincronizando con Active Directory...</td></tr>';
   
   try {
     const list = await api('GET', '/ldap/group-members');
     if (list.error) {
-      tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-amber-600 font-semibold">⚠️ ${esc(list.error)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-amber-600 font-semibold">⚠️ ${esc(list.error)}</td></tr>`;
       document.getElementById('ldap-users-count').textContent = '0 usuarios autorizados';
+      const paginationDiv = document.getElementById('ldap-pagination-controls');
+      if (paginationDiv) paginationDiv.style.display = 'none';
       return;
     }
-    renderLdapUsersTable(list);
+    window._ldapUsersList = Array.isArray(list) ? list : [];
+    window._ldapCurrentPage = 1;
+    const searchInput = document.getElementById('ldap-search-input');
+    window._ldapSearchQuery = searchInput ? searchInput.value.trim() : '';
+    
+    renderLdapUsersTable();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-500 font-medium">Error de conexión LDAP: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-500 font-medium">Error de conexión LDAP: ${esc(err.message)}</td></tr>`;
+    const paginationDiv = document.getElementById('ldap-pagination-controls');
+    if (paginationDiv) paginationDiv.style.display = 'none';
   }
 }
 
-function renderLdapUsersTable(list) {
+function onLdapSearchInput(val) {
+  window._ldapSearchQuery = val.trim();
+  window._ldapCurrentPage = 1;
+  renderLdapUsersTable();
+}
+
+function changeLdapPage(direction) {
+  const query = window._ldapSearchQuery.toLowerCase();
+  const filtered = window._ldapUsersList.filter(u => {
+    return (
+      String(u.username || '').toLowerCase().includes(query) ||
+      String(u.nombres || '').toLowerCase().includes(query) ||
+      String(u.apellidos || '').toLowerCase().includes(query) ||
+      String(u.email || '').toLowerCase().includes(query)
+    );
+  });
+  const totalPages = Math.ceil(filtered.length / 10) || 1;
+  
+  let newPage = window._ldapCurrentPage + direction;
+  if (newPage < 1) newPage = 1;
+  if (newPage > totalPages) newPage = totalPages;
+  
+  window._ldapCurrentPage = newPage;
+  renderLdapUsersTable();
+}
+
+function renderLdapUsersTable() {
   const tbody = document.getElementById('ldap-users-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
   
-  if (list.length === 0) {
+  const query = window._ldapSearchQuery.toLowerCase();
+  const filtered = window._ldapUsersList.filter(u => {
+    return (
+      String(u.username || '').toLowerCase().includes(query) ||
+      String(u.nombres || '').toLowerCase().includes(query) ||
+      String(u.apellidos || '').toLowerCase().includes(query) ||
+      String(u.email || '').toLowerCase().includes(query)
+    );
+  });
+  
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+  
+  if (window._ldapCurrentPage > totalPages) {
+    window._ldapCurrentPage = totalPages;
+  }
+  
+  const startIdx = (window._ldapCurrentPage - 1) * itemsPerPage;
+  const endIdx = startIdx + itemsPerPage;
+  const pageItems = filtered.slice(startIdx, endIdx);
+  
+  const paginationDiv = document.getElementById('ldap-pagination-controls');
+  if (paginationDiv) {
+    paginationDiv.style.display = filtered.length > 0 ? 'flex' : 'none';
+    document.getElementById('ldap-page-info').textContent = `Página ${window._ldapCurrentPage} de ${totalPages}`;
+    document.getElementById('btn-ldap-prev').disabled = window._ldapCurrentPage === 1;
+    document.getElementById('btn-ldap-next').disabled = window._ldapCurrentPage === totalPages;
+  }
+  
+  if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">No se encontraron usuarios en el grupo de Active Directory.</td></tr>';
-    document.getElementById('ldap-users-count').textContent = '0 usuarios en Active Directory';
+    document.getElementById('ldap-users-count').textContent = '0 usuarios encontrados';
     return;
   }
   
-  list.forEach(u => {
+  pageItems.forEach(u => {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50/50 transition-colors';
     
@@ -6317,7 +6403,7 @@ function renderLdapUsersTable(list) {
     tbody.appendChild(tr);
   });
   
-  document.getElementById('ldap-users-count').textContent = `${list.length} usuario${list.length === 1 ? '' : 's'} encontrado${list.length === 1 ? '' : 's'} en Active Directory`;
+  document.getElementById('ldap-users-count').textContent = `${filtered.length} usuario${filtered.length === 1 ? '' : 's'} encontrado${filtered.length === 1 ? '' : 's'} de ${window._ldapUsersList.length} en total`;
 }
 
 async function toggleLdapUserStatus(username, active) {

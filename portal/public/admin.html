@@ -595,23 +595,6 @@
 
     <!-- ── TAB USUARIOS LDAP ── -->
     <div id="tab-ldap-users" class="tab-content hidden">
-      <!-- Tarjeta de Configuración de Grupo LDAP -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <h2 class="text-base font-bold text-gray-800 mb-2">Configuración del Grupo Autorizado</h2>
-        <p class="text-xs text-gray-500 mb-4">Especifique el DN completo (Distinguished Name) del grupo de seguridad del Active Directory cuyos miembros tendrán permiso de acceso.</p>
-        <div class="flex flex-col sm:flex-row gap-4 items-end">
-          <div class="flex-1 w-full">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre Distinguido del Grupo (Group DN)</label>
-            <input type="text" id="ldap-group-allowed-dn" placeholder="CN=Acceso Wifi,OU=Grupos,DC=empresa,DC=local" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-          </div>
-          <div>
-            <button onclick="saveLdapGroupDN()" id="btn-save-ldap-group" class="w-full sm:w-auto px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer whitespace-nowrap">
-              💾 Guardar Grupo
-            </button>
-          </div>
-        </div>
-        <p id="save-ldap-group-result" class="text-xs font-medium mt-2 hidden"></p>
-      </div>
 
       <!-- Tarjeta de Mapeo de VLANs por Grupo LDAP -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
@@ -1958,7 +1941,13 @@ function switchTab(tab) {
   else if (tab === 'groups') loadGroups();
   else if (tab === 'controllers') loadControllers();
   else if (tab === 'live-sessions') loadActiveSessions();
-  else if (tab === 'ldap-users') loadLdapGroupDN().then(() => { loadLdapUsers(); loadLdapGroupVlans(); });
+  else if (tab === 'ldap-users') {
+    api('GET', '/controllers').then(cfg => {
+      window._ctrlCfg = cfg;
+      loadLdapUsers();
+      loadLdapGroupVlans();
+    });
+  }
   else if (tab === 'reports') loadReports();
   else if (tab === 'branding') loadBranding();
   else if (tab === 'bandwidth') loadBandwidthProfiles();
@@ -3932,6 +3921,10 @@ function buildEditForm(vendor, cfg) {
           <label class="block text-xs font-medium text-gray-600 mb-1">Base de Búsqueda (Search Base DN)</label>
           <input class="${FIELD_CLASS}" id="cfg-${vendor}-ldapSearchBase" value="${esc(cfg.ldapSearchBase || '')}" placeholder="OU=Usuarios,DC=empresa,DC=local">
         </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-medium text-gray-600 mb-1">Grupo Autorizado Global (Allowed Group DN) - Opcional</label>
+          <input class="${FIELD_CLASS}" id="cfg-${vendor}-ldapAllowedGroup" value="${esc(cfg.ldapAllowedGroup || '')}" placeholder="CN=Acceso Wifi,OU=Grupos,DC=empresa,DC=local">
+        </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Bind DN de Lectura</label>
           <input class="${FIELD_CLASS}" id="cfg-${vendor}-ldapBindDN" value="${esc(cfg.ldapBindDN || '')}" placeholder="CN=Lector LDAP,CN=Users,DC=empresa,DC=local">
@@ -4009,7 +4002,7 @@ function renderControllerCard(vendor, cfg) {
   } else if (vendor === 'ldap') {
     summary = `<span class="text-gray-500">Servidor URL:</span> <span class="font-mono">${cfg.ldapServerUrl ? esc(cfg.ldapServerUrl) : '<span class="text-amber-600">no configurado</span>'}</span>
                <span class="text-gray-400 mx-1">·</span>
-               <span class="text-gray-500">Search Base:</span> <span class="font-mono text-xs">${cfg.ldapSearchBase ? esc(cfg.ldapSearchBase) : '—'}</span>`;
+               <span class="text-gray-500">Grupo Global:</span> <span class="font-mono text-xs">${cfg.ldapAllowedGroup ? esc(cfg.ldapAllowedGroup) : '<span class="text-gray-400">Ninguno (Opcional)</span>'}</span>`;
   }
 
   return `
@@ -4143,7 +4136,8 @@ async function saveControllerConfig(vendor) {
       ldapServerUrl: get('ldapServerUrl'),
       ldapBindDN: get('ldapBindDN'),
       ldapBindCredentials: get('ldapBindCredentials'),
-      ldapSearchBase: get('ldapSearchBase')
+      ldapSearchBase: get('ldapSearchBase'),
+      ldapAllowedGroup: get('ldapAllowedGroup')
     };
   }
 
@@ -6587,60 +6581,7 @@ async function deleteLdapGroupVlan(id) {
   }
 }
 
-async function loadLdapGroupDN() {
-  try {
-    const cfg = await api('GET', '/controllers');
-    // Guardar en cache global de controllers
-    window._ctrlCfg = cfg;
-    const ldapCfg = cfg.ldap || {};
-    const input = document.getElementById('ldap-group-allowed-dn');
-    if (input) {
-      input.value = ldapCfg.ldapAllowedGroup || '';
-    }
-  } catch (err) {
-    console.error('Error al cargar grupo LDAP:', err);
-  }
-}
 
-async function saveLdapGroupDN() {
-  const btn = document.getElementById('btn-save-ldap-group');
-  const resultEl = document.getElementById('save-ldap-group-result');
-  const groupDN = document.getElementById('ldap-group-allowed-dn').value.trim();
-  
-  resultEl.className = 'text-xs font-medium mt-2 hidden';
-  btn.disabled = true;
-  btn.textContent = 'Guardando...';
-  
-  try {
-    const currentCfg = window._ctrlCfg && window._ctrlCfg.ldap ? window._ctrlCfg.ldap : {};
-    
-    const body = {
-      ldapServerUrl: currentCfg.ldapServerUrl || '',
-      ldapBindDN: currentCfg.ldapBindDN || '',
-      ldapBindCredentials: currentCfg.ldapBindCredentials || '',
-      ldapSearchBase: currentCfg.ldapSearchBase || '',
-      ldapAllowedGroup: groupDN
-    };
-    
-    await api('PUT', '/controllers/ldap', body);
-    
-    // Actualizar cache local
-    if (!window._ctrlCfg) window._ctrlCfg = {};
-    window._ctrlCfg.ldap = { ...currentCfg, ldapAllowedGroup: groupDN };
-    
-    resultEl.textContent = '✓ Grupo guardado correctamente.';
-    resultEl.className = 'text-xs font-semibold mt-2 text-green-600';
-    
-    // Recargar la lista de miembros
-    await loadLdapUsers();
-  } catch (err) {
-    resultEl.textContent = 'Error: ' + err.message;
-    resultEl.className = 'text-xs font-semibold mt-2 text-red-600';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '💾 Guardar Grupo';
-  }
-}
 
 async function testLdapConnectionGlobal() {
   const resultEl = document.getElementById('test-ldap-global-result');

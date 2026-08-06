@@ -39,6 +39,8 @@ services:
       - "1813:1813/udp"
     networks:
       - captive_net
+    volumes:
+      - freeradius_certs:/etc/raddb/certs
     depends_on:
       postgres:
         condition: service_healthy
@@ -80,6 +82,7 @@ services:
       - captive_net
     volumes:
       - ./ssl:/app/ssl
+      - freeradius_certs:/app/freeradius-certs
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,3 +109,4 @@ networks:
 
 volumes:
   postgres_data:
+  freeradius_certs:

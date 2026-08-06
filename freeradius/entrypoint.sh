@@ -100,6 +100,26 @@ if [ -f "$RADDB/mods-available/eap" ]; then
   echo "[FREERADIUS] Modificado: use_tunneled_reply = yes en mods-available/eap"
 fi
 
+# Hilo en segundo plano para recarga en caliente al detectar cambios en .reload
+(
+  LAST_RELOAD=""
+  while true; do
+    if [ -f "$RADDB/certs/.reload" ]; then
+      CURRENT_RELOAD=$(cat "$RADDB/certs/.reload" 2>/dev/null || true)
+      if [ "$CURRENT_RELOAD" != "$LAST_RELOAD" ]; then
+        LAST_RELOAD="$CURRENT_RELOAD"
+        echo "[FREERADIUS] Detectado cambio en certificados (.reload). Recargando configuración..."
+        # Esperar 1 segundo para asegurar la escritura completa de los archivos
+        sleep 1
+        # Ajustar permisos antes de enviar señal
+        chown -R freerad:freerad "$RADDB/certs"
+        pkill -HUP freeradius || true
+      fi
+    fi
+    sleep 5
+  done
+) &
+
 # Ajustar permisos
 chown -R freerad:freerad "$RADDB"
 

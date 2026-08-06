@@ -749,6 +749,38 @@
       <div class="space-y-4" id="controllers-cards">
         <!-- Cards generadas por JS -->
       </div>
+
+      <!-- Tarjeta para carga de Certificados WPA-Enterprise (802.1X) -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
+        <h2 class="text-base font-bold text-gray-800 mb-2">Certificados WPA-Enterprise (802.1X / EAP)</h2>
+        <p class="text-xs text-gray-500 mb-4">Suba los archivos del certificado de la CA, certificado del servidor y clave privada para cifrar la autenticación de los clientes WPA-Enterprise (RADIUS).</p>
+        
+        <div id="wpa-cert-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+        <div id="wpa-cert-success" class="hidden mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">✓ Certificados WPA-Enterprise guardados con éxito. El servidor RADIUS se ha recargado en caliente.</div>
+        
+        <form id="form-wpa-certs" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Certificado CA (ca.pem)</label>
+              <input type="file" id="wpa-ca-file" accept=".crt,.pem,.cer" required class="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Certificado Servidor (server.crt)</label>
+              <input type="file" id="wpa-cert-file" accept=".crt,.pem,.cer" required class="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Clave Privada (server.key)</label>
+              <input type="file" id="wpa-key-file" accept=".key,.pem" required class="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+          </div>
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pt-2">
+            <button type="submit" id="btn-save-wpa-certs" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer whitespace-nowrap">
+              💾 Guardar y Aplicar en RADIUS
+            </button>
+            <span class="text-xs text-gray-400">El servidor FreeRADIUS se recargará automáticamente al guardar.</span>
+          </div>
+        </form>
+      </div>
     </div>
 
     <!-- ── TAB SESIONES ACTIVAS ── -->
@@ -5445,6 +5477,57 @@ document.getElementById('form-ssl').addEventListener('submit', async (e) => {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Guardar y Aplicar HTTPS';
+  }
+});
+
+// ── WPA-Enterprise Certs Submit ─────────────────────────────────────────────
+document.getElementById('form-wpa-certs').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btn-save-wpa-certs');
+  const errEl = document.getElementById('wpa-cert-error');
+  const successEl = document.getElementById('wpa-cert-success');
+  errEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+
+  const caFile = document.getElementById('wpa-ca-file').files[0];
+  const certFile = document.getElementById('wpa-cert-file').files[0];
+  const keyFile = document.getElementById('wpa-key-file').files[0];
+
+  if (!caFile || !certFile || !keyFile) {
+    errEl.textContent = 'Por favor seleccione los tres archivos.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Guardando y aplicando en RADIUS...';
+
+  const readFileAsText = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (e) => reject(e);
+      reader.readAsText(file);
+    });
+  };
+
+  try {
+    const [caText, certText, keyText] = await Promise.all([
+      readFileAsText(caFile),
+      readFileAsText(certFile),
+      readFileAsText(keyFile)
+    ]);
+
+    await api('POST', '/wpa-certs', { ca: caText, cert: certText, key: keyText });
+    successEl.classList.remove('hidden');
+    document.getElementById('form-wpa-certs').reset();
+    setTimeout(() => successEl.classList.add('hidden'), 5000);
+  } catch (err) {
+    errEl.textContent = 'Error al guardar certificados WPA-Enterprise: ' + err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar y Aplicar en RADIUS';
   }
 });
 

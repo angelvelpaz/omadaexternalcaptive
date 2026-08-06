@@ -889,7 +889,7 @@ router.post('/auth/ldap',
           if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
           if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
           if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
-          if (ldapConfig.ldapAllowedGroup) ldapAllowedGroup = ldapConfig.ldapAllowedGroup;
+          if (ldapConfig.ldapAllowedGroup !== undefined) ldapAllowedGroup = ldapConfig.ldapAllowedGroup;
         }
       } catch (dbErr) {
         console.warn('[LDAP-Auth] No se pudo leer la configuración global de LDAP:', dbErr.message);

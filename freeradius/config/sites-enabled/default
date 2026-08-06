@@ -34,6 +34,9 @@ server default {
 
         # Si el usuario tiene Cleartext-Password en radcheck, usar PAP
         pap
+
+        # Procesar solicitudes EAP (802.1X WPA-Enterprise)
+        eap
     }
 
     # ── Sección authenticate ──────────────────────────────────────────────────
@@ -47,6 +50,9 @@ server default {
         Auth-Type LDAP {
             ldap
         }
+
+        # Procesar EAP
+        eap
     }
 
     # ── Pre-Accounting ────────────────────────────────────────────────────────

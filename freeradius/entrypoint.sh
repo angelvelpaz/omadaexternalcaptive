@@ -94,6 +94,12 @@ ldap {
 }
 EOF
 
+# Habilitar copia de atributos del túnel interno al túnel externo (use_tunneled_reply = yes)
+if [ -f "$RADDB/mods-available/eap" ]; then
+  sed -i 's/use_tunneled_reply = no/use_tunneled_reply = yes/g' "$RADDB/mods-available/eap"
+  echo "[FREERADIUS] Modificado: use_tunneled_reply = yes en mods-available/eap"
+fi
+
 # Ajustar permisos
 chown -R freerad:freerad "$RADDB"
 

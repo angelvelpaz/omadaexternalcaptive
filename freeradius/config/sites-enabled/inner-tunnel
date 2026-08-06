@@ -1,0 +1,56 @@
+##
+## sites-enabled/inner-tunnel — Servidor virtual para túneles internos (EAP-PEAP / EAP-TTLS)
+##
+
+server inner-tunnel {
+    # ── Sección authorize ──
+    # Se ejecuta dentro del túnel TLS seguro.
+    authorize {
+        # Buscar usuario en SQL (radcheck)
+        sql
+
+        # Consultar LDAP/Active Directory
+        ldap
+
+        # Módulos para diferentes tipos de autenticación interna
+        chap
+        mschap
+        pap
+    }
+
+    # ── Sección authenticate ──
+    authenticate {
+        Auth-Type PAP {
+            pap
+        }
+        Auth-Type CHAP {
+            chap
+        }
+        Auth-Type MS-CHAP {
+            mschap
+        }
+        ldap
+    }
+
+    # ── Sección post-auth ──
+    post-auth {
+        # Asignar dinámicamente VLAN para usuarios LDAP según grupo AD
+        if (control:Auth-Type == LDAP) {
+            foreach &control:LDAP-Group {
+                if ("%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}") {
+                    update reply {
+                        Tunnel-Type := VLAN
+                        Tunnel-Medium-Type := IEEE-802
+                        Tunnel-Private-Group-ID := "%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}"
+                    }
+                    break
+                }
+            }
+        }
+
+        # Mapear estado de sesión si corresponde
+        update {
+            &reply: += &session-state:
+        }
+    }
+}

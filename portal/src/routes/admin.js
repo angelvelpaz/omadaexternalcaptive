@@ -1565,6 +1565,16 @@ router.post('/api/ssids', requireAdmin, async (req, res, next) => {
 
     const configInput = config || {};
 
+    // Validar que si es LDAP y no hay grupo global, sea obligatorio definir el grupo en el SSID
+    if (authType === 'ldap') {
+      const ldapConfig = await db.getControllerConfig('ldap');
+      const hasGlobalGroup = ldapConfig && ldapConfig.ldapAllowedGroup && ldapConfig.ldapAllowedGroup.trim();
+      const hasSsidGroup = configInput.ldapAllowedGroup && configInput.ldapAllowedGroup.trim();
+      if (!hasGlobalGroup && !hasSsidGroup) {
+        return res.status(400).json({ error: 'Como no se ha configurado un Grupo Autorizado Global de LDAP, es obligatorio especificar un grupo de seguridad de LDAP para este perfil de SSID.' });
+      }
+    }
+
     let logoUrl = configInput.logoUrl || '/static/logo.svg';
     if (configInput.logoBase64 && configInput.logoBase64.startsWith('data:image/')) {
       const matches = configInput.logoBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
@@ -1887,6 +1897,12 @@ router.post('/api/active-sessions/kick', requireAdmin, async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
+function getCNFromDN(dn) {
+  if (!dn) return '';
+  const match = dn.match(/CN=([^,]+)/i);
+  return match ? match[1] : dn;
+}
+
 // GET - Obtener miembros del grupo de Active Directory (LDAP) configurado
 router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
   try {
@@ -1910,18 +1926,114 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
       console.warn('[LDAP-Members] No se pudo leer la configuración global de LDAP:', dbErr.message);
     }
 
-    if (!ldapServerUrl || !ldapBindDN || !ldapSearchBase || !ldapAllowedGroup) {
-      return res.json({ error: 'La conexión LDAP o el Grupo Autorizado no están configurados.' });
+    if (!ldapServerUrl || !ldapBindDN || !ldapSearchBase) {
+      return res.json({ error: 'La conexión LDAP no está configurada.' });
     }
 
-    // Obtener miembros del grupo AD
-    const members = await ldapSvc.getGroupMembers({
-      url: ldapServerUrl,
-      bindDN: ldapBindDN,
-      bindPassword: ldapBindPassword,
-      searchBase: ldapSearchBase,
-      allowedGroup: ldapAllowedGroup
+    // 1. Identificar todos los grupos LDAP que tienen rol en el sistema
+    let targetGroups = [];
+    if (ldapAllowedGroup && ldapAllowedGroup.trim()) {
+      targetGroups.push({ group_dn: ldapAllowedGroup.trim(), source: 'Global' });
+    }
+
+    // Obtener grupos desde la tabla de VLANs
+    try {
+      const vlanGroups = await db.listLdapGroupVlans();
+      vlanGroups.forEach(g => {
+        targetGroups.push({ group_dn: g.group_dn, source: `VLAN ${g.vlan_id}` });
+      });
+    } catch (err) {
+      console.warn('[LDAP-Members] No se pudo leer ldap_group_vlans:', err.message);
+    }
+
+    // Obtener grupos desde ssid_config
+    try {
+      const ssids = await db.listAllSsidConfigs();
+      ssids.forEach(s => {
+        const sc = s.config || {};
+        if (s.auth_type === 'ldap' && sc.ldapAllowedGroup && sc.ldapAllowedGroup.trim()) {
+          targetGroups.push({ group_dn: sc.ldapAllowedGroup.trim(), source: `SSID ${s.ssid}` });
+        }
+      });
+    } catch (err) {
+      console.warn('[LDAP-Members] No se pudo leer ssid_config:', err.message);
+    }
+
+    // Filtrar duplicados
+    const uniqueGroups = [];
+    const seen = new Set();
+    targetGroups.forEach(g => {
+      const lowerDn = g.group_dn.toLowerCase();
+      if (!seen.has(lowerDn)) {
+        seen.add(lowerDn);
+        uniqueGroups.push(g);
+      }
     });
+
+    if (uniqueGroups.length === 0) {
+      return res.json({ error: 'No hay grupos de seguridad de LDAP configurados en el sistema.' });
+    }
+
+    // 2. Consultar mapeos de VLAN por grupo para cruce rápido
+    let vlanMappings = [];
+    try {
+      vlanMappings = await db.listLdapGroupVlans();
+    } catch (dbErr) {
+      console.warn('[LDAP-Members] No se pudo leer la lista de mapeos de VLAN:', dbErr.message);
+    }
+    const vlanMap = new Map();
+    vlanMappings.forEach(m => {
+      vlanMap.set(m.group_dn.toLowerCase(), m.vlan_id);
+    });
+
+    // 3. Consultar SSIDs para cruce rápido de portales cautivos
+    let ssidList = [];
+    try {
+      ssidList = await db.listAllSsidConfigs();
+    } catch (dbErr) {
+      console.warn('[LDAP-Members] No se pudo leer la lista de SSIDs:', dbErr.message);
+    }
+    const ssidGroupMap = new Map();
+    ssidList.forEach(s => {
+      const sc = s.config || {};
+      if (s.auth_type === 'ldap' && sc.ldapAllowedGroup) {
+        ssidGroupMap.set(sc.ldapAllowedGroup.toLowerCase(), s.ssid);
+      }
+    });
+
+    // 4. Buscar miembros de cada grupo en paralelo y consolidar
+    const allMembersMap = new Map();
+    await Promise.all(uniqueGroups.map(async (g) => {
+      try {
+        const list = await ldapSvc.getGroupMembers({
+          url: ldapServerUrl,
+          bindDN: ldapBindDN,
+          bindPassword: ldapBindPassword,
+          searchBase: ldapSearchBase,
+          allowedGroup: g.group_dn
+        });
+        
+        list.forEach(m => {
+          const lowerUser = String(m.username).toLowerCase();
+          const mappedVlan = vlanMap.get(g.group_dn.toLowerCase());
+          const mappedSsid = ssidGroupMap.get(g.group_dn.toLowerCase());
+          
+          if (!allMembersMap.has(lowerUser)) {
+            allMembersMap.set(lowerUser, {
+              ...m,
+              grupoDn: g.group_dn,
+              grupoCn: getCNFromDN(g.group_dn),
+              vlanId: mappedVlan || null,
+              ssidName: mappedSsid || null
+            });
+          }
+        });
+      } catch (err) {
+        console.warn(`[LDAP-Members] Error al buscar miembros del grupo ${g.group_dn}:`, err.message);
+      }
+    }));
+
+    const members = Array.from(allMembersMap.values());
 
     // Obtener sesiones activas para cruzar conexión
     const activeSessions = await db.getActiveSessions();

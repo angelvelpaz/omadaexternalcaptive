@@ -1930,7 +1930,7 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
       return res.json({ error: 'La conexión LDAP no está configurada.' });
     }
 
-    // 1. Identificar todos los grupos LDAP que tienen rol en el sistema
+    // 1. Identificar grupos de WPA-Enterprise (Global y Tabla de VLANs)
     let targetGroups = [];
     if (ldapAllowedGroup && ldapAllowedGroup.trim()) {
       targetGroups.push({ group_dn: ldapAllowedGroup.trim(), source: 'Global' });
@@ -1946,19 +1946,6 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
       console.warn('[LDAP-Members] No se pudo leer ldap_group_vlans:', err.message);
     }
 
-    // Obtener grupos desde ssid_config
-    try {
-      const ssids = await db.listAllSsidConfigs();
-      ssids.forEach(s => {
-        const sc = s.config || {};
-        if (s.auth_type === 'ldap' && sc.ldapAllowedGroup && sc.ldapAllowedGroup.trim()) {
-          targetGroups.push({ group_dn: sc.ldapAllowedGroup.trim(), source: `SSID ${s.ssid}` });
-        }
-      });
-    } catch (err) {
-      console.warn('[LDAP-Members] No se pudo leer ssid_config:', err.message);
-    }
-
     // Filtrar duplicados
     const uniqueGroups = [];
     const seen = new Set();
@@ -1971,7 +1958,7 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
     });
 
     if (uniqueGroups.length === 0) {
-      return res.json({ error: 'No hay grupos de seguridad de LDAP configurados en el sistema.' });
+      return res.json({ error: 'No hay grupos de seguridad de LDAP configurados para WPA-Enterprise.' });
     }
 
     // 2. Consultar mapeos de VLAN por grupo para cruce rápido
@@ -1986,22 +1973,7 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
       vlanMap.set(m.group_dn.toLowerCase(), m.vlan_id);
     });
 
-    // 3. Consultar SSIDs para cruce rápido de portales cautivos
-    let ssidList = [];
-    try {
-      ssidList = await db.listAllSsidConfigs();
-    } catch (dbErr) {
-      console.warn('[LDAP-Members] No se pudo leer la lista de SSIDs:', dbErr.message);
-    }
-    const ssidGroupMap = new Map();
-    ssidList.forEach(s => {
-      const sc = s.config || {};
-      if (s.auth_type === 'ldap' && sc.ldapAllowedGroup) {
-        ssidGroupMap.set(sc.ldapAllowedGroup.toLowerCase(), s.ssid);
-      }
-    });
-
-    // 4. Buscar miembros de cada grupo en paralelo y consolidar
+    // 3. Buscar miembros de cada grupo en paralelo y consolidar
     const allMembersMap = new Map();
     await Promise.all(uniqueGroups.map(async (g) => {
       try {
@@ -2016,7 +1988,6 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
         list.forEach(m => {
           const lowerUser = String(m.username).toLowerCase();
           const mappedVlan = vlanMap.get(g.group_dn.toLowerCase());
-          const mappedSsid = ssidGroupMap.get(g.group_dn.toLowerCase());
           
           if (!allMembersMap.has(lowerUser)) {
             allMembersMap.set(lowerUser, {
@@ -2024,7 +1995,7 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
               grupoDn: g.group_dn,
               grupoCn: getCNFromDN(g.group_dn),
               vlanId: mappedVlan || null,
-              ssidName: mappedSsid || null
+              ssidName: null
             });
           }
         });
@@ -2075,6 +2046,148 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Error al consultar miembros de AD: ' + err.message });
+  }
+});
+
+// GET - Obtener miembros de los grupos de LDAP autorizados para los portales cautivos (SSID)
+router.get('/api/ldap/portal-members', requireAdmin, async (req, res, next) => {
+  try {
+    let ldapServerUrl = process.env.LDAP_SERVER_URL;
+    let ldapBindDN = process.env.LDAP_BIND_DN;
+    let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
+    let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
+    let ldapAllowedGroup = process.env.LDAP_ALLOWED_GROUP;
+
+    try {
+      const ldapConfig = await db.getControllerConfig('ldap');
+      if (ldapConfig) {
+        if (ldapConfig.ldapServerUrl) ldapServerUrl = ldapConfig.ldapServerUrl;
+        if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
+        if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
+        if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
+        if (ldapConfig.ldapAllowedGroup !== undefined) ldapAllowedGroup = ldapConfig.ldapAllowedGroup;
+      }
+    } catch (dbErr) {
+      console.warn('[LDAP-Portal-Members] No se pudo leer la configuración global de LDAP:', dbErr.message);
+    }
+
+    if (!ldapServerUrl || !ldapBindDN || !ldapSearchBase) {
+      return res.json({ error: 'La conexión LDAP no está configurada.' });
+    }
+
+    // 1. Identificar grupos LDAP configurados en los SSIDs
+    let targetGroups = [];
+    
+    // Obtener grupos desde ssid_config
+    try {
+      const ssids = await db.listAllSsidConfigs();
+      ssids.forEach(s => {
+        const sc = s.config || {};
+        if (s.auth_type === 'ldap') {
+          const group = sc.ldapAllowedGroup && sc.ldapAllowedGroup.trim() ? sc.ldapAllowedGroup.trim() : (ldapAllowedGroup && ldapAllowedGroup.trim() ? ldapAllowedGroup.trim() : '');
+          if (group) {
+            targetGroups.push({ group_dn: group, ssidName: s.ssid_name });
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('[LDAP-Portal-Members] No se pudo leer ssid_config:', err.message);
+    }
+
+    // Filtrar duplicados
+    const groupSsidMap = new Map();
+    targetGroups.forEach(g => {
+      const key = g.group_dn.toLowerCase();
+      if (!groupSsidMap.has(key)) {
+        groupSsidMap.set(key, { group_dn: g.group_dn, ssids: new Set() });
+      }
+      groupSsidMap.get(key).ssids.add(g.ssidName);
+    });
+
+    const uniqueGroups = Array.from(groupSsidMap.values());
+
+    if (uniqueGroups.length === 0) {
+      return res.json([]);
+    }
+
+    // 2. Buscar miembros de cada grupo en AD
+    const allMembersMap = new Map();
+    await Promise.all(uniqueGroups.map(async (g) => {
+      try {
+        const list = await ldapSvc.getGroupMembers({
+          url: ldapServerUrl,
+          bindDN: ldapBindDN,
+          bindPassword: ldapBindPassword,
+          searchBase: ldapSearchBase,
+          allowedGroup: g.group_dn
+        });
+        
+        list.forEach(m => {
+          const lowerUser = String(m.username).toLowerCase();
+          const ssidList = Array.from(g.ssids).join(', ');
+          
+          if (!allMembersMap.has(lowerUser)) {
+            allMembersMap.set(lowerUser, {
+              ...m,
+              grupoDn: g.group_dn,
+              grupoCn: getCNFromDN(g.group_dn),
+              ssidName: ssidList,
+              vlanId: null
+            });
+          } else {
+            const existing = allMembersMap.get(lowerUser);
+            const set = new Set(existing.ssidName.split(', '));
+            g.ssids.forEach(s => set.add(s));
+            existing.ssidName = Array.from(set).join(', ');
+          }
+        });
+      } catch (err) {
+        console.warn(`[LDAP-Portal-Members] Error al buscar miembros del grupo ${g.group_dn}:`, err.message);
+      }
+    }));
+
+    const members = Array.from(allMembersMap.values());
+
+    // Obtener sesiones activas para cruzar conexión
+    const activeSessions = await db.getActiveSessions();
+    const activeSessionsMap = new Map();
+    activeSessions.forEach(s => {
+      activeSessionsMap.set(String(s.username).toLowerCase(), {
+        macAddress: s.mac_address,
+        ipAddress: s.ip_address,
+        startTime: s.start_time
+      });
+    });
+
+    // Consultar estado local de estos usuarios
+    const usernames = members.map(m => String(m.username).toLowerCase());
+    let localUsers = [];
+    if (usernames.length > 0) {
+      try {
+        localUsers = await db.getUsersLocalStatus(usernames);
+      } catch (dbErr) {
+        console.error('[LDAP-Portal-Members] Error al consultar estados locales:', dbErr.message);
+      }
+    }
+    const localActiveMap = new Map();
+    localUsers.forEach(u => {
+      localActiveMap.set(String(u.cedula).toLowerCase(), u.activo === true);
+    });
+
+    const result = members.map(m => {
+      const lowerUser = String(m.username).toLowerCase();
+      const session = activeSessionsMap.get(lowerUser);
+      return {
+        ...m,
+        activo: localActiveMap.has(lowerUser) ? localActiveMap.get(lowerUser) : true,
+        isConnected: !!session,
+        session: session || null
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al consultar miembros de portal: ' + err.message });
   }
 });
 

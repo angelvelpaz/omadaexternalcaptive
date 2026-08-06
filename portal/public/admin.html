@@ -4914,15 +4914,15 @@ function updateAuthTypeFields() {
   const grpPublicidad = document.getElementById('cfg-group-publicidad');
   const grpLdap = document.getElementById('cfg-group-ldap');
 
-  grpCedula.classList.add('hidden');
-  grpPublicidad.classList.add('hidden');
-  grpLdap.classList.add('hidden');
+  if (grpCedula) grpCedula.classList.add('hidden');
+  if (grpPublicidad) grpPublicidad.classList.add('hidden');
+  if (grpLdap) grpLdap.classList.add('hidden');
 
-  if (type === 'cedula') {
+  if (type === 'cedula' && grpCedula) {
     grpCedula.classList.remove('hidden');
-  } else if (type === 'publicidad') {
+  } else if (type === 'publicidad' && grpPublicidad) {
     grpPublicidad.classList.remove('hidden');
-  } else if (type === 'ldap') {
+  } else if (type === 'ldap' && grpLdap) {
     grpLdap.classList.remove('hidden');
   }
 }

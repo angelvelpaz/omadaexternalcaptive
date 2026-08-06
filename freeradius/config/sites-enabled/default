@@ -71,6 +71,20 @@ server default {
         # Registrar en radpostauth si existe la tabla
         # sql
 
+        # Asignar dinámicamente VLAN para usuarios LDAP según grupo AD
+        if (control:Auth-Type == LDAP) {
+            foreach &control:LDAP-Group {
+                if ("%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}") {
+                    update reply {
+                        Tunnel-Type := VLAN
+                        Tunnel-Medium-Type := IEEE-802
+                        Tunnel-Private-Group-ID := "%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}"
+                    }
+                    break
+                }
+            }
+        }
+
         Post-Auth-Type REJECT {
             attr_filter.access_reject
         }

@@ -2037,6 +2037,62 @@ router.put('/api/ldap/users/:username/status', requireAdmin,
   }
 );
 
+// GET - Obtener todos los mapeos de grupos LDAP a VLANs
+router.get('/api/ldap/group-vlans', requireAdmin, async (req, res, next) => {
+  try {
+    const list = await db.listLdapGroupVlans();
+    res.json(list);
+  } catch (err) { next(err); }
+});
+
+// POST - Crear o actualizar un mapeo de grupo LDAP a VLAN
+router.post('/api/ldap/group-vlans', requireAdmin,
+  body('group_dn').isString().trim().notEmpty().withMessage('El DN del grupo es obligatorio.'),
+  body('vlan_id').isInt({ min: 1, max: 4094 }).withMessage('El ID de VLAN debe ser un número entre 1 y 4094.'),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
+      }
+
+      const { group_dn, vlan_id } = req.body;
+      const mapping = await db.createLdapGroupVlan(group_dn, vlan_id);
+
+      // Auditoría
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'CREAR_MAPEO_VLAN_LDAP',
+        detalles: `Creó/Actualizó mapeo de VLAN ${vlan_id} para el grupo LDAP: ${group_dn}`
+      });
+
+      res.status(201).json(mapping);
+    } catch (err) { next(err); }
+  }
+);
+
+// DELETE - Eliminar un mapeo de grupo LDAP a VLAN
+router.delete('/api/ldap/group-vlans/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'ID de mapeo inválido.' });
+
+    const deleted = await db.deleteLdapGroupVlan(id);
+    if (!deleted) return res.status(404).json({ error: 'Mapeo no encontrado.' });
+
+    // Auditoría
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'ELIMINAR_MAPEO_VLAN_LDAP',
+      detalles: `Eliminó mapeo de VLAN ${deleted.vlan_id} para el grupo LDAP: ${deleted.group_dn}`
+    });
+
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
 // GET - Resolver nombre de propietario desde servidores externos (SECAP o LDAP)
 router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next) => {
   try {

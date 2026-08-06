@@ -613,6 +613,43 @@
         <p id="save-ldap-group-result" class="text-xs font-medium mt-2 hidden"></p>
       </div>
 
+      <!-- Tarjeta de Mapeo de VLANs por Grupo LDAP -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h2 class="text-base font-bold text-gray-800 mb-2">Asignación Dinámica de VLANs por Grupo (WPA-Enterprise 802.1X)</h2>
+        <p class="text-xs text-gray-500 mb-4">Asigne un ID de VLAN específico a diferentes grupos de Active Directory. Cuando un dispositivo se autentique mediante 802.1X, FreeRADIUS le asignará esta VLAN de forma dinámica.</p>
+        
+        <div class="flex flex-col md:flex-row gap-4 items-end mb-6">
+          <div class="flex-1 w-full">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre Distinguido del Grupo (Group DN)</label>
+            <input type="text" id="ldap-vlan-group-dn" placeholder="CN=Ventas,OU=Grupos,DC=empresa,DC=local" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div class="w-full md:w-32">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">ID de VLAN</label>
+            <input type="number" id="ldap-vlan-id" min="1" max="4094" placeholder="10" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <button onclick="addLdapGroupVlan()" class="w-full sm:w-auto px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer whitespace-nowrap">
+              ➕ Agregar Mapeo
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                <th class="p-3">Grupo de Active Directory (DN)</th>
+                <th class="p-3">VLAN ID</th>
+                <th class="p-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="ldap-group-vlans-tbody" class="divide-y divide-gray-100">
+              <!-- Cargado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 overflow-hidden">
         <div class="flex justify-between items-center mb-4">
           <div>
@@ -1910,7 +1947,7 @@ function switchTab(tab) {
   else if (tab === 'groups') loadGroups();
   else if (tab === 'controllers') loadControllers();
   else if (tab === 'live-sessions') loadActiveSessions();
-  else if (tab === 'ldap-users') loadLdapGroupDN().then(() => loadLdapUsers());
+  else if (tab === 'ldap-users') loadLdapGroupDN().then(() => { loadLdapUsers(); loadLdapGroupVlans(); });
   else if (tab === 'reports') loadReports();
   else if (tab === 'branding') loadBranding();
   else if (tab === 'bandwidth') loadBandwidthProfiles();
@@ -6428,6 +6465,90 @@ async function kickLdapUserDevice(mac) {
     await loadLdapUsers();
   } catch (err) {
     alert('Error al conectar con la API: ' + err.message);
+  }
+}
+
+async function loadLdapGroupVlans() {
+  const tbody = document.getElementById('ldap-group-vlans-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">Cargando mapeos de VLAN...</td></tr>';
+  
+  try {
+    const list = await api('GET', '/ldap/group-vlans');
+    renderLdapGroupVlansTable(list);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-red-500">Error: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function renderLdapGroupVlansTable(list) {
+  const tbody = document.getElementById('ldap-group-vlans-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  if (!list || list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">No hay mapeos de VLAN configurados.</td></tr>';
+    return;
+  }
+  
+  list.forEach(m => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-50/50 transition-colors';
+    tr.innerHTML = `
+      <td class="p-3 text-gray-700 font-medium">${esc(m.group_dn)}</td>
+      <td class="p-3 font-mono font-bold text-blue-600">${m.vlan_id}</td>
+      <td class="p-3 text-right">
+        <button onclick="deleteLdapGroupVlan(${m.id})" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold rounded transition-colors cursor-pointer">
+          Eliminar
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function addLdapGroupVlan() {
+  const groupDnInput = document.getElementById('ldap-vlan-group-dn');
+  const vlanIdInput = document.getElementById('ldap-vlan-id');
+  
+  const group_dn = groupDnInput.value.trim();
+  const vlan_id = parseInt(vlanIdInput.value);
+  
+  if (!group_dn || isNaN(vlan_id)) {
+    alert('Por favor complete todos los campos.');
+    return;
+  }
+  
+  if (vlan_id < 1 || vlan_id > 4094) {
+    alert('El ID de VLAN debe estar entre 1 y 4094.');
+    return;
+  }
+  
+  try {
+    const res = await api('POST', '/ldap/group-vlans', { group_dn, vlan_id });
+    if (res.error) {
+      alert('Error: ' + res.error);
+    } else {
+      groupDnInput.value = '';
+      vlanIdInput.value = '';
+      await loadLdapGroupVlans();
+    }
+  } catch (err) {
+    alert('Error al agregar mapeo: ' + err.message);
+  }
+}
+
+async function deleteLdapGroupVlan(id) {
+  if (!confirm('¿Está seguro de eliminar este mapeo de VLAN?')) return;
+  try {
+    const res = await api('DELETE', `/ldap/group-vlans/${id}`);
+    if (res.error) {
+      alert('Error: ' + res.error);
+    } else {
+      await loadLdapGroupVlans();
+    }
+  } catch (err) {
+    alert('Error al eliminar mapeo: ' + err.message);
   }
 }
 

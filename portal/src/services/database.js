@@ -2150,10 +2150,31 @@ async function getUsersLocalStatus(usernames) {
   return result.rows;
 }
 
+async function listLdapGroupVlans() {
+  const result = await pool.query('SELECT * FROM ldap_group_vlans ORDER BY id ASC');
+  return result.rows;
+}
+
+async function createLdapGroupVlan(groupDn, vlanId) {
+  const result = await pool.query(
+    'INSERT INTO ldap_group_vlans (group_dn, vlan_id) VALUES ($1, $2) ON CONFLICT (group_dn) DO UPDATE SET vlan_id = EXCLUDED.vlan_id RETURNING *',
+    [groupDn.trim(), parseInt(vlanId)]
+  );
+  return result.rows[0];
+}
+
+async function deleteLdapGroupVlan(id) {
+  const result = await pool.query('DELETE FROM ldap_group_vlans WHERE id = $1 RETURNING *', [id]);
+  return result.rows[0];
+}
+
 module.exports = {
   connect,
   getPool,
   getUsersLocalStatus,
+  listLdapGroupVlans,
+  createLdapGroupVlan,
+  deleteLdapGroupVlan,
   startAcctSession,
   closeExpiredSessions,
   userExists, getUserByCedula, createUser, logAccess, updateTermsAcceptance,

@@ -148,3 +148,12 @@ CREATE TABLE IF NOT EXISTS mac_bypass (
 
 CREATE INDEX IF NOT EXISTS idx_mac_bypass_mac ON mac_bypass(mac_address);
 
+-- ─── Tabla de asignación dinámica de VLANs por Grupo LDAP ──────────────────────
+CREATE TABLE IF NOT EXISTS ldap_group_vlans (
+    id        SERIAL PRIMARY KEY,
+    group_dn  VARCHAR(256) UNIQUE NOT NULL,
+    vlan_id   INTEGER NOT NULL CHECK (vlan_id >= 1 AND vlan_id <= 4094)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ldap_group_vlans_group_dn ON ldap_group_vlans(group_dn);
+

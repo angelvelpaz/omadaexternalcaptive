@@ -1253,7 +1253,7 @@ router.put('/api/controllers/:vendor', requireAdmin,
           ldapBindDN:          getVal(input.ldapBindDN, existing.ldapBindDN),
           ldapBindCredentials: getVal(input.ldapBindCredentials, existing.ldapBindCredentials),
           ldapSearchBase:      getVal(input.ldapSearchBase, existing.ldapSearchBase),
-          ldapAllowedGroup:    getVal(input.ldapAllowedGroup, existing.ldapAllowedGroup),
+          ldapAllowedGroup:    input.ldapAllowedGroup !== undefined ? String(input.ldapAllowedGroup).trim() : (existing.ldapAllowedGroup || ''),
           activo:              activoVal,
         };
       }

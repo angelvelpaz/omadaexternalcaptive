@@ -875,7 +875,7 @@ router.post('/auth/ldap',
       const clientIp = req.ip || req.connection.remoteAddress;
       const params = typeof vendorParams === 'object' ? vendorParams : {};
 
-      // 1. Resolver configuración LDAP según tabla global controller_config
+      // 1. Resolver configuración LDAP según tabla global controller_config y SSID específico
       let ldapUrl = process.env.LDAP_SERVER_URL;
       let ldapBindDN = process.env.LDAP_BIND_DN;
       let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
@@ -893,6 +893,23 @@ router.post('/auth/ldap',
         }
       } catch (dbErr) {
         console.warn('[LDAP-Auth] No se pudo leer la configuración global de LDAP:', dbErr.message);
+      }
+
+      // Buscar si el SSID actual tiene un grupo LDAP específico para anular el global
+      const ssidParam = (ssid || '').trim();
+      if (ssidParam) {
+        try {
+          let ssidConfig = await db.getSsidConfig(ssidParam);
+          if (!ssidConfig && ssidParam !== 'default') {
+            ssidConfig = await db.getSsidConfig('default');
+          }
+          const sc = ssidConfig ? (ssidConfig.config || {}) : {};
+          if (sc.ldapAllowedGroup) {
+            ldapAllowedGroup = sc.ldapAllowedGroup;
+          }
+        } catch (dbErr) {
+          console.warn('[LDAP-Auth] No se pudo leer la configuración específica de SSID:', dbErr.message);
+        }
       }
 
       if (!ldapUrl || !ldapBindDN || !ldapSearchBase) {

@@ -680,6 +680,8 @@
                 <th class="p-4">Usuario (sAMAccountName)</th>
                 <th class="p-4">Nombre Completo</th>
                 <th class="p-4">Correo Electrónico</th>
+                <th class="p-4">Grupo de AD</th>
+                <th class="p-4">VLAN / SSID</th>
                 <th class="p-4">Estado de Conexión</th>
                 <th class="p-4">Acceso Local</th>
                 <th class="p-4">Detalles / Acciones</th>
@@ -5198,6 +5200,16 @@ document.getElementById('form-branding').addEventListener('submit', async (e) =>
     ldapAllowedGroup: (window._ctrlCfg && window._ctrlCfg.ldap ? window._ctrlCfg.ldap.ldapAllowedGroup : '') || '',
   };
 
+  // Validar si es LDAP y no hay grupo global, exigir grupo del SSID
+  if (authType === 'ldap') {
+    const hasGlobalGroup = window._ctrlCfg && window._ctrlCfg.ldap && window._ctrlCfg.ldap.ldapAllowedGroup && window._ctrlCfg.ldap.ldapAllowedGroup.trim();
+    const hasSsidGroup = configObj.ldapAllowedGroup && configObj.ldapAllowedGroup.trim();
+    if (!hasGlobalGroup && !hasSsidGroup) {
+      alert('Debes ingresar el Grupo LDAP Autorizado para este SSID, ya que no se ha configurado un grupo LDAP global.');
+      return;
+    }
+  }
+
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
@@ -6305,12 +6317,12 @@ window._ldapSearchQuery = '';
 async function loadLdapUsers() {
   const tbody = document.getElementById('ldap-users-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Sincronizando con Active Directory...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Sincronizando con Active Directory...</td></tr>';
   
   try {
     const list = await api('GET', '/ldap/group-members');
     if (list.error) {
-      tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-amber-600 font-semibold">⚠️ ${esc(list.error)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-amber-600 font-semibold">⚠️ ${esc(list.error)}</td></tr>`;
       document.getElementById('ldap-users-count').textContent = '0 usuarios autorizados';
       const paginationDiv = document.getElementById('ldap-pagination-controls');
       if (paginationDiv) paginationDiv.style.display = 'none';
@@ -6323,7 +6335,7 @@ async function loadLdapUsers() {
     
     renderLdapUsersTable();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-500 font-medium">Error de conexión LDAP: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-medium">Error de conexión LDAP: ${esc(err.message)}</td></tr>`;
     const paginationDiv = document.getElementById('ldap-pagination-controls');
     if (paginationDiv) paginationDiv.style.display = 'none';
   }
@@ -6390,7 +6402,7 @@ function renderLdapUsersTable() {
   }
   
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">No se encontraron usuarios en el grupo de Active Directory.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400">No se encontraron usuarios en el grupo de Active Directory.</td></tr>';
     document.getElementById('ldap-users-count').textContent = '0 usuarios encontrados';
     return;
   }
@@ -6429,10 +6441,23 @@ function renderLdapUsersTable() {
       </label>
     `;
 
+    const groupDisplay = u.grupoCn
+      ? `<span class="px-2 py-1 text-[11px] font-semibold bg-blue-50 text-blue-700 rounded border border-blue-200" title="${esc(u.grupoDn)}">${esc(u.grupoCn)}</span>`
+      : '<span class="text-gray-400">—</span>';
+      
+    let vlanSsidDisplay = '<span class="text-gray-400">—</span>';
+    if (u.vlanId) {
+      vlanSsidDisplay = `<span class="px-2 py-0.5 text-xs font-bold font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 rounded">VLAN ${u.vlanId}</span>`;
+    } else if (u.ssidName) {
+      vlanSsidDisplay = `<span class="px-2 py-0.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded">SSID: ${esc(u.ssidName)}</span>`;
+    }
+
     tr.innerHTML = `
       <td class="p-4 font-mono font-semibold text-gray-700">${esc(u.username)}</td>
       <td class="p-4 text-gray-800 font-medium">${esc(u.nombres)} ${esc(u.apellidos)}</td>
       <td class="p-4 text-gray-500 font-mono text-xs">${esc(u.email || '—')}</td>
+      <td class="p-4">${groupDisplay}</td>
+      <td class="p-4">${vlanSsidDisplay}</td>
       <td class="p-4">${statusBadge}</td>
       <td class="p-4">${toggleHtml}</td>
       <td class="p-4">${detailsHtml}</td>

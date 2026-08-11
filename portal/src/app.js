@@ -10,6 +10,8 @@ const adminRoutes = require('./routes/admin');
 const db = require('./services/database');
 const statsWorker = require('./services/statsWorker');
 const maintenanceWorker = require('./services/maintenanceWorker');
+const { setupSwagger } = require('./swagger');
+const db = require('./services/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,6 +44,47 @@ app.use((req, res, next) => {
 // ─── Rutas ────────────────────────────────────────────────────────────────────
 app.use('/auth/login', authLimiter);
 app.use('/auth/register', authLimiter);
+app.use('/auth/ldap', authLimiter);
+app.use('/auth/hotel', authLimiter);
+app.use('/auth/restaurant', authLimiter);
+app.use('/auth/free-access', authLimiter);
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get('/health', async (req, res) => {
+  const checks = {
+    postgres: 'ok',
+    freeradius: 'ok',
+  };
+
+  try {
+    const pool = db.getPool && db.getPool();
+    if (pool) {
+      await pool.query('SELECT 1');
+    }
+  } catch (e) {
+    checks.postgres = 'fail';
+  }
+
+  try {
+    const { authenticate } = require('./services/radius');
+    // No hacemos ping real a RADIUS en health check para no bloquear
+    checks.freeradius = process.env.RADIUS_SECRET ? 'ok' : 'unconfigured';
+  } catch (e) {
+    checks.freeradius = 'fail';
+  }
+
+  const status = checks.postgres === 'ok' ? 'ok' : 'degraded';
+  res.status(status === 'ok' ? 200 : 503).json({
+    status,
+    checks,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ─── Swagger / OpenAPI ──────────────────────────────────────────────────────
+if (process.env.NODE_ENV !== 'test') {
+  setupSwagger(app);
+}
+
 app.use('/admin', adminRoutes);
 app.use('/', routes);
 

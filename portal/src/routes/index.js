@@ -6,12 +6,13 @@ const { body, validationResult } = require('express-validator');
 const axios = require('axios');
 const router = express.Router();
 
-const cedula   = require('../services/cedula');
-const db       = require('../services/database');
-const radius   = require('../services/radius');
-const unifi    = require('../services/unifi');
-const omadaSvc = require('../services/omada');
-const ldapSvc  = require('../services/ldap');
+const cedula     = require('../services/cedula');
+const db         = require('../services/database');
+const radius     = require('../services/radius');
+const unifi      = require('../services/unifi');
+const omadaSvc   = require('../services/omada');
+const ldapSvc    = require('../services/ldap');
+const externalApi = require('../services/externalApi');
 
 // ─── Detección de vendor ─────────────────────────────────────────────────────
 
@@ -224,6 +225,21 @@ router.post('/auth/check',
       // Si no existe localmente, verificar validación externa
       const extConfig = await db.getControllerConfig('external_db_config');
       if (extConfig && extConfig.enabled && extConfig.host && extConfig.tableName && extConfig.colCedula) {
+        // Whitelist estricta de tablas y columnas permitidas
+        const ALLOWED_TABLES = (process.env.EXT_DB_ALLOWED_TABLES || '').split(',').map(s => s.trim()).filter(Boolean);
+        const ALLOWED_COLS = (process.env.EXT_DB_ALLOWED_COLS || 'cedula,nombres,apellidos,email,documento,id').split(',').map(s => s.trim());
+        if (ALLOWED_TABLES.length > 0 && !ALLOWED_TABLES.includes(extConfig.tableName.trim())) {
+          console.error(`[EXT-DB] Tabla no autorizada: ${extConfig.tableName}`);
+          return res.json({ valid: false, exists: false, error: 'Configuración de base de datos externa no autorizada.' });
+        }
+        const rawCols = [extConfig.colCedula, extConfig.colNombres, extConfig.colApellidos, extConfig.colEmail].filter(Boolean);
+        for (const c of rawCols) {
+          if (!ALLOWED_COLS.includes(c.trim())) {
+            console.error(`[EXT-DB] Columna no autorizada: ${c}`);
+            return res.json({ valid: false, exists: false, error: 'Configuración de base de datos externa no autorizada.' });
+          }
+        }
+
         const { Client } = require('pg');
         const extClient = new Client({
           host: extConfig.host,
@@ -320,43 +336,6 @@ router.post('/auth/check',
   }
 );
 
-/**
- * Realiza la consulta HTTP a la API externa de SECAP (Registro Civil de Ecuador)
- */
-async function querySecapCivilRegistry(cedula) {
-  try {
-    const response = await axios.post(
-      'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php',
-      new URLSearchParams({ documento: cedula, tipo: '1' }).toString(),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
-        timeout: 6000
-      }
-    );
-    
-    if (response.data && response.data.respuesta === 1) {
-      return {
-        success: true,
-        nombres: (response.data.nombres || '').trim(),
-        apellidos: (response.data.apellidos || '').trim()
-      };
-    }
-    return {
-      success: false,
-      error: response.data?.error || 'No se encontraron datos en el Registro Civil.'
-    };
-  } catch (err) {
-    console.error('[SECAP] Error al consultar API externa:', err.message);
-    return {
-      success: false,
-      error: 'Servidor de verificación de identidad fuera de línea.'
-    };
-  }
-}
-
 // GET — Valida identidad contra el Registro Civil de Ecuador (SECAP Proxy)
 router.get('/api/public/validate-identity', async (req, res, next) => {
   try {
@@ -370,7 +349,7 @@ router.get('/api/public/validate-identity', async (req, res, next) => {
       return res.json({ enabled: false });
     }
 
-    const result = await querySecapCivilRegistry(ced);
+    const result = await externalApi.querySecapCivilRegistry(ced);
     res.json({ 
       enabled: true, 
       emailOpcional: secapCfg.emailOpcional === true || secapCfg.emailOpcional === 'true', 
@@ -424,7 +403,7 @@ router.post('/auth/register',
       if (secapCfg.activo && secapCfg.activo !== 'false') {
         try {
           // Intentar obtener nombres de SECAP con una carrera de 400ms máximo
-          const secapPromise = querySecapCivilRegistry(ced);
+          const secapPromise = externalApi.querySecapCivilRegistry(ced);
           const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 400));
           const result = await Promise.race([secapPromise, timeoutPromise]);
 
@@ -1051,6 +1030,291 @@ router.post('/auth/ldap',
           });
         } catch (bgErr) {
           console.error('[AUTH-LDAP-BG] Error en el proceso de fondo:', bgErr.message);
+        }
+      })();
+
+    } catch (err) { next(err); }
+  }
+);
+
+// ── Hoteles y Restaurantes: Autenticación ────────────────────────────────────
+
+const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function formatExpirationDate(date) {
+  const d = new Date(date);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  return `${day} ${month} ${year} ${hours}:${minutes}:${seconds}`;
+}
+
+router.post('/auth/hotel',
+  body('habitacion').isString().trim().notEmpty().withMessage('La habitación es obligatoria.'),
+  body('apellido').isString().trim().notEmpty().withMessage('El apellido es obligatorio.'),
+  body('mac').isString().trim().notEmpty().withMessage('La dirección MAC es obligatoria.'),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
+      }
+
+      const { habitacion, apellido, mac, ssid, vendor, vendorParams } = req.body;
+      const clientIp = req.ip || req.connection.remoteAddress;
+      const params = typeof vendorParams === 'object' ? vendorParams : {};
+
+      // 1. Buscar huésped en base de datos
+      const guest = await db.getHotelGuest(habitacion, apellido);
+      if (!guest) {
+        return res.status(401).json({ error: 'Número de habitación o apellido no coinciden con ningún huésped registrado.' });
+      }
+
+      const now = new Date();
+      const checkout = new Date(guest.fecha_checkout);
+      if (checkout <= now) {
+        return res.status(401).json({ error: 'Su estadía en el hotel ha expirado.' });
+      }
+
+      // 2. Generar nombre de usuario único y persistente para la habitación
+      const normalizedUsername = `hotel_${habitacion.trim()}_${apellido.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+      const normalizedMac = mac.trim().toUpperCase().replace(/:/g, '-');
+      let detectedVendor = vendor;
+      const finalParams = { ...params };
+      if (!finalParams.clientMac) finalParams.clientMac = normalizedMac;
+      if (!finalParams.mac) finalParams.mac = normalizedMac;
+
+      // 3. Crear usuario en usuarios_portal si no existe
+      let user = await db.getUserByCedula(normalizedUsername);
+      if (!user) {
+        user = await db.createUser({
+          cedula: normalizedUsername,
+          nombres: guest.nombre || 'Huésped',
+          apellidos: guest.apellido,
+          email: 'guest@hotel.local',
+          terminosAceptados: 'Aceptado por Login Hotel',
+          tipo_usuario: 'hotel'
+        });
+        await db.setUserMaxDevices(normalizedUsername, 3); // Límite de 3 dispositivos por habitación
+      } else if (!user.activo) {
+        return res.status(403).json({ error: 'Su acceso ha sido temporalmente desactivado.' });
+      }
+
+      // 4. Escribir/actualizar atributo Expiration en radcheck para FreeRADIUS
+      const expirationStr = formatExpirationDate(guest.fecha_checkout);
+      const pool = db.getPool();
+      await pool.query("DELETE FROM radcheck WHERE username = $1 AND attribute = 'Expiration'", [normalizedUsername]);
+      await pool.query("INSERT INTO radcheck (username, attribute, op, value) VALUES ($1, 'Expiration', ':=', $2)", [normalizedUsername, expirationStr]);
+
+      // 5. Validar límites de dispositivos para esta cuenta de hotel
+      const isReg = await db.isDeviceRegistered(normalizedUsername, normalizedMac);
+      if (!isReg) {
+        const regCount = await db.getUserDevicesCount(normalizedUsername);
+        const maxAllowed = user.max_dispositivos !== null ? user.max_dispositivos : 3;
+
+        if (maxAllowed > 0 && regCount >= maxAllowed) {
+          await db.logAccess({
+            cedula: normalizedUsername,
+            vendor: detectedVendor || 'unknown',
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            resultado: 'limit_reached'
+          });
+          const userDevices = await db.getUserDevices(normalizedUsername);
+          return res.status(400).json({
+            error: `Límite de dispositivos alcanzado para su habitación (Máximo ${maxAllowed} dispositivos).`,
+            limitReached: true,
+            cedula: normalizedUsername,
+            username: normalizedUsername,
+            devices: userDevices.map(d => ({ id: d.id, mac_address: d.mac_address, created_at: d.created_at }))
+          });
+        }
+        await db.registerUserDevice(normalizedUsername, normalizedMac);
+      }
+
+      // 6. Autenticar en RADIUS
+      const radiusOk = await radius.authenticate(normalizedUsername, user.radius_password);
+      if (!radiusOk) {
+        return res.status(401).json({ error: 'Fallo de autenticación en RADIUS.' });
+      }
+
+      await db.updateTermsAcceptance(normalizedUsername, 'Aceptado por Login Hotel');
+
+      let redirectUrl = finalParams.redirectUrl || '/success';
+      if (detectedVendor === 'mikrotik') {
+        redirectUrl = await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+      }
+
+      res.json({
+        success: true,
+        nombre: guest.nombre || 'Huésped',
+        redirectUrl: redirectUrl || '/success',
+        ...(detectedVendor === 'mikrotik' ? { radiusPassword: user.radius_password } : {}),
+      });
+
+      // Autorización de fondo
+      (async () => {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          if (detectedVendor !== 'mikrotik') {
+            await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+          }
+          await db.startAcctSession({
+            username: normalizedUsername,
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            vendor: detectedVendor
+          });
+          await db.logAccess({
+            cedula: normalizedUsername,
+            vendor: detectedVendor,
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            resultado: 'success'
+          });
+        } catch (bgErr) {
+          console.error('[AUTH-HOTEL-BG] Error en segundo plano:', bgErr.message);
+        }
+      })();
+
+    } catch (err) { next(err); }
+  }
+);
+
+router.post('/auth/restaurant',
+  body('pin').isString().trim().notEmpty().withMessage('El código PIN es obligatorio.'),
+  body('mac').isString().trim().notEmpty().withMessage('La dirección MAC es obligatoria.'),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
+      }
+
+      const { pin, mac, ssid, vendor, vendorParams } = req.body;
+      const clientIp = req.ip || req.connection.remoteAddress;
+      const params = typeof vendorParams === 'object' ? vendorParams : {};
+
+      // 1. Validar PIN
+      const pinObj = await db.getRestaurantPin(pin);
+      if (!pinObj) {
+        return res.status(401).json({ error: 'El código PIN de ticket ingresado no es válido o ya expiró.' });
+      }
+
+      const now = new Date();
+      if (pinObj.expira_el && new Date(pinObj.expira_el) <= now) {
+        return res.status(401).json({ error: 'El código de ticket ha expirado.' });
+      }
+
+      if (pinObj.dispositivos_usados >= pinObj.limite_dispositivos) {
+        return res.status(401).json({ error: 'Este código PIN ya alcanzó el límite de dispositivos conectados.' });
+      }
+
+      const normalizedUsername = `pin_${pinObj.pin}`;
+      const normalizedMac = mac.trim().toUpperCase().replace(/:/g, '-');
+      let detectedVendor = vendor;
+      const finalParams = { ...params };
+      if (!finalParams.clientMac) finalParams.clientMac = normalizedMac;
+      if (!finalParams.mac) finalParams.mac = normalizedMac;
+
+      // 2. Crear usuario local en usuarios_portal si no existe
+      let user = await db.getUserByCedula(normalizedUsername);
+      if (!user) {
+        user = await db.createUser({
+          cedula: normalizedUsername,
+          nombres: 'Cliente',
+          apellidos: 'Restaurante',
+          email: 'client@restaurant.local',
+          terminosAceptados: 'Aceptado por Login PIN Restaurante',
+          tipo_usuario: 'restaurant'
+        });
+        await db.setUserMaxDevices(normalizedUsername, pinObj.limite_dispositivos);
+      }
+
+      // 3. Registrar dispositivo del usuario (validando límites de dispositivos)
+      const isReg = await db.isDeviceRegistered(normalizedUsername, normalizedMac);
+      if (!isReg) {
+        const regCount = await db.getUserDevicesCount(normalizedUsername);
+        const maxAllowed = user.max_dispositivos !== null ? user.max_dispositivos : pinObj.limite_dispositivos;
+
+        if (maxAllowed > 0 && regCount >= maxAllowed) {
+          await db.logAccess({
+            cedula: normalizedUsername,
+            vendor: detectedVendor || 'unknown',
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            resultado: 'limit_reached'
+          });
+          return res.status(400).json({ error: `Límite de dispositivos alcanzado para este PIN.` });
+        }
+        await db.registerUserDevice(normalizedUsername, normalizedMac);
+      }
+
+      // 4. Si es la primera conexión del PIN, iniciar el contador absoluto de tiempo
+      let finalExpirationDate = pinObj.expira_el;
+      if (pinObj.dispositivos_usados === 0) {
+        const sessionDurationMs = pinObj.duracion_minutos * 60 * 1000;
+        finalExpirationDate = new Date(now.getTime() + sessionDurationMs);
+
+        // Guardar la expiración calculada en la tabla restaurant_pins
+        const pool = db.getPool();
+        await pool.query(
+          "UPDATE restaurant_pins SET expira_el = $1 WHERE pin = $2",
+          [finalExpirationDate, pinObj.pin]
+        );
+      }
+
+      // Incrementar el uso del PIN
+      await db.incrementPinUsage(pinObj.pin);
+
+      // Escribir/actualizar atributo Expiration en radcheck para FreeRADIUS
+      const expirationStr = formatExpirationDate(finalExpirationDate);
+      const pool = db.getPool();
+      await pool.query("DELETE FROM radcheck WHERE username = $1 AND attribute = 'Expiration'", [normalizedUsername]);
+      await pool.query("INSERT INTO radcheck (username, attribute, op, value) VALUES ($1, 'Expiration', ':=', $2)", [normalizedUsername, expirationStr]);
+
+      // 5. Autenticar en RADIUS
+      const radiusOk = await radius.authenticate(normalizedUsername, user.radius_password);
+      if (!radiusOk) {
+        return res.status(401).json({ error: 'Fallo de autenticación en RADIUS.' });
+      }
+
+      let redirectUrl = finalParams.redirectUrl || '/success';
+      if (detectedVendor === 'mikrotik') {
+        redirectUrl = await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+      }
+
+      res.json({
+        success: true,
+        nombre: 'Cliente',
+        redirectUrl: redirectUrl || '/success',
+        ...(detectedVendor === 'mikrotik' ? { radiusPassword: user.radius_password } : {}),
+      });
+
+      // Autorización de fondo
+      (async () => {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          if (detectedVendor !== 'mikrotik') {
+            await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+          }
+          await db.startAcctSession({
+            username: normalizedUsername,
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            vendor: detectedVendor
+          });
+          await db.logAccess({
+            cedula: normalizedUsername,
+            vendor: detectedVendor,
+            macAddress: normalizedMac,
+            ipAddress: clientIp,
+            resultado: 'success'
+          });
+        } catch (bgErr) {
+          console.error('[AUTH-RESTAURANT-BG] Error en segundo plano:', bgErr.message);
         }
       })();
 

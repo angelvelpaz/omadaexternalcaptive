@@ -11,6 +11,8 @@ const omadaSvc       = require('../services/omada');
 const unifiSvc       = require('../services/unifi');
 const ldapSvc        = require('../services/ldap');
 const axios          = require('axios');
+const externalApi    = require('../services/externalApi');
+const { getClientIp, validateBase64Image } = require('../services/utils');
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin_secret_cambia_esto';
 const PUBLIC = path.join(__dirname, '../../public');
@@ -22,15 +24,6 @@ router.use((req, res, next) => {
   res.setHeader('Expires', '0');
   next();
 });
-
-// ─── Utilidad para obtener la IP del cliente ──────────────────────────────────
-function getClientIp(req) {
-  let clientIp = req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.ip || req.connection?.remoteAddress || '';
-  if (clientIp.startsWith('::ffff:')) {
-    clientIp = clientIp.substring(7);
-  }
-  return clientIp;
-}
 
 // ─── Utilidad de comprobación de IP CIDR ──────────────────────────────────────
 function ipMatchesCidr(ip, cidr) {
@@ -1392,67 +1385,38 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
 
     // Si viene una carga de imagen en Base64, decodificarla y guardarla en el servidor
     if (input.logoBase64 && input.logoBase64.startsWith('data:image/')) {
+      const v = validateBase64Image(input.logoBase64);
+      if (!v.valid) return res.status(400).json({ error: v.error });
       const fs = require('fs');
       const path = require('path');
-
-      const matches = input.logoBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        let ext = matches[1];
-        if (ext === 'svg+xml') ext = 'svg';
-        const base64Data = matches[2];
-        const buffer = Buffer.from(base64Data, 'base64');
-
-        const publicDir = path.join(__dirname, '../../public');
-        const filename = `logo_upload.${ext}`;
-        const filepath = path.join(publicDir, filename);
-
-        fs.writeFileSync(filepath, buffer);
-        logoUrl = `/static/${filename}`;
-      }
+      const publicDir = path.join(__dirname, '../../public');
+      const filename = `logo_upload.${v.ext}`;
+      fs.writeFileSync(path.join(publicDir, filename), v.buffer);
+      logoUrl = `/static/${filename}`;
     }
 
     let adImageUrl = input.adImageUrl || '';
     if (input.adBase64 && input.adBase64.startsWith('data:image/')) {
+      const v = validateBase64Image(input.adBase64);
+      if (!v.valid) return res.status(400).json({ error: v.error });
       const fs = require('fs');
       const path = require('path');
-
-      const matches = input.adBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        let ext = matches[1];
-        if (ext === 'svg+xml') ext = 'svg';
-        if (ext === 'jpeg') ext = 'jpg';
-        const base64Data = matches[2];
-        const buffer = Buffer.from(base64Data, 'base64');
-
-        const publicDir = path.join(__dirname, '../../public');
-        const filename = `ad_upload.${ext}`;
-        const filepath = path.join(publicDir, filename);
-
-        fs.writeFileSync(filepath, buffer);
-        adImageUrl = `/static/${filename}`;
-      }
+      const publicDir = path.join(__dirname, '../../public');
+      const filename = `ad_upload.${v.ext}`;
+      fs.writeFileSync(path.join(publicDir, filename), v.buffer);
+      adImageUrl = `/static/${filename}`;
     }
 
     let adImageUrlMobile = input.adImageUrlMobile || '';
     if (input.adMobileBase64 && input.adMobileBase64.startsWith('data:image/')) {
+      const v = validateBase64Image(input.adMobileBase64);
+      if (!v.valid) return res.status(400).json({ error: v.error });
       const fs = require('fs');
       const path = require('path');
-
-      const matches = input.adMobileBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        let ext = matches[1];
-        if (ext === 'svg+xml') ext = 'svg';
-        if (ext === 'jpeg') ext = 'jpg';
-        const base64Data = matches[2];
-        const buffer = Buffer.from(base64Data, 'base64');
-
-        const publicDir = path.join(__dirname, '../../public');
-        const filename = `ad_upload_mobile.${ext}`;
-        const filepath = path.join(publicDir, filename);
-
-        fs.writeFileSync(filepath, buffer);
-        adImageUrlMobile = `/static/${filename}`;
-      }
+      const publicDir = path.join(__dirname, '../../public');
+      const filename = `ad_upload_mobile.${v.ext}`;
+      fs.writeFileSync(path.join(publicDir, filename), v.buffer);
+      adImageUrlMobile = `/static/${filename}`;
     }
 
     const newCfg = {
@@ -1577,50 +1541,29 @@ router.post('/api/ssids', requireAdmin, async (req, res, next) => {
 
     let logoUrl = configInput.logoUrl || '/static/logo.svg';
     if (configInput.logoBase64 && configInput.logoBase64.startsWith('data:image/')) {
-      const matches = configInput.logoBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        let ext = matches[1];
-        if (ext === 'svg+xml') ext = 'svg';
-        if (ext === 'jpeg') ext = 'jpg';
-        const base64Data = matches[2];
-        const buffer = Buffer.from(base64Data, 'base64');
-        const filename = `logo_upload_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
-        const filepath = path.join(PUBLIC, filename);
-        fs.writeFileSync(filepath, buffer);
-        logoUrl = `/static/${filename}`;
-      }
+      const v = validateBase64Image(configInput.logoBase64);
+      if (!v.valid) return res.status(400).json({ error: v.error });
+      const filename = `logo_upload_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${v.ext}`;
+      fs.writeFileSync(path.join(PUBLIC, filename), v.buffer);
+      logoUrl = `/static/${filename}`;
     }
 
     let adImageUrl = configInput.adImageUrl || '';
     if (configInput.adBase64 && configInput.adBase64.startsWith('data:image/')) {
-      const matches = configInput.adBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        let ext = matches[1];
-        if (ext === 'svg+xml') ext = 'svg';
-        if (ext === 'jpeg') ext = 'jpg';
-        const base64Data = matches[2];
-        const buffer = Buffer.from(base64Data, 'base64');
-        const filename = `ad_upload_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
-        const filepath = path.join(PUBLIC, filename);
-        fs.writeFileSync(filepath, buffer);
-        adImageUrl = `/static/${filename}`;
-      }
+      const v = validateBase64Image(configInput.adBase64);
+      if (!v.valid) return res.status(400).json({ error: v.error });
+      const filename = `ad_upload_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${v.ext}`;
+      fs.writeFileSync(path.join(PUBLIC, filename), v.buffer);
+      adImageUrl = `/static/${filename}`;
     }
 
     let adImageUrlMobile = configInput.adImageUrlMobile || '';
     if (configInput.adMobileBase64 && configInput.adMobileBase64.startsWith('data:image/')) {
-      const matches = configInput.adMobileBase64.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        let ext = matches[1];
-        if (ext === 'svg+xml') ext = 'svg';
-        if (ext === 'jpeg') ext = 'jpg';
-        const base64Data = matches[2];
-        const buffer = Buffer.from(base64Data, 'base64');
-        const filename = `ad_upload_mobile_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
-        const filepath = path.join(PUBLIC, filename);
-        fs.writeFileSync(filepath, buffer);
-        adImageUrlMobile = `/static/${filename}`;
-      }
+      const v = validateBase64Image(configInput.adMobileBase64);
+      if (!v.valid) return res.status(400).json({ error: v.error });
+      const filename = `ad_upload_mobile_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${v.ext}`;
+      fs.writeFileSync(path.join(PUBLIC, filename), v.buffer);
+      adImageUrlMobile = `/static/${filename}`;
     }
 
     const savedConfig = {
@@ -1862,6 +1805,110 @@ router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, async (req, res, next) =>
       ipAddress: getClientIp(req),
       accion: 'ACTUALIZAR_PPSK_BYPASS_LOTE',
       detalles: `Actualizó clave PPSK en lote para ${ids.length} dispositivos.`
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ── Hoteles: Gestión de Huéspedes ──────────────────────────────────────────
+
+router.get('/api/hotel/guests', requireAdmin, async (req, res, next) => {
+  try {
+    const guests = await db.listHotelGuests();
+    res.json(guests);
+  } catch (err) { next(err); }
+});
+
+router.post('/api/hotel/guests', requireAdmin, async (req, res, next) => {
+  try {
+    const { habitacion, apellido, nombre, fecha_checkin, fecha_checkout, perfil_velocidad } = req.body;
+    if (!habitacion || !apellido || !fecha_checkout) {
+      return res.status(400).json({ error: 'Se requieren habitación, apellido y fecha de checkout.' });
+    }
+    const guest = await db.createHotelGuest({
+      habitacion,
+      apellido,
+      nombre,
+      fecha_checkin,
+      fecha_checkout,
+      perfil_velocidad
+    });
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'CREAR_HUESPED',
+      detalles: `Registró huésped de habitación ${habitacion} (Apellido: ${apellido}).`
+    });
+
+    res.json(guest);
+  } catch (err) { next(err); }
+});
+
+router.delete('/api/hotel/guests/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const guest = await db.deleteHotelGuest(req.params.id);
+    if (!guest) {
+      return res.status(404).json({ error: 'Huésped no encontrado.' });
+    }
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'ELIMINAR_HUESPED',
+      detalles: `Eliminó huésped de habitación ${guest.habitacion} (Apellido: ${guest.apellido}).`
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ── Restaurante: Gestión de PINs ──────────────────────────────────────────
+
+router.get('/api/restaurant/pins', requireAdmin, async (req, res, next) => {
+  try {
+    const pins = await db.listRestaurantPins();
+    res.json(pins);
+  } catch (err) { next(err); }
+});
+
+router.post('/api/restaurant/pins', requireAdmin, async (req, res, next) => {
+  try {
+    const { pin, duracion_minutos, limite_dispositivos, expira_el } = req.body;
+    if (!pin) {
+      return res.status(400).json({ error: 'El PIN es requerido.' });
+    }
+    const pinObj = await db.createRestaurantPin({
+      pin,
+      duracion_minutos,
+      limite_dispositivos,
+      expira_el
+    });
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'CREAR_PIN_RESTAURANTE',
+      detalles: `Creó PIN de ticket: ${pin} (Duración: ${duracion_minutos} min).`
+    });
+
+    res.json(pinObj);
+  } catch (err) { next(err); }
+});
+
+router.delete('/api/restaurant/pins/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const pinObj = await db.deleteRestaurantPin(req.params.id);
+    if (!pinObj) {
+      return res.status(404).json({ error: 'PIN no encontrado.' });
+    }
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'ELIMINAR_PIN_RESTAURANTE',
+      detalles: `Eliminó PIN de ticket: ${pinObj.pin}.`
     });
 
     res.json({ ok: true });
@@ -2328,7 +2375,7 @@ router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next)
 
     // 1. Si son 10 dígitos, consultar SECAP (Registro Civil)
     if (/^\d{10}$/.test(identifier)) {
-      const result = await querySecapCivilRegistry(identifier);
+      const result = await externalApi.querySecapCivilRegistry(identifier);
       if (result.success) {
         return res.json({
           source: 'secap',
@@ -2388,39 +2435,6 @@ router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next)
     }
   } catch (err) { next(err); }
 });
-
-async function querySecapCivilRegistry(cedula) {
-  try {
-    const response = await axios.post(
-      'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php',
-      new URLSearchParams({ documento: cedula, tipo: '1' }).toString(),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
-        timeout: 6000
-      }
-    );
-    
-    if (response.data && response.data.respuesta === 1) {
-      return {
-        success: true,
-        nombres: (response.data.nombres || '').trim(),
-        apellidos: (response.data.apellidos || '').trim()
-      };
-    }
-    return {
-      success: false,
-      error: response.data?.error || 'No se encontraron datos en el Registro Civil.'
-    };
-  } catch (err) {
-    return {
-      success: false,
-      error: 'Error al conectar con la API de SECAP: ' + err.message
-    };
-  }
-}
 
 function sanitizePem(pemText) {
   if (!pemText) return '';

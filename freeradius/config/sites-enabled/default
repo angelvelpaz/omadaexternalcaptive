@@ -32,6 +32,9 @@ server default {
         # Si no se encuentra en SQL local, consultar LDAP/Active Directory
         ldap
 
+        # Validar fecha de expiración del usuario si el atributo Expiration está en radcheck
+        expiration
+
         # Si el usuario tiene Cleartext-Password en radcheck, usar PAP
         pap
 

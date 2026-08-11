@@ -177,6 +177,77 @@
       </button>
     </form>
 
+    <!-- Formulario Hotel (Habitación + Apellido) -->
+    <form id="form-hotel" class="hidden" autocomplete="off" novalidate>
+      <div class="space-y-4">
+        <div>
+          <label for="hotel-room-input" class="block text-sm font-semibold text-gray-700 mb-1">Número de Habitación</label>
+          <input type="text" id="hotel-room-input" placeholder="Ej: 304" required
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-medium text-gray-800 transition-colors">
+        </div>
+        <div>
+          <label for="hotel-lastname-input" class="block text-sm font-semibold text-gray-700 mb-1">Primer Apellido</label>
+          <input type="text" id="hotel-lastname-input" placeholder="Ej: Perez" required
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-medium text-gray-800 transition-colors">
+        </div>
+        
+        <!-- Términos y condiciones -->
+        <div class="flex items-start gap-3 mt-4">
+          <input type="checkbox" id="hotel-terms" checked
+            class="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer">
+          <label for="hotel-terms" class="text-sm text-gray-600 cursor-pointer select-none">
+            Acepto los <a href="/static/terms.html" target="_blank" class="text-blue-600 underline hover:text-blue-800">términos de uso</a>
+          </label>
+        </div>
+        <p id="hotel-terms-error" class="text-red-500 text-xs hidden">Debe aceptar los términos de uso.</p>
+        <p id="hotel-error" class="text-red-500 text-sm hidden"></p>
+        
+        <button type="submit" id="btn-hotel" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          <span id="btn-hotel-text">Conectarse a la Red</span>
+          <span id="btn-hotel-spinner" class="hidden">
+            <svg class="animate-spin inline h-5 w-5 mr-2 -mt-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            Validando huésped...
+          </span>
+        </button>
+      </div>
+    </form>
+
+    <!-- Formulario Restaurante (PIN de Ticket) -->
+    <form id="form-restaurant" class="hidden" autocomplete="off" novalidate>
+      <div class="space-y-4">
+        <div>
+          <label for="restaurant-pin-input" class="block text-sm font-semibold text-gray-700 mb-1 text-center">Código PIN de Ticket</label>
+          <input type="text" id="restaurant-pin-input" placeholder="Ej: 4819" required
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-medium text-gray-800 transition-colors text-center font-bold tracking-widest text-lg">
+        </div>
+        
+        <!-- Términos y condiciones -->
+        <div class="flex items-start gap-3 mt-4">
+          <input type="checkbox" id="restaurant-terms" checked
+            class="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer">
+          <label for="restaurant-terms" class="text-sm text-gray-600 cursor-pointer select-none">
+            Acepto los <a href="/static/terms.html" target="_blank" class="text-blue-600 underline hover:text-blue-800">términos de uso</a>
+          </label>
+        </div>
+        <p id="restaurant-terms-error" class="text-red-500 text-xs hidden">Debe aceptar los términos de uso.</p>
+        <p id="restaurant-error" class="text-red-500 text-sm hidden"></p>
+        
+        <button type="submit" id="btn-restaurant" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          <span id="btn-restaurant-text">Conectarse a la Red</span>
+          <span id="btn-restaurant-spinner" class="hidden">
+            <svg class="animate-spin inline h-5 w-5 mr-2 -mt-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            Validando PIN...
+          </span>
+        </button>
+      </div>
+    </form>
+
     <!-- Contenedor Acceso Publicitario (Acceso Libre) -->
     <div id="ad-access-container" class="hidden">
       <!-- Imagen publicitaria (Full Bleed: borde a borde) -->
@@ -331,15 +402,35 @@
             adRegisterLink.classList.remove('hidden');
           }
         }
+      } else if (cfg.authType === 'hotel') {
+        document.getElementById('form-cedula').classList.add('hidden');
+        document.getElementById('form-ldap').classList.add('hidden');
+        document.getElementById('form-hotel').classList.remove('hidden');
+        document.getElementById('form-restaurant').classList.add('hidden');
+        const warningBox = document.getElementById('mac-warning-box');
+        if (warningBox) warningBox.classList.add('hidden');
+        document.getElementById('welcome-text').textContent = cfg.welcomeText || 'Ingrese los datos de su habitación para conectarse';
+      } else if (cfg.authType === 'restaurant') {
+        document.getElementById('form-cedula').classList.add('hidden');
+        document.getElementById('form-ldap').classList.add('hidden');
+        document.getElementById('form-hotel').classList.add('hidden');
+        document.getElementById('form-restaurant').classList.remove('hidden');
+        const warningBox = document.getElementById('mac-warning-box');
+        if (warningBox) warningBox.classList.add('hidden');
+        document.getElementById('welcome-text').textContent = cfg.welcomeText || 'Ingrese el PIN de su ticket de compra';
       } else if (cfg.ldapEnabled) {
         document.getElementById('form-cedula').classList.add('hidden');
         document.getElementById('form-ldap').classList.remove('hidden');
+        document.getElementById('form-hotel').classList.add('hidden');
+        document.getElementById('form-restaurant').classList.add('hidden');
         const warningBox = document.getElementById('mac-warning-box');
         if (warningBox) warningBox.classList.add('hidden');
         document.getElementById('welcome-text').textContent = cfg.welcomeText || 'Inicie sesión con su cuenta institucional';
       } else {
         document.getElementById('form-cedula').classList.remove('hidden');
         document.getElementById('form-ldap').classList.add('hidden');
+        document.getElementById('form-hotel').classList.add('hidden');
+        document.getElementById('form-restaurant').classList.add('hidden');
         if (cfg.welcomeText) document.getElementById('welcome-text').textContent = cfg.welcomeText;
       }
       
@@ -826,6 +917,163 @@
       } catch (err) {
         ldapError.textContent = 'Error de conexión con el portal.';
         ldapError.classList.remove('hidden');
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnSpinner.classList.add('hidden');
+      }
+    });
+
+    // ── submit form-hotel ──
+    document.getElementById('form-hotel').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const roomEl = document.getElementById('hotel-room-input');
+      const lastnameEl = document.getElementById('hotel-lastname-input');
+      const termsChecked = document.getElementById('hotel-terms').checked;
+      const termsError = document.getElementById('hotel-terms-error');
+      const hotelError = document.getElementById('hotel-error');
+
+      termsError.classList.add('hidden');
+      hotelError.classList.add('hidden');
+
+      if (!termsChecked) {
+        termsError.classList.remove('hidden');
+        return;
+      }
+
+      const habitacion = roomEl.value.trim();
+      const apellido = lastnameEl.value.trim();
+
+      if (!habitacion || !apellido) {
+        hotelError.textContent = 'Ingrese su número de habitación y primer apellido.';
+        hotelError.classList.remove('hidden');
+        return;
+      }
+
+      const clientMac = getClientMac();
+      if (!clientMac) {
+        alert('No se pudo detectar la dirección MAC de su dispositivo.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-hotel');
+      const btnText = document.getElementById('btn-hotel-text');
+      const btnSpinner = document.getElementById('btn-hotel-spinner');
+
+      btn.disabled = true;
+      btnText.classList.add('hidden');
+      btnSpinner.classList.remove('hidden');
+
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
+
+        const resp = await fetch('/auth/hotel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            habitacion,
+            apellido,
+            mac: clientMac,
+            ssid: ssidVal,
+            vendor,
+            vendorParams: getVendorParams()
+          }),
+        });
+        const data = await resp.json();
+
+        if (!data.success) {
+          if (data.limitReached) {
+            openSelfReleaseModal(data, 'hotel', data.radiusPassword || '');
+          } else {
+            hotelError.textContent = data.error || 'Error al validar huésped.';
+            hotelError.classList.remove('hidden');
+          }
+          btn.disabled = false;
+          btnText.classList.remove('hidden');
+          btnSpinner.classList.add('hidden');
+          return;
+        }
+
+        handleRedirect(data, `hotel_${habitacion}_${apellido.toLowerCase().replace(/[^a-z0-9]/g, '')}`);
+      } catch (err) {
+        hotelError.textContent = 'Error de conexión con el portal.';
+        hotelError.classList.remove('hidden');
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnSpinner.classList.add('hidden');
+      }
+    });
+
+    // ── submit form-restaurant ──
+    document.getElementById('form-restaurant').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const pinEl = document.getElementById('restaurant-pin-input');
+      const termsChecked = document.getElementById('restaurant-terms').checked;
+      const termsError = document.getElementById('restaurant-terms-error');
+      const restaurantError = document.getElementById('restaurant-error');
+
+      termsError.classList.add('hidden');
+      restaurantError.classList.add('hidden');
+
+      if (!termsChecked) {
+        termsError.classList.remove('hidden');
+        return;
+      }
+
+      const pin = pinEl.value.trim();
+
+      if (!pin) {
+        restaurantError.textContent = 'Ingrese el código PIN de su ticket.';
+        restaurantError.classList.remove('hidden');
+        return;
+      }
+
+      const clientMac = getClientMac();
+      if (!clientMac) {
+        alert('No se pudo detectar la dirección MAC de su dispositivo.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-restaurant');
+      const btnText = document.getElementById('btn-restaurant-text');
+      const btnSpinner = document.getElementById('btn-restaurant-spinner');
+
+      btn.disabled = true;
+      btnText.classList.add('hidden');
+      btnSpinner.classList.remove('hidden');
+
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
+
+        const resp = await fetch('/auth/restaurant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pin,
+            mac: clientMac,
+            ssid: ssidVal,
+            vendor,
+            vendorParams: getVendorParams()
+          }),
+        });
+        const data = await resp.json();
+
+        if (!data.success) {
+          restaurantError.textContent = data.error || 'Código PIN de ticket no válido.';
+          restaurantError.classList.remove('hidden');
+          btn.disabled = false;
+          btnText.classList.remove('hidden');
+          btnSpinner.classList.add('hidden');
+          return;
+        }
+
+        handleRedirect(data, `pin_${pin}`);
+      } catch (err) {
+        restaurantError.textContent = 'Error de conexión con el portal.';
+        restaurantError.classList.remove('hidden');
         btn.disabled = false;
         btnText.classList.remove('hidden');
         btnSpinner.classList.add('hidden');

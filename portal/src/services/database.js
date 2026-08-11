@@ -76,6 +76,34 @@ async function connect() {
     )
   `);
 
+  // Crear tablas para módulo de Hoteles y Restaurantes
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS restaurant_pins (
+      id                  SERIAL PRIMARY KEY,
+      pin                 VARCHAR(10) UNIQUE NOT NULL,
+      duracion_minutos    INTEGER DEFAULT 60,
+      limite_dispositivos INTEGER DEFAULT 2,
+      dispositivos_usados INTEGER DEFAULT 0,
+      activo              BOOLEAN DEFAULT TRUE,
+      creado_el           TIMESTAMPTZ DEFAULT NOW(),
+      expira_el           TIMESTAMPTZ
+    )
+  `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS hotel_guests (
+      id                SERIAL PRIMARY KEY,
+      habitacion        VARCHAR(10) NOT NULL,
+      apellido          VARCHAR(100) NOT NULL,
+      nombre            VARCHAR(100),
+      fecha_checkin     TIMESTAMPTZ DEFAULT NOW(),
+      fecha_checkout    TIMESTAMPTZ NOT NULL,
+      activo            BOOLEAN DEFAULT TRUE,
+      perfil_velocidad  VARCHAR(50) DEFAULT 'ldap',
+      UNIQUE(habitacion, apellido)
+    )
+  `);
+
   // Insertar administrador inicial por defecto si la tabla está vacía
   const adminCheck = await client.query('SELECT 1 FROM administradores LIMIT 1');
   if (adminCheck.rowCount === 0) {
@@ -2168,6 +2196,83 @@ async function deleteLdapGroupVlan(id) {
   return result.rows[0];
 }
 
+// ── Métodos para Hoteles y Restaurantes ──────────────────────────────────────
+
+async function getHotelGuest(habitacion, apellido) {
+  const result = await pool.query(
+    'SELECT * FROM hotel_guests WHERE LOWER(habitacion) = LOWER($1) AND LOWER(apellido) = LOWER($2) AND activo = TRUE LIMIT 1',
+    [habitacion.trim(), apellido.trim()]
+  );
+  return result.rows[0];
+}
+
+async function createHotelGuest({ habitacion, apellido, nombre, fecha_checkin, fecha_checkout, perfil_velocidad }) {
+  const checkinVal = fecha_checkin ? new Date(fecha_checkin) : new Date();
+  const checkoutVal = new Date(fecha_checkout);
+  const result = await pool.query(
+    `INSERT INTO hotel_guests (habitacion, apellido, nombre, fecha_checkin, fecha_checkout, perfil_velocidad, activo)
+     VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+     ON CONFLICT (habitacion, apellido) 
+     DO UPDATE SET nombre = EXCLUDED.nombre, fecha_checkin = EXCLUDED.fecha_checkin, fecha_checkout = EXCLUDED.fecha_checkout, perfil_velocidad = EXCLUDED.perfil_velocidad, activo = TRUE
+     RETURNING *`,
+    [habitacion.trim(), apellido.trim(), nombre ? nombre.trim() : null, checkinVal, checkoutVal, perfil_velocidad || 'ldap']
+  );
+  return result.rows[0];
+}
+
+async function listHotelGuests() {
+  const result = await pool.query('SELECT * FROM hotel_guests ORDER BY fecha_checkout DESC');
+  return result.rows;
+}
+
+async function deleteHotelGuest(id) {
+  const result = await pool.query('DELETE FROM hotel_guests WHERE id = $1 RETURNING *', [id]);
+  return result.rows[0];
+}
+
+async function getRestaurantPin(pin) {
+  const result = await pool.query(
+    'SELECT * FROM restaurant_pins WHERE pin = $1 AND activo = TRUE LIMIT 1',
+    [pin.trim()]
+  );
+  return result.rows[0];
+}
+
+async function createRestaurantPin({ pin, duracion_minutos, limite_dispositivos, expira_el }) {
+  const limitDisp = limite_dispositivos ? parseInt(limite_dispositivos) : 2;
+  const durMin = duracion_minutos ? parseInt(duracion_minutos) : 60;
+  const expVal = expira_el ? new Date(expira_el) : null;
+  const result = await pool.query(
+    `INSERT INTO restaurant_pins (pin, duracion_minutos, limite_dispositivos, expira_el, activo)
+     VALUES ($1, $2, $3, $4, TRUE)
+     ON CONFLICT (pin) DO UPDATE SET duracion_minutos = EXCLUDED.duracion_minutos, limite_dispositivos = EXCLUDED.limite_dispositivos, expira_el = EXCLUDED.expira_el, activo = TRUE
+     RETURNING *`,
+    [pin.trim(), durMin, limitDisp, expVal]
+  );
+  return result.rows[0];
+}
+
+async function incrementPinUsage(pin) {
+  const result = await pool.query(
+    `UPDATE restaurant_pins 
+     SET dispositivos_usados = dispositivos_usados + 1,
+         activo = CASE WHEN (dispositivos_usados + 1) >= limite_dispositivos THEN FALSE ELSE TRUE END
+     WHERE pin = $1 RETURNING *`,
+    [pin.trim()]
+  );
+  return result.rows[0];
+}
+
+async function listRestaurantPins() {
+  const result = await pool.query('SELECT * FROM restaurant_pins ORDER BY creado_el DESC');
+  return result.rows;
+}
+
+async function deleteRestaurantPin(id) {
+  const result = await pool.query('DELETE FROM restaurant_pins WHERE id = $1 RETURNING *', [id]);
+  return result.rows[0];
+}
+
 module.exports = {
   connect,
   getPool,
@@ -2196,4 +2301,7 @@ module.exports = {
   getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
   // mac bypass admin
   listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, updateMacBypassStatus, deleteMacBypass,
+  // hoteles y restaurantes
+  getHotelGuest, createHotelGuest, listHotelGuests, deleteHotelGuest,
+  getRestaurantPin, createRestaurantPin, incrementPinUsage, listRestaurantPins, deleteRestaurantPin,
 };

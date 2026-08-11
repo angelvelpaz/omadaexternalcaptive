@@ -12,6 +12,9 @@ server inner-tunnel {
         # Consultar LDAP/Active Directory
         ldap
 
+        # Validar fecha de expiración si el atributo Expiration está en radcheck
+        expiration
+
         # Módulos para diferentes tipos de autenticación interna
         chap
         mschap

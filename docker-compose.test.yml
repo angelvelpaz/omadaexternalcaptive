@@ -1,0 +1,14 @@
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: portal_cautivo_test
+      POSTGRES_USER: portal_user
+      POSTGRES_PASSWORD: portal_password_seguro
+
+  portal:
+    environment:
+      NODE_ENV: test
+      POSTGRES_DB: portal_cautivo_test
+      PORT: 3000
+    ports:
+      - "3001:3000"

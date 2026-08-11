@@ -113,6 +113,8 @@
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="groups" role="menuitem">Grupos RADIUS</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ldap-users" role="menuitem">WPA Enterprise</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ldap-portal-users" role="menuitem">Portal Cautivo LDAP</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="hotel-guests" role="menuitem">Huéspedes (Hotel)</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="restaurant-pins" role="menuitem">PINs (Restaurante)</button>
             </div>
           </div>
 
@@ -194,6 +196,8 @@
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="groups">Grupos RADIUS</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ldap-users">VLANs Dinámicas (LDAP)</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ldap-portal-users">Usuarios Portal (LDAP)</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="hotel-guests">Huéspedes (Hotel)</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="restaurant-pins">PINs (Restaurante)</button>
             </div>
           </div>
 
@@ -743,6 +747,73 @@
       </div>
     </div>
 
+    <!-- ── TAB HUÉSPEDES (HOTEL) ── -->
+    <div id="tab-hotel-guests" class="tab-content hidden">
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">Módulo Hotel: Gestión de Huéspedes</h2>
+          <p class="text-sm text-gray-500">Registre huéspedes y configure su fecha de salida (Check-out) para controlar el acceso Wi-Fi automático.</p>
+        </div>
+        <button onclick="openAddGuestModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+          ➕ Registrar Huésped
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                <th class="p-4">Habitación</th>
+                <th class="p-4">Huésped</th>
+                <th class="p-4">Fecha Check-in</th>
+                <th class="p-4">Fecha Check-out (Expiración)</th>
+                <th class="p-4">Perfil de Velocidad</th>
+                <th class="p-4">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="hotel-guests-tbody" class="divide-y divide-gray-100">
+              <!-- Cargado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB PINs (RESTAURANTE) ── -->
+    <div id="tab-restaurant-pins" class="tab-content hidden">
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">Módulo Restaurante: PINs de Ticket</h2>
+          <p class="text-sm text-gray-500">Genere códigos PIN de un solo uso o por tiempo limitado para el acceso Wi-Fi de comensales.</p>
+        </div>
+        <button onclick="openGeneratePinModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+          🎫 Generar PIN
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                <th class="p-4">PIN</th>
+                <th class="p-4">Duración (min)</th>
+                <th class="p-4">Límite Disp.</th>
+                <th class="p-4">Dispositivos Usados</th>
+                <th class="p-4">Primer Uso (Expiración)</th>
+                <th class="p-4">Estado</th>
+                <th class="p-4">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="restaurant-pins-tbody" class="divide-y divide-gray-100">
+              <!-- Cargado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ── TAB CONTROLADORES ── -->
     <div id="tab-controllers" class="tab-content hidden">
 
@@ -1002,6 +1073,8 @@
                 <option value="cedula">Cédula de Identidad (SECAP Ecuador)</option>
                 <option value="publicidad">Publicidad (Acceso Libre Directo)</option>
                 <option value="ldap">LDAP / Active Directory (Credenciales de Red)</option>
+                <option value="hotel">Hotel (Habitación + Apellido)</option>
+                <option value="restaurant">Restaurante (PIN de Ticket)</option>
               </select>
             </div>
 
@@ -1720,6 +1793,90 @@
     </form>
   </div>
 </div>
+
+<!-- ── MODAL AGREGAR HUÉSPED ── -->
+<div id="modal-add-guest" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-900 to-indigo-900 text-white">
+      <h3 class="font-bold text-lg leading-tight">Registrar Huésped</h3>
+      <button type="button" onclick="closeAddGuestModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <form id="form-add-guest" onsubmit="submitAddGuest(event)" class="p-6 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Número de Habitación</label>
+        <input type="text" id="guest-room" placeholder="Ej: 304" required
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Primer Apellido</label>
+        <input type="text" id="guest-lastname" placeholder="Ej: Perez" required
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre Completo (Opcional)</label>
+        <input type="text" id="guest-name" placeholder="Ej: Juan Perez"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha y Hora de Salida (Check-out)</label>
+        <input type="datetime-local" id="guest-checkout" required
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Perfil de Velocidad</label>
+        <select id="guest-profile" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+          <option value="publicity">Básico (Publicidad)</option>
+          <option value="citizen" selected>Estándar (Ciudadano)</option>
+          <option value="ldap">Premium (LDAP)</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" onclick="closeAddGuestModal()" class="px-4 py-2 border border-gray-200 text-gray-500 rounded-lg text-sm font-semibold hover:bg-gray-50">Cancelar</button>
+        <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold">Guardar Huésped</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL GENERAR PIN RESTAURANTE ── -->
+<div id="modal-generate-pin" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-900 to-indigo-900 text-white">
+      <h3 class="font-bold text-lg leading-tight">Generar PIN de Restaurante</h3>
+      <button type="button" onclick="closeGeneratePinModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <form id="form-generate-pin" onsubmit="submitGeneratePin(event)" class="p-6 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Código PIN (4-6 dígitos o autogenerar)</label>
+        <div class="flex gap-2">
+          <input type="text" id="pin-code" placeholder="Ej: 4819" required
+            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+          <button type="button" onclick="autogeneratePin()" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium">Auto</button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Duración de la Sesión (minutos)</label>
+        <input type="number" id="pin-duration" value="60" min="5" required
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Límite de Dispositivos</label>
+        <input type="number" id="pin-limit" value="2" min="1" required
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Expiración Absoluta del Código (Opcional)</label>
+        <input type="datetime-local" id="pin-expiration"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+      </div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" onclick="closeGeneratePinModal()" class="px-4 py-2 border border-gray-200 text-gray-500 rounded-lg text-sm font-semibold hover:bg-gray-50">Cancelar</button>
+        <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold">Generar PIN</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="user-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-start justify-center p-4 pt-10 overflow-y-auto">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
     <div class="flex items-center justify-between p-5 border-b">
@@ -2043,6 +2200,8 @@ function switchTab(tab) {
       loadLdapPortalUsers();
     });
   }
+  else if (tab === 'hotel-guests') loadHotelGuests();
+  else if (tab === 'restaurant-pins') loadRestaurantPins();
   else if (tab === 'reports') loadReports();
   else if (tab === 'branding') loadBranding();
   else if (tab === 'bandwidth') loadBandwidthProfiles();
@@ -6946,6 +7105,183 @@ async function testLdapConnectionGlobal() {
   } catch (err) {
     resultEl.textContent = '❌ Error de red: ' + err.message;
     resultEl.className = 'text-xs font-semibold mt-2 text-red-600';
+  }
+}
+
+// ── Hoteles: Huéspedes ────────────────────────────────────────────────────────
+async function loadHotelGuests() {
+  const tbody = document.getElementById('hotel-guests-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">Cargando huéspedes...</td></tr>';
+  try {
+    const guests = await api('GET', '/hotel/guests');
+    if (guests.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">No hay huéspedes registrados actualmente.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = guests.map(g => {
+      const checkin = new Date(g.fecha_checkin).toLocaleString();
+      const checkout = new Date(g.fecha_checkout).toLocaleString();
+      const isExpired = new Date(g.fecha_checkout) <= new Date();
+      return `
+        <tr class="hover:bg-gray-50/50 transition-colors">
+          <td class="p-4 font-bold text-gray-800">${esc(g.habitacion)}</td>
+          <td class="p-4 font-medium text-gray-700">${esc(g.nombre || 'Huésped')} ${esc(g.apellido)}</td>
+          <td class="p-4 text-xs text-gray-500">${checkin}</td>
+          <td class="p-4 text-xs font-semibold ${isExpired ? 'text-red-600' : 'text-green-600'}">
+            ${checkout} ${isExpired ? '(Expirado)' : ''}
+          </td>
+          <td class="p-4 text-xs font-semibold text-gray-600 capitalize">${esc(g.perfil_velocidad)}</td>
+          <td class="p-4">
+            <button onclick="deleteHotelGuest(${g.id})" class="px-2.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer">Eliminar</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-600 font-semibold">Error al cargar huéspedes: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function openAddGuestModal() {
+  document.getElementById('form-add-guest').reset();
+  
+  // Establecer fecha de check-out por defecto a mañana a las 12:00 PM
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(12, 0, 0, 0);
+  
+  // Ajustar zona horaria local para el input datetime-local
+  const tzOffset = tomorrow.getTimezoneOffset() * 60000;
+  const localISOTime = (new Date(tomorrow - tzOffset)).toISOString().slice(0, 16);
+  document.getElementById('guest-checkout').value = localISOTime;
+
+  document.getElementById('modal-add-guest').classList.remove('hidden');
+  document.getElementById('modal-add-guest').classList.add('flex');
+}
+
+function closeAddGuestModal() {
+  document.getElementById('modal-add-guest').classList.add('hidden');
+  document.getElementById('modal-add-guest').classList.remove('flex');
+}
+
+async function submitAddGuest(e) {
+  e.preventDefault();
+  const habitacion = document.getElementById('guest-room').value.trim();
+  const apellido = document.getElementById('guest-lastname').value.trim();
+  const nombre = document.getElementById('guest-name').value.trim();
+  const fecha_checkout = document.getElementById('guest-checkout').value;
+  const perfil_velocidad = document.getElementById('guest-profile').value;
+
+  try {
+    await api('POST', '/hotel/guests', {
+      habitacion,
+      apellido,
+      nombre,
+      fecha_checkout,
+      perfil_velocidad
+    });
+    closeAddGuestModal();
+    loadHotelGuests();
+  } catch (err) {
+    alert('Error al registrar huésped: ' + err.message);
+  }
+}
+
+async function deleteHotelGuest(id) {
+  if (!confirm('¿Está seguro de que desea eliminar este huésped? Se desactivará de inmediato su acceso Wi-Fi.')) return;
+  try {
+    await api('DELETE', `/hotel/guests/${id}`);
+    loadHotelGuests();
+  } catch (err) {
+    alert('Error al eliminar huésped: ' + err.message);
+  }
+}
+
+// ── Restaurante: PINs ────────────────────────────────────────────────────────
+async function loadRestaurantPins() {
+  const tbody = document.getElementById('restaurant-pins-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">Cargando PINs...</td></tr>';
+  try {
+    const pins = await api('GET', '/restaurant/pins');
+    if (pins.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No hay PINs generados actualmente.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = pins.map(p => {
+      const expira = p.expira_el ? new Date(p.expira_el).toLocaleString() : 'Pendiente primer uso';
+      const isExpired = p.expira_el && new Date(p.expira_el) <= new Date();
+      const isLimitReached = p.dispositivos_usados >= p.limite_dispositivos;
+      const activeState = (p.activo && !isExpired && !isLimitReached);
+      
+      return `
+        <tr class="hover:bg-gray-50/50 transition-colors">
+          <td class="p-4 font-bold text-blue-600 select-all">${esc(p.pin)}</td>
+          <td class="p-4 font-medium text-gray-700">${p.duracion_minutos} min</td>
+          <td class="p-4 text-center text-gray-600">${p.limite_dispositivos}</td>
+          <td class="p-4 text-center font-bold ${isLimitReached ? 'text-amber-600' : 'text-gray-600'}">${p.dispositivos_usados}</td>
+          <td class="p-4 text-xs text-gray-500">${expira}</td>
+          <td class="p-4">
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-full ${activeState ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}">
+              ${activeState ? 'Activo' : (isExpired ? 'Expirado' : (isLimitReached ? 'Límite' : 'Inactivo'))}
+            </span>
+          </td>
+          <td class="p-4">
+            <button onclick="deleteRestaurantPin(${p.id})" class="px-2.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer">Eliminar</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-600 font-semibold">Error al cargar PINs: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function openGeneratePinModal() {
+  document.getElementById('form-generate-pin').reset();
+  autogeneratePin();
+  document.getElementById('modal-generate-pin').classList.remove('hidden');
+  document.getElementById('modal-generate-pin').classList.add('flex');
+}
+
+function closeGeneratePinModal() {
+  document.getElementById('modal-generate-pin').classList.add('hidden');
+  document.getElementById('modal-generate-pin').classList.remove('flex');
+}
+
+function autogeneratePin() {
+  // Generar PIN aleatorio de 4 dígitos
+  const code = Math.floor(1000 + Math.random() * 9000);
+  document.getElementById('pin-code').value = code;
+}
+
+async function submitGeneratePin(e) {
+  e.preventDefault();
+  const pin = document.getElementById('pin-code').value.trim();
+  const duracion_minutos = document.getElementById('pin-duration').value;
+  const limite_dispositivos = document.getElementById('pin-limit').value;
+  const expira_el = document.getElementById('pin-expiration').value || null;
+
+  try {
+    await api('POST', '/restaurant/pins', {
+      pin,
+      duracion_minutos,
+      limite_dispositivos,
+      expira_el
+    });
+    closeGeneratePinModal();
+    loadRestaurantPins();
+  } catch (err) {
+    alert('Error al generar PIN: ' + err.message);
+  }
+}
+
+async function deleteRestaurantPin(id) {
+  if (!confirm('¿Está seguro de que desea eliminar este PIN de ticket? Los usuarios conectados con este código serán desconectados.')) return;
+  try {
+    await api('DELETE', `/restaurant/pins/${id}`);
+    loadRestaurantPins();
+  } catch (err) {
+    alert('Error al eliminar PIN: ' + err.message);
   }
 }
 

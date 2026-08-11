@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, captiveportal_oc]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build containers
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+
+      - name: Wait for services
+        run: |
+          sleep 15
+          docker compose -f docker-compose.yml -f docker-compose.test.yml ps
+
+      - name: Run tests
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml exec -T portal npm test
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml logs portal
+
+      - name: Shutdown
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml down -v

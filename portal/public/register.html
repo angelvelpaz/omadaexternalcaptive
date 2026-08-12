@@ -165,19 +165,31 @@
       const termsTextToLoad = (cfg.termsText && cfg.termsText.trim()) ? cfg.termsText : DEFAULT_TERMS;
       termsBox.textContent = termsTextToLoad;
 
-      // Habilitar checkbox al hacer scroll hasta el final
-      termsBox.addEventListener('scroll', () => {
-        if (termsBox.scrollHeight - termsBox.scrollTop <= termsBox.clientHeight + 5) {
-          enableTermsCheckbox();
-        }
-      });
+      // Crear un centinela para detectar cuando se llega al final sin recargar la CPU con eventos scroll
+      const sentinel = document.createElement('div');
+      sentinel.style.height = '1px';
+      sentinel.style.width = '100%';
+      sentinel.style.marginTop = '4px';
+      termsBox.appendChild(sentinel);
 
-      // Si no es lo suficientemente largo para requerir scroll, habilitar de inmediato
+      // Usar IntersectionObserver en lugar de eventos de scroll para evitar advertencias de Firefox sobre efectos de scroll asíncronos y mejorar la fluidez
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          enableTermsCheckbox();
+          observer.disconnect();
+        }
+      }, {
+        root: termsBox,
+        threshold: 0.1
+      });
+      observer.observe(sentinel);
+
+      // Respaldo inmediato si no se requiere scroll (el centinela ya es visible)
       setTimeout(() => {
         if (termsBox.scrollHeight <= termsBox.clientHeight) {
           enableTermsCheckbox();
         }
-      }, 250);
+      }, 300);
 
       function enableTermsCheckbox() {
         termsCheckbox.disabled = false;

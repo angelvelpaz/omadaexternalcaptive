@@ -5364,36 +5364,8 @@ document.getElementById('btn-ssid-delete').addEventListener('click', async () =>
   }
 });
 
-// Probar conexión LDAP
-document.getElementById('btn-ldap-test-conn').addEventListener('click', async () => {
-  const statusEl = document.getElementById('ldap-test-status');
-  statusEl.className = 'text-xs font-semibold text-blue-500';
-  statusEl.textContent = 'Probando conexión...';
 
-  const body = {
-    serverUrl:       document.getElementById('cfg-ldap-serverUrl').value.trim(),
-    searchBase:      document.getElementById('cfg-ldap-searchBase').value.trim(),
-    bindDN:          document.getElementById('cfg-ldap-bindDN').value.trim(),
-    bindCredentials: document.getElementById('cfg-ldap-bindCredentials').value,
-    allowedGroup:    document.getElementById('cfg-ldap-allowedGroup').value.trim(),
-    testUser:        document.getElementById('cfg-ldap-test-user').value.trim(),
-    testPassword:    document.getElementById('cfg-ldap-test-pass').value
-  };
 
-  try {
-    const resp = await api('POST', '/controllers/ldap/test', body);
-    if (resp.success) {
-      statusEl.className = 'text-xs font-semibold text-green-600';
-      statusEl.textContent = resp.message;
-    } else {
-      statusEl.className = 'text-xs font-semibold text-red-600';
-      statusEl.textContent = 'Error: ' + resp.error;
-    }
-  } catch (err) {
-    statusEl.className = 'text-xs font-semibold text-red-600';
-    statusEl.textContent = 'Error de conexión: ' + err.message;
-  }
-});
 
 // Sincronizar selectores de color e inputs
 const syncColor = (textId, pickerId) => {

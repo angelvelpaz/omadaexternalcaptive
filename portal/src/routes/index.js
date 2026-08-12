@@ -225,18 +225,22 @@ router.post('/auth/check',
       // Si no existe localmente, verificar validación externa
       const extConfig = await db.getControllerConfig('external_db_config');
       if (extConfig && extConfig.enabled && extConfig.host && extConfig.tableName && extConfig.colCedula) {
-        // Whitelist estricta de tablas y columnas permitidas
+        // Whitelist estricta de tablas y columnas permitidas (admite '*' como comodín general)
         const ALLOWED_TABLES = (process.env.EXT_DB_ALLOWED_TABLES || '').split(',').map(s => s.trim()).filter(Boolean);
         const ALLOWED_COLS = (process.env.EXT_DB_ALLOWED_COLS || 'cedula,nombres,apellidos,email,documento,id').split(',').map(s => s.trim());
-        if (ALLOWED_TABLES.length > 0 && !ALLOWED_TABLES.includes(extConfig.tableName.trim())) {
+
+        if (ALLOWED_TABLES.length > 0 && !ALLOWED_TABLES.includes('*') && !ALLOWED_TABLES.includes(extConfig.tableName.trim())) {
           console.error(`[EXT-DB] Tabla no autorizada: ${extConfig.tableName}`);
           return res.json({ valid: false, exists: false, error: 'Configuración de base de datos externa no autorizada.' });
         }
+
         const rawCols = [extConfig.colCedula, extConfig.colNombres, extConfig.colApellidos, extConfig.colEmail].filter(Boolean);
-        for (const c of rawCols) {
-          if (!ALLOWED_COLS.includes(c.trim())) {
-            console.error(`[EXT-DB] Columna no autorizada: ${c}`);
-            return res.json({ valid: false, exists: false, error: 'Configuración de base de datos externa no autorizada.' });
+        if (!ALLOWED_COLS.includes('*')) {
+          for (const c of rawCols) {
+            if (!ALLOWED_COLS.includes(c.trim())) {
+              console.error(`[EXT-DB] Columna no autorizada: ${c}`);
+              return res.json({ valid: false, exists: false, error: 'Configuración de base de datos externa no autorizada.' });
+            }
           }
         }
 

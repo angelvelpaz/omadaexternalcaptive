@@ -1811,6 +1811,45 @@ router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
+// POST - Actualizar VLAN en lote
+router.post('/api/mac-bypass/bulk-vlan', requireAdmin, async (req, res, next) => {
+  try {
+    const { ids, vlanId } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Debe seleccionar al menos un dispositivo.' });
+    }
+    
+    const parsedVlan = vlanId ? parseInt(vlanId) : null;
+    const dbVlan = isNaN(parsedVlan) ? null : parsedVlan;
+
+    // Ejecutar actualización
+    await db.bulkUpdateMacBypassVlan(ids, dbVlan);
+
+    // Intentar desconexión de red (CoA) en segundo plano para cada uno
+    for (const id of ids) {
+      db.getMacBypassById(id).then(dev => {
+        if (dev) {
+          db.disconnectRadiusClient(dev.mac_address).catch(coaErr => {
+            console.warn(`[CoA] Error al desconectar ID ${id} en bulk VLAN:`, coaErr.message);
+          });
+        }
+      }).catch(err => {
+        console.error(`[DB] Error al buscar dispositivo ID ${id} para CoA:`, err.message);
+      });
+    }
+
+    // Registrar auditoría
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'ACTUALIZAR_VLAN_BYPASS_LOTE',
+      detalles: `Actualizó VLAN ID a ${dbVlan || 'ninguno'} en lote para ${ids.length} dispositivos.`
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // ── Hoteles: Gestión de Huéspedes ──────────────────────────────────────────
 
 router.get('/api/hotel/guests', requireAdmin, async (req, res, next) => {

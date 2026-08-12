@@ -533,6 +533,9 @@
           <button onclick="bulkEditPpskBypass()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
             🔑 Definir PPSK en Lote
           </button>
+          <button onclick="bulkEditVlanBypass()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+            🏷️ Definir VLAN en Lote
+          </button>
           <button onclick="clearBypassSelection()" class="px-3.5 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-50 transition-colors">
             Cancelar
           </button>
@@ -2924,6 +2927,34 @@ async function bulkEditPpskBypass() {
     await loadMacBypass();
   } catch (err) {
     alert('Error al actualizar claves PPSK en lote: ' + err.message);
+  }
+}
+
+async function bulkEditVlanBypass() {
+  const checkboxes = document.querySelectorAll('.bypass-select-item');
+  const selected = [];
+  for (const cb of checkboxes) {
+    if (cb.checked) selected.push(parseInt(cb.value));
+  }
+
+  if (selected.length === 0) return;
+
+  const newVlan = prompt(`Ingrese el nuevo ID de VLAN para los ${selected.length} dispositivos seleccionados (Dejar vacío para eliminar la asignación de VLAN):`);
+  if (newVlan === null) return; // user cancelled
+
+  const vlanVal = newVlan.trim();
+  const vlanId = vlanVal !== '' ? parseInt(vlanVal) : null;
+  if (vlanId !== null && (isNaN(vlanId) || vlanId < 1 || vlanId > 4094)) {
+    alert('ID de VLAN inválido. Debe ser un número entre 1 y 4094, o vacío.');
+    return;
+  }
+
+  try {
+    await api('POST', '/mac-bypass/bulk-vlan', { ids: selected, vlanId });
+    alert('VLANs actualizadas y comandos de desconexión (CoA) enviados con éxito.');
+    await loadMacBypass();
+  } catch (err) {
+    alert('Error al actualizar VLANs en lote: ' + err.message);
   }
 }
 

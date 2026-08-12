@@ -2154,6 +2154,43 @@ async function bulkUpdateMacBypassPpsk(ids, ppsk) {
   }
 }
 
+async function bulkUpdateMacBypassVlan(ids, vlanId) {
+  const cleanVlan = vlanId ? parseInt(vlanId) : null;
+  const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const id of ids) {
+      const devRes = await client.query('SELECT mac_address FROM mac_bypass WHERE id = $1', [id]);
+      if (devRes.rows.length > 0) {
+        const dev = devRes.rows[0];
+        const cleanMac = dev.mac_address.trim().toUpperCase().replace(/:/g, '-');
+
+        // 1. Actualizar VLAN
+        await client.query('UPDATE mac_bypass SET vlan_id = $2 WHERE id = $1', [id, dbVlan]);
+
+        // 2. Re-generar radreply
+        await client.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
+        await client.query("INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '15728640')", [cleanMac]);
+        await client.query("INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '5242880')", [cleanMac]);
+        await client.query("INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '15M/5M')", [cleanMac]);
+
+        if (dbVlan !== null) {
+          await client.query("INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Type', ':=', 'VLAN')", [cleanMac]);
+          await client.query("INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Medium-Type', ':=', 'IEEE-802')", [cleanMac]);
+          await client.query("INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Private-Group-ID', ':=', $2)", [cleanMac, String(dbVlan)]);
+        }
+      }
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function updateMacBypassStatus(id, activo) {
   const result = await pool.query(
     'UPDATE mac_bypass SET activo = $2 WHERE id = $1 RETURNING *',
@@ -2305,7 +2342,7 @@ module.exports = {
   // ssid configurations
   getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
   // mac bypass admin
-  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, updateMacBypassStatus, deleteMacBypass,
+  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, bulkUpdateMacBypassVlan, updateMacBypassStatus, deleteMacBypass,
   // hoteles y restaurantes
   getHotelGuest, createHotelGuest, listHotelGuests, deleteHotelGuest,
   getRestaurantPin, createRestaurantPin, incrementPinUsage, listRestaurantPins, deleteRestaurantPin,

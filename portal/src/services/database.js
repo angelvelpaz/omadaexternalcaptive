@@ -129,7 +129,7 @@ async function connect() {
     `);
     await client.query(`
       ALTER TABLE usuarios_portal 
-      ADD COLUMN IF NOT EXISTS tipo_usuario VARCHAR(20) DEFAULT 'externo';
+      ADD COLUMN IF NOT EXISTS tipo_usuario VARCHAR(20) DEFAULT 'autoregistro';
     `);
     await client.query(`
       ALTER TABLE administradores 
@@ -201,7 +201,7 @@ async function getUserByCedula(cedula) {
  * Usa una transacción para garantizar consistencia.
  * @returns {Object} usuario creado
  */
-async function createUser({ cedula, nombres, apellidos, email, terminosAceptados, tipo_usuario = 'externo' }) {
+async function createUser({ cedula, nombres, apellidos, email, terminosAceptados, tipo_usuario = 'autoregistro' }) {
   const radiusPassword = uuidv4();
   const client = await pool.connect();
 
@@ -226,7 +226,7 @@ async function createUser({ cedula, nombres, apellidos, email, terminosAceptados
     );
 
     // Asignar al grupo de RADIUS correcto
-    const groupName = tipo_usuario === 'institucional' ? 'captive-portal-users-institucional' : 'captive-portal-users-externo';
+    const groupName = (tipo_usuario === 'ldap_portal' || tipo_usuario === 'institucional') ? 'captive-portal-users-institucional' : 'captive-portal-users-externo';
     await client.query(
       `INSERT INTO radusergroup (username, groupname, priority)
        VALUES ($1, $2, 1)
@@ -806,8 +806,11 @@ async function getStats() {
         COUNT(*) FILTER (WHERE activo = TRUE)  AS active_users,
         COUNT(*) FILTER (WHERE activo = FALSE) AS inactive_users,
         COUNT(*)                               AS total_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'institucional') AS institutional_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'externo')       AS external_users
+        COUNT(*) FILTER (WHERE tipo_usuario = 'ldap_portal' OR tipo_usuario = 'institucional') AS institutional_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo')       AS external_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'wpa_enterprise') AS wpa_enterprise_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'hotel')          AS hotel_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'restaurant')     AS restaurant_users
       FROM usuarios_portal
     `),
     pool.query(`

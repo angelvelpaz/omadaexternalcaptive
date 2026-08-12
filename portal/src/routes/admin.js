@@ -415,7 +415,7 @@ router.get('/api/users/:cedula', requireAdmin,
 
 router.patch('/api/users/:cedula/type', requireAdmin,
   param('cedula').isString().trim().notEmpty().isLength({ max: 32 }),
-  body('tipo_usuario').isIn(['institucional', 'externo']),
+  body('tipo_usuario').isIn(['autoregistro', 'ldap_portal', 'wpa_enterprise', 'hotel', 'restaurant', 'institucional', 'externo']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -442,7 +442,7 @@ router.patch('/api/users/:cedula/type', requireAdmin,
 
 router.post('/api/users/bulk-type', requireAdmin,
   body('cedulas').isArray({ min: 1 }),
-  body('tipo_usuario').isIn(['institucional', 'externo']),
+  body('tipo_usuario').isIn(['autoregistro', 'ldap_portal', 'wpa_enterprise', 'hotel', 'restaurant', 'institucional', 'externo']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -2279,7 +2279,7 @@ router.put('/api/ldap/users/:username/status', requireAdmin,
           apellidos: userDetails.apellidos,
           email: userDetails.email,
           terminosAceptados: 'Bloqueado Localmente por Admin',
-          tipo_usuario: 'externo'
+          tipo_usuario: 'ldap_portal'
         });
         await db.setUserMaxDevices(normalized, 1);
       }

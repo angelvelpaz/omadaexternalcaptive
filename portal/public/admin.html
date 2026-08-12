@@ -254,11 +254,11 @@
           <p id="stat-total" class="text-3xl font-bold text-blue-600">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-5">
-          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Institucionales</p>
+          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Portal LDAP</p>
           <p id="stat-institutional" class="text-3xl font-bold text-indigo-600">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-5">
-          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Externos</p>
+          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Autoregistro</p>
           <p id="stat-external" class="text-3xl font-bold text-emerald-600">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-5">
@@ -271,7 +271,7 @@
         </div>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-4">
+      <div class="grid md:grid-cols-3 gap-4">
         <!-- Accesos por vendor -->
         <div class="bg-white rounded-xl shadow-sm p-5">
           <h3 class="font-semibold text-gray-700 mb-3">Accesos por vendor (7 días)</h3>
@@ -279,8 +279,13 @@
         </div>
         <!-- Accesos por resultado -->
         <div class="bg-white rounded-xl shadow-sm p-5">
-          <h3 class="font-semibold text-gray-700 mb-3">Resultados (7 días)</h3>
+          <h3 class="font-semibold text-gray-700 mb-3">Accesos por resultado</h3>
           <div id="stat-results" class="space-y-2 text-sm"></div>
+        </div>
+        <!-- Distribucion por tipo -->
+        <div class="bg-white rounded-xl shadow-sm p-5">
+          <h3 class="font-semibold text-gray-700 mb-3">Distribución por Tipo</h3>
+          <div id="stat-types" class="space-y-2 text-sm"></div>
         </div>
       </div>
 
@@ -385,12 +390,16 @@
           </svg>
           <span class="font-semibold text-blue-800" id="bulk-selected-count">0 usuarios seleccionados</span>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <button onclick="applyBulkUserType('institucional')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
-            Tipo: Institucional
-          </button>
-          <button onclick="applyBulkUserType('externo')" class="bg-indigo-400 hover:bg-indigo-500 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
-            Tipo: Externo
+        <div class="flex flex-wrap gap-2 items-center">
+          <select id="bulk-type-select" class="text-xs font-semibold rounded-lg border border-gray-300 bg-white px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+            <option value="autoregistro">Tipo: Autoregistro</option>
+            <option value="ldap_portal">Tipo: Portal LDAP</option>
+            <option value="wpa_enterprise">Tipo: WPA Enterprise</option>
+            <option value="hotel">Tipo: Huésped</option>
+            <option value="restaurant">Tipo: PIN</option>
+          </select>
+          <button onclick="applyBulkUserType(document.getElementById('bulk-type-select').value)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
+            Aplicar Tipo
           </button>
           <span class="h-6 w-px bg-blue-200 self-center hidden sm:inline"></span>
           <button onclick="applyBulkUserActive(true)" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
@@ -2297,6 +2306,28 @@ async function loadDashboard() {
     document.getElementById('stat-inactive').textContent      = s.inactive_users;
     document.getElementById('stat-today').textContent         = s.todayLogins;
 
+    const typeLabels = {
+      autoregistro: 'Autoregistro',
+      external: 'Autoregistro (Externo)',
+      ldap_portal: 'Portal LDAP',
+      institutional: 'Portal LDAP (AD)',
+      wpa_enterprise: 'WPA Enterprise',
+      hotel: 'Huésped (Hotel)',
+      restaurant: 'PIN (Restaurante)'
+    };
+    const typesData = [
+      { key: 'autoregistro', val: s.external_users, color: 'text-green-600' },
+      { key: 'ldap_portal', val: s.institutional_users, color: 'text-indigo-600' },
+      { key: 'wpa_enterprise', val: s.wpa_enterprise_users || 0, color: 'text-blue-600' },
+      { key: 'hotel', val: s.hotel_users || 0, color: 'text-yellow-600' },
+      { key: 'restaurant', val: s.restaurant_users || 0, color: 'text-purple-600' }
+    ];
+    document.getElementById('stat-types').innerHTML = typesData.map(t => `
+      <div class="flex items-center justify-between py-0.5 border-b border-gray-50 last:border-0">
+        <span class="${t.color} font-medium">${typeLabels[t.key] || t.key}</span>
+        <span class="font-semibold text-gray-800">${t.val}</span>
+      </div>`).join('');
+
     const vendorColors = { mikrotik: 'blue', unifi: 'purple', omada: 'green', unknown: 'gray' };
     document.getElementById('stat-vendors').innerHTML = s.byVendor.length
       ? s.byVendor.map(v => `
@@ -2502,9 +2533,19 @@ async function loadUsers() {
         <td class="px-4 py-3 text-gray-500 hidden md:table-cell text-xs">${esc(u.email)}</td>
         <td class="px-4 py-3 hidden md:table-cell text-xs">
           <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-            u.tipo_usuario === 'indigo' || u.tipo_usuario === 'institucional' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'
+            u.tipo_usuario === 'ldap_portal' || u.tipo_usuario === 'institucional' ? 'bg-indigo-100 text-indigo-700' :
+            u.tipo_usuario === 'wpa_enterprise' ? 'bg-blue-100 text-blue-700' :
+            u.tipo_usuario === 'hotel' ? 'bg-yellow-100 text-yellow-700' :
+            u.tipo_usuario === 'restaurant' ? 'bg-purple-100 text-purple-700' :
+            'bg-green-100 text-green-700'
           }">
-            ${u.tipo_usuario === 'institucional' ? 'Institucional' : 'Externo'}
+            ${
+              u.tipo_usuario === 'ldap_portal' || u.tipo_usuario === 'institucional' ? 'Portal LDAP' :
+              u.tipo_usuario === 'wpa_enterprise' ? 'WPA Enterprise' :
+              u.tipo_usuario === 'hotel' ? 'Huésped' :
+              u.tipo_usuario === 'restaurant' ? 'PIN' :
+              'Autoregistro'
+            }
           </span>
         </td>
         <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">${new Date(u.fecha_registro).toLocaleDateString('es-EC')}</td>
@@ -2647,7 +2688,18 @@ async function applyBulkUserType(tipo_usuario) {
 
   if (selected.length === 0) return;
 
-  if (!confirm(`¿Está seguro de que desea cambiar el tipo de usuario a "${tipo_usuario === 'institucional' ? 'Institucional' : 'Externo'}" para los ${selected.length} usuarios seleccionados?`)) {
+  const labels = {
+    'autoregistro': 'Autoregistro',
+    'externo': 'Autoregistro (Externo)',
+    'ldap_portal': 'Portal LDAP',
+    'institucional': 'Portal LDAP (AD)',
+    'wpa_enterprise': 'WPA Enterprise',
+    'hotel': 'Huésped',
+    'restaurant': 'PIN'
+  };
+  const label = labels[tipo_usuario] || tipo_usuario;
+
+  if (!confirm(`¿Está seguro de que desea cambiar el tipo de usuario a "${label}" para los ${selected.length} usuarios seleccionados?`)) {
     return;
   }
 
@@ -3674,8 +3726,11 @@ async function viewUser(cedula) {
           <p class="text-xs text-gray-500 mb-1">Tipo de Usuario (Click para cambiar)</p>
           <select id="user-detail-tipo-select" onchange="changeUserType('${user.cedula}', this.value)"
             class="text-xs font-semibold rounded-lg border border-gray-300 bg-white px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-750 cursor-pointer">
-            <option value="institucional" ${user.tipo_usuario === 'institucional' ? 'selected' : ''}>Institucional</option>
-            <option value="externo" ${user.tipo_usuario === 'externo' ? 'selected' : ''}>Externo</option>
+            <option value="autoregistro" ${user.tipo_usuario === 'autoregistro' || user.tipo_usuario === 'externo' ? 'selected' : ''}>Autoregistro</option>
+            <option value="ldap_portal" ${user.tipo_usuario === 'ldap_portal' || user.tipo_usuario === 'institucional' ? 'selected' : ''}>Portal LDAP</option>
+            <option value="wpa_enterprise" ${user.tipo_usuario === 'wpa_enterprise' ? 'selected' : ''}>WPA Enterprise</option>
+            <option value="hotel" ${user.tipo_usuario === 'hotel' ? 'selected' : ''}>Huésped</option>
+            <option value="restaurant" ${user.tipo_usuario === 'restaurant' ? 'selected' : ''}>PIN</option>
           </select>
         </div>
         <div>

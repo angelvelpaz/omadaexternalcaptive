@@ -32,7 +32,7 @@ async function getUserByCedula(cedula) {
  * Usa una transacción para garantizar consistencia.
  * @returns {Object} usuario creado
  */
-async function createUser({ cedula, nombres, apellidos, email, terminosAceptados, tipo_usuario = 'externo' }) {
+async function createUser({ cedula, nombres, apellidos, email, terminosAceptados, tipo_usuario = 'autoregistro' }) {
   const radiusPassword = uuidv4();
   const client = await getPool().connect();
 
@@ -57,7 +57,7 @@ async function createUser({ cedula, nombres, apellidos, email, terminosAceptados
     );
 
     // Asignar al grupo de RADIUS correcto
-    const groupName = tipo_usuario === 'institucional' ? 'captive-portal-users-institucional' : 'captive-portal-users-externo';
+    const groupName = (tipo_usuario === 'ldap_portal' || tipo_usuario === 'institucional') ? 'captive-portal-users-institucional' : 'captive-portal-users-externo';
     await client.query(
       `INSERT INTO radusergroup (username, groupname, priority)
        VALUES ($1, $2, 1)

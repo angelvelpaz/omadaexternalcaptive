@@ -294,7 +294,7 @@ router.post('/auth/check',
                 activo: true,
                 acepta_terminos: true,
                 fecha_acepta_terminos: new Date(),
-                tipo_usuario: 'institucional'
+                tipo_usuario: 'ldap_portal'
               });
               
               // Responder que ya existe (para login directo)
@@ -444,7 +444,7 @@ router.post('/auth/register',
       const terminosAceptados = branding.termsText || DEFAULT_TERMS;
 
       // Crear usuario (incluye radcheck insert y guardar los términos aceptados)
-      const user = await db.createUser({ cedula: ced, nombres: finalNombres, apellidos: finalApellidos, email, terminosAceptados, tipo_usuario: 'externo' });
+      const user = await db.createUser({ cedula: ced, nombres: finalNombres, apellidos: finalApellidos, email, terminosAceptados, tipo_usuario: 'autoregistro' });
 
       // Registrar dispositivo del usuario si viene la MAC
       const params = typeof vendorParams === 'object' ? vendorParams : {};
@@ -782,7 +782,7 @@ router.post('/auth/free-access',
           apellidos: 'Publicitario',
           email: 'acceso.libre@wifi.local',
           terminosAceptados: 'Aceptado en Modo Publicitario',
-          tipo_usuario: 'externo'
+          tipo_usuario: 'autoregistro'
         });
         // Asegurar que el usuario genérico tenga límite ilimitado
         await db.setUserMaxDevices('9999999999', 0);
@@ -942,7 +942,7 @@ router.post('/auth/ldap',
           apellidos: authResult.apellidos,
           email: authResult.email,
           terminosAceptados: 'Aceptado por Login LDAP',
-          tipo_usuario: 'externo'
+          tipo_usuario: 'ldap_portal'
         });
         await db.setUserMaxDevices(normalizedUsername, 1);
       } else if (!user.activo) {

@@ -127,7 +127,7 @@ async function connect() {
     `);
     await client.query(`
       ALTER TABLE usuarios_portal 
-      ADD COLUMN IF NOT EXISTS tipo_usuario VARCHAR(20) DEFAULT 'externo';
+      ADD COLUMN IF NOT EXISTS tipo_usuario VARCHAR(20) DEFAULT 'autoregistro';
     `);
     await client.query(`
       ALTER TABLE administradores 

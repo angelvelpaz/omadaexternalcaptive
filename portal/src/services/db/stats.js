@@ -40,8 +40,11 @@ async function getStats() {
         COUNT(*) FILTER (WHERE activo = TRUE)  AS active_users,
         COUNT(*) FILTER (WHERE activo = FALSE) AS inactive_users,
         COUNT(*)                               AS total_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'institucional') AS institutional_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'externo')       AS external_users
+        COUNT(*) FILTER (WHERE tipo_usuario = 'ldap_portal' OR tipo_usuario = 'institucional') AS institutional_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo')       AS external_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'wpa_enterprise') AS wpa_enterprise_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'hotel')          AS hotel_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'restaurant')     AS restaurant_users
       FROM usuarios_portal
     `),
     getPool().query(`

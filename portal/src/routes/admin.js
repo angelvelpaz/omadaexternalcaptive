@@ -383,6 +383,7 @@ router.get('/api/users', requireAdmin,
   query('filterLastConnStart').optional().isString().trim(),
   query('filterLastConnEnd').optional().isString().trim(),
   query('filterConsumption').optional().isString().trim(),
+  query('tipo_usuario').optional().isString().trim(),
   async (req, res, next) => {
     try {
       const matched = matchedData(req, { includeOptionals: true, locations: ['query'] });
@@ -394,9 +395,10 @@ router.get('/api/users', requireAdmin,
       const filterLastConnStart = matched.filterLastConnStart || '';
       const filterLastConnEnd = matched.filterLastConnEnd || '';
       const filterConsumption = matched.filterConsumption || 'all';
+      const tipo_usuario = matched.tipo_usuario || '';
       
       res.json(await db.listUsers({ 
-        search, limit, offset, orderBy, orderDir, filterLastConnStart, filterLastConnEnd, filterConsumption 
+        search, limit, offset, orderBy, orderDir, filterLastConnStart, filterLastConnEnd, filterConsumption, tipo_usuario
       }));
     } catch (err) { next(err); }
   }

@@ -352,7 +352,8 @@ async function listUsers({
   orderDir = 'DESC', 
   filterLastConnStart = '', 
   filterLastConnEnd = '', 
-  filterConsumption = 'all' 
+  filterConsumption = 'all',
+  tipo_usuario = ''
 } = {}) {
   const trimmed = (search || '').trim();
   const searchParam = `%${trimmed}%`;
@@ -425,6 +426,19 @@ async function listUsers({
     sql += ` AND consumo_total >= 100 * 1024 * 1024 AND consumo_total <= 1024 * 1024 * 1024`;
   } else if (filterConsumption === 'high') {
     sql += ` AND consumo_total > 1024 * 1024 * 1024`;
+  }
+
+  // Filtro por Tipo de Usuario
+  if (tipo_usuario) {
+    if (tipo_usuario === 'autoregistro') {
+      sql += ` AND (tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo')`;
+    } else if (tipo_usuario === 'ldap_portal') {
+      sql += ` AND (tipo_usuario = 'ldap_portal' OR tipo_usuario = 'institucional')`;
+    } else {
+      sql += ` AND tipo_usuario = $${paramIdx}`;
+      params.push(tipo_usuario);
+      paramIdx++;
+    }
   }
 
   // Consulta para obtener el total de registros filtrados
@@ -1225,6 +1239,13 @@ async function getUserDevices(cedula) {
 async function registerUserDevice(cedula, macAddress, customTimeLimit = null) {
   if (!macAddress) return;
   const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
+  
+  // Regla de Propietario Único: eliminar asociaciones previas de esta MAC con otros usuarios
+  await pool.query(
+    `DELETE FROM dispositivos_usuario WHERE mac_address = $1 AND cedula != $2`,
+    [cleanMac, cedula]
+  );
+
   await pool.query(
     `INSERT INTO dispositivos_usuario (cedula, mac_address)
      VALUES ($1, $2)
@@ -2069,6 +2090,9 @@ async function createMacBypass(mac, propietario, alias, ppsk, vlanId, cedula = n
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
   const cleanCedula = cedula ? String(cedula).trim() : null;
   
+  // Eliminar el dispositivo del autoregistro si se agrega a bypass MAB
+  await pool.query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
+
   const result = await pool.query(
     'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, vlan_id, cedula, activo) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *',
     [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanCedula]
@@ -2096,6 +2120,9 @@ async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
   const cleanCedula = cedula ? String(cedula).trim() : null;
+
+  // Eliminar el dispositivo del autoregistro si se actualiza en bypass MAB
+  await pool.query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
 
   const result = await pool.query(
     'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6, cedula = $7 WHERE id = $1 RETURNING *',

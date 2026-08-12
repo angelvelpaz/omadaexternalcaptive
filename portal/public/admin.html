@@ -706,7 +706,18 @@
 
     <!-- ── TAB USUARIOS PORTAL LDAP ── -->
     <div id="tab-ldap-portal-users" class="tab-content hidden">
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 overflow-hidden">
+      <!-- Sub-navegacion LDAP -->
+      <div class="flex border-b border-gray-200 mb-6 gap-6">
+        <button onclick="switchLdapSubTab('live')" id="ldap-subtab-live-btn" class="border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors">
+          🌐 Miembros en Vivo (Active Directory)
+        </button>
+        <button onclick="switchLdapSubTab('local')" id="ldap-subtab-local-btn" class="border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors">
+          💾 Usuarios Locales Registrados
+        </button>
+      </div>
+
+      <!-- SECCION EN VIVO (AD) -->
+      <div id="ldap-section-live" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 overflow-hidden">
         <div class="flex justify-between items-center mb-4">
           <div>
             <h2 class="text-lg font-bold text-gray-800">Miembros del Portal (Active Directory)</h2>
@@ -754,6 +765,59 @@
             <button onclick="changeLdapPortalPage(-1)" id="btn-ldap-portal-prev" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
             <span id="ldap-portal-page-info" class="text-xs font-medium">Página 1 de 1</span>
             <button onclick="changeLdapPortalPage(1)" id="btn-ldap-portal-next" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Siguiente</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCION LOCALES -->
+      <div id="ldap-section-local" class="hidden bg-white rounded-xl shadow-sm border border-gray-100 p-6 overflow-hidden">
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Usuarios Locales (Base de Datos)</h2>
+            <p class="text-xs text-gray-500 mt-1">Lista de usuarios LDAP autenticados y guardados localmente en la base de datos del portal cautivo.</p>
+          </div>
+          <button onclick="loadLocalLdapUsers()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+            🔄 Actualizar
+          </button>
+        </div>
+
+        <!-- Buscador de Usuarios LDAP Local -->
+        <div class="mb-4 flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <input type="text" id="ldap-local-search-input" placeholder="Buscar por usuario, nombre o correo..." 
+              oninput="onLocalLdapSearchInput(this.value)"
+              class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
+              🔍
+            </div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                <th class="p-4">Usuario</th>
+                <th class="p-4">Nombre Completo</th>
+                <th class="p-4">Correo Electrónico</th>
+                <th class="p-4">Fecha Registro</th>
+                <th class="p-4">Última Conexión</th>
+                <th class="p-4 text-center">Estado</th>
+                <th class="p-4 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="ldap-local-users-tbody" class="divide-y divide-gray-100">
+              <!-- Cargado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
+          <span id="ldap-local-users-count">0 usuarios locales</span>
+          <div class="flex items-center gap-2" id="ldap-local-pagination-controls">
+            <button onclick="changeLocalLdapPage(-1)" id="btn-ldap-local-prev" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
+            <span id="ldap-local-page-info" class="text-xs font-medium">Página 1 de 1</span>
+            <button onclick="changeLocalLdapPage(1)" id="btn-ldap-local-next" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Siguiente</button>
           </div>
         </div>
       </div>
@@ -2209,7 +2273,7 @@ function switchTab(tab) {
   else if (tab === 'ldap-portal-users') {
     api('GET', '/controllers').then(cfg => {
       window._ctrlCfg = cfg;
-      loadLdapPortalUsers();
+      switchLdapSubTab('live');
     });
   }
   else if (tab === 'hotel-guests') loadHotelGuests();
@@ -2517,7 +2581,8 @@ async function loadUsers() {
       orderDir: usersOrderDir,
       filterLastConnStart: filterLastConnStart,
       filterLastConnEnd: filterLastConnEnd,
-      filterConsumption: filterConsumption
+      filterConsumption: filterConsumption,
+      tipo_usuario: 'autoregistro'
     });
 
     const data = await api('GET', '/users?' + params.toString());
@@ -7060,6 +7125,124 @@ async function kickLdapPortalUserDevice(mac) {
     await loadLdapPortalUsers();
   } catch (err) {
     alert('Error al expulsar dispositivo: ' + err.message);
+  }
+}
+
+window._ldapLocalUsersList = [];
+window._ldapLocalCurrentPage = 1;
+window._ldapLocalSearchQuery = '';
+
+function switchLdapSubTab(type) {
+  const liveBtn = document.getElementById('ldap-subtab-live-btn');
+  const localBtn = document.getElementById('ldap-subtab-local-btn');
+  const liveSec = document.getElementById('ldap-section-live');
+  const localSec = document.getElementById('ldap-section-local');
+
+  if (type === 'live') {
+    liveBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors';
+    localBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors';
+    liveSec.classList.remove('hidden');
+    localSec.classList.add('hidden');
+    loadLdapPortalUsers();
+  } else {
+    localBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors';
+    liveBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors';
+    localSec.classList.remove('hidden');
+    liveSec.classList.add('hidden');
+    loadLocalLdapUsers();
+  }
+}
+
+async function loadLocalLdapUsers() {
+  const tbody = document.getElementById('ldap-local-users-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando usuarios LDAP locales...</td></tr>';
+
+  try {
+    const params = new URLSearchParams({
+      search: window._ldapLocalSearchQuery,
+      limit: 10,
+      offset: (window._ldapLocalCurrentPage - 1) * 10,
+      orderBy: 'fecha_registro',
+      orderDir: 'DESC',
+      tipo_usuario: 'ldap_portal'
+    });
+
+    const data = await api('GET', '/users?' + params.toString());
+    window._ldapLocalUsersList = data.users || [];
+    
+    renderLocalLdapUsersTable(data.total);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-500 font-medium">Error al cargar usuarios locales: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function onLocalLdapSearchInput(val) {
+  window._ldapLocalSearchQuery = val.trim();
+  window._ldapLocalCurrentPage = 1;
+  loadLocalLdapUsers();
+}
+
+function changeLocalLdapPage(direction) {
+  window._ldapLocalCurrentPage += direction;
+  if (window._ldapLocalCurrentPage < 1) window._ldapLocalCurrentPage = 1;
+  loadLocalLdapUsers();
+}
+
+function renderLocalLdapUsersTable(total) {
+  const tbody = document.getElementById('ldap-local-users-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const totalPages = Math.ceil(total / 10) || 1;
+  document.getElementById('ldap-local-page-info').textContent = `Página ${window._ldapLocalCurrentPage} de ${totalPages}`;
+  document.getElementById('btn-ldap-local-prev').disabled = window._ldapLocalCurrentPage === 1;
+  document.getElementById('btn-ldap-local-next').disabled = window._ldapLocalCurrentPage >= totalPages;
+  document.getElementById('ldap-local-users-count').textContent = `${total} usuario${total !== 1 ? 's' : ''} local${total !== 1 ? 'es' : ''} registrado${total !== 1 ? 's' : ''}`;
+
+  if (window._ldapLocalUsersList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">No se encontraron usuarios LDAP registrados en la base de datos local.</td></tr>';
+    return;
+  }
+
+  window._ldapLocalUsersList.forEach(u => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-50/50 transition-colors';
+
+    const localActiveToggleHtml = `
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" ${u.activo ? 'checked' : ''} 
+          onchange="toggleLocalLdapUserActiveStatus('${esc(u.cedula)}', this.checked)"
+          class="sr-only peer">
+        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+        <span class="ml-2 text-xs font-semibold text-gray-700">${u.activo ? 'Activo' : 'Inactivo'}</span>
+      </label>
+    `;
+
+    tr.innerHTML = `
+      <td class="p-4 font-mono font-semibold text-gray-700">${esc(u.cedula)}</td>
+      <td class="p-4 text-gray-800 font-medium">${esc(u.nombres)} ${esc(u.apellidos)}</td>
+      <td class="p-4 text-gray-500 font-mono text-xs">${esc(u.email || '—')}</td>
+      <td class="p-4 text-gray-400 text-xs">${new Date(u.fecha_registro).toLocaleDateString('es-EC')}</td>
+      <td class="p-4 text-gray-500 text-xs">
+        ${u.ultima_conexion ? new Date(u.ultima_conexion).toLocaleString('es-EC') : '<span class="text-gray-300">Nunca</span>'}
+      </td>
+      <td class="p-4 text-center">${localActiveToggleHtml}</td>
+      <td class="p-4 text-right">
+        <button onclick="viewUser('${esc(u.cedula)}')" class="text-blue-600 hover:text-blue-800 text-xs font-semibold underline cursor-pointer">Ver Detalle</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function toggleLocalLdapUserActiveStatus(cedula, active) {
+  try {
+    await api('PATCH', `/users/${cedula}/active`, { active });
+    await loadLocalLdapUsers();
+  } catch (err) {
+    alert('Error al cambiar estado del usuario local: ' + err.message);
+    await loadLocalLdapUsers();
   }
 }
 

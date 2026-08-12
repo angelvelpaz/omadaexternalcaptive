@@ -36,6 +36,9 @@ async function createMacBypass(mac, propietario, alias, ppsk, vlanId, cedula = n
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
   const cleanCedula = cedula ? String(cedula).trim() : null;
   
+  // Eliminar el dispositivo del autoregistro si se agrega a bypass MAB
+  await getPool().query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
+
   const result = await getPool().query(
     'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, vlan_id, cedula, activo) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *',
     [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanCedula]
@@ -63,6 +66,9 @@ async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
   const cleanCedula = cedula ? String(cedula).trim() : null;
+
+  // Eliminar el dispositivo del autoregistro si se actualiza en bypass MAB
+  await getPool().query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
 
   const result = await getPool().query(
     'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6, cedula = $7 WHERE id = $1 RETURNING *',

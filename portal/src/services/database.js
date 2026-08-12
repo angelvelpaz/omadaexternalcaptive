@@ -212,7 +212,7 @@ async function createUser({ cedula, nombres, apellidos, email, terminosAceptados
     const userResult = await client.query(
       `INSERT INTO usuarios_portal (cedula, nombres, apellidos, email, radius_password, acepta_terminos, fecha_acepta_terminos, terminos_aceptados, tipo_usuario)
        VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), $6, $7)
-       RETURNING id, cedula, nombres, apellidos, email, radius_password, tipo_usuario`,
+       RETURNING id, cedula, nombres, apellidos, email, radius_password, tipo_usuario, max_dispositivos`,
       [cedula, nombres.trim(), apellidos.trim(), (email || '').trim().toLowerCase(), radiusPassword, terminosAceptados || null, tipo_usuario]
     );
 

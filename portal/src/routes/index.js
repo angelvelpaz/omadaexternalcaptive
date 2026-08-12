@@ -1264,6 +1264,8 @@ router.post('/auth/restaurant',
           return res.status(400).json({ error: `Límite de dispositivos alcanzado para este PIN.` });
         }
         await db.registerUserDevice(normalizedUsername, normalizedMac);
+        // Incrementar el uso del PIN solo para nuevos dispositivos
+        await db.incrementPinUsage(pinObj.pin);
       }
 
       // 4. Si es la primera conexión del PIN, iniciar el contador absoluto de tiempo
@@ -1279,9 +1281,6 @@ router.post('/auth/restaurant',
           [finalExpirationDate, pinObj.pin]
         );
       }
-
-      // Incrementar el uso del PIN
-      await db.incrementPinUsage(pinObj.pin);
 
       // Escribir/actualizar atributo Expiration en radcheck para FreeRADIUS
       const expirationStr = formatExpirationDate(finalExpirationDate);

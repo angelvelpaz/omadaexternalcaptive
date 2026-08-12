@@ -78,6 +78,8 @@ services:
       OMADA_SITE_ID: ${OMADA_SITE_ID:-}
       OMADA_CLIENT_ID: ${OMADA_CLIENT_ID:-}
       OMADA_CLIENT_SECRET: ${OMADA_CLIENT_SECRET:-}
+      EXT_DB_ALLOWED_TABLES: ${EXT_DB_ALLOWED_TABLES:-}
+      EXT_DB_ALLOWED_COLS: ${EXT_DB_ALLOWED_COLS:-}
     networks:
       - captive_net
     volumes:

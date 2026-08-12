@@ -1636,7 +1636,7 @@ router.get('/api/mac-bypass', requireAdmin, async (req, res, next) => {
 // POST - Registrar nueva MAC en bypass
 router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
   try {
-    const { macAddress, propietario, alias, ppsk, vlanId } = req.body;
+    const { macAddress, propietario, alias, ppsk, vlanId, cedula } = req.body;
     if (!macAddress || !propietario) {
       return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
     }
@@ -1653,7 +1653,7 @@ router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'Esta dirección MAC ya está registrada en la lista de exclusiones (MAC Bypass).' });
     }
 
-    const newDevice = await db.createMacBypass(cleanMac, propietario, alias, ppsk, vlanId);
+    const newDevice = await db.createMacBypass(cleanMac, propietario, alias, ppsk, vlanId, cedula);
 
     await db.logAdminAudit({
       username: req.adminUser,
@@ -1670,7 +1670,7 @@ router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
 router.put('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { macAddress, propietario, alias, ppsk, vlanId } = req.body;
+    const { macAddress, propietario, alias, ppsk, vlanId, cedula } = req.body;
     
     if (!macAddress || !propietario) {
       return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
@@ -1687,7 +1687,7 @@ router.put('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'Esta dirección MAC ya está registrada en otra exclusión (MAC Bypass).' });
     }
 
-    const updated = await db.updateMacBypass(id, cleanMac, propietario, alias, ppsk, vlanId);
+    const updated = await db.updateMacBypass(id, cleanMac, propietario, alias, ppsk, vlanId, cedula);
     if (!updated) {
       return res.status(404).json({ error: 'Registro no encontrado.' });
     }

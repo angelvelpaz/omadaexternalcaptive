@@ -1,0 +1,4 @@
+mac,cedula,alias,ppsk,vlan_id
+AA:BB:CC:DD:EE:01,1713175071,Celular de Prueba,WiFiPass123,10
+AA:BB:CC:DD:EE:02,1713175089,Laptop Personal,,20
+AA:BB:CC:DD:EE:03,,Impresora de Red,,

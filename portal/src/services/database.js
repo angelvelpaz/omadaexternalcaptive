@@ -2061,16 +2061,17 @@ async function getMacBypassByMac(mac) {
   return result.rows[0] || null;
 }
 
-async function createMacBypass(mac, propietario, alias, ppsk, vlanId) {
+async function createMacBypass(mac, propietario, alias, ppsk, vlanId, cedula = null) {
   if (!mac) throw new Error('La dirección MAC es obligatoria');
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
+  const cleanCedula = cedula ? String(cedula).trim() : null;
   
   const result = await pool.query(
-    'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, vlan_id, activo) VALUES ($1, $2, $3, $4, $5, true) RETURNING *',
-    [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan]
+    'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, vlan_id, cedula, activo) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *',
+    [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanCedula]
   );
 
   // Configurar atributos de ancho de banda predeterminados para la MAC en radreply (15M/5M)
@@ -2089,15 +2090,16 @@ async function createMacBypass(mac, propietario, alias, ppsk, vlanId) {
   return result.rows[0];
 }
 
-async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId) {
+async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula = null) {
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
+  const cleanCedula = cedula ? String(cedula).trim() : null;
 
   const result = await pool.query(
-    'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6 WHERE id = $1 RETURNING *',
-    [id, cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan]
+    'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6, cedula = $7 WHERE id = $1 RETURNING *',
+    [id, cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanCedula]
   );
 
   // Actualizar atributos de radreply para el nuevo/actual MAC address

@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS mac_bypass (
     alias         VARCHAR(100),
     ppsk          VARCHAR(64),
     vlan_id       INTEGER,
+    cedula        VARCHAR(150) REFERENCES usuarios_portal(cedula) ON DELETE CASCADE,
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     activo        BOOLEAN DEFAULT TRUE
 );

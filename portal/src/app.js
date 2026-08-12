@@ -11,7 +11,7 @@ const db = require('./services/database');
 const statsWorker = require('./services/statsWorker');
 const maintenanceWorker = require('./services/maintenanceWorker');
 const { setupSwagger } = require('./swagger');
-const db = require('./services/database');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -100,21 +100,28 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 // ─── Inicio ───────────────────────────────────────────────────────────────────
 async function start() {
   await db.connect();
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[PORTAL] Servidor iniciado en puerto ${PORT}`);
-    console.log(`[PORTAL] Portal: ${process.env.PORTAL_NAME || 'Portal Cautivo'}`);
-    
-    // Iniciar el recolector de estadísticas de consumo en background
-    statsWorker.startStatsWorker();
+  if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[PORTAL] Servidor iniciado en puerto ${PORT}`);
+      console.log(`[PORTAL] Portal: ${process.env.PORTAL_NAME || 'Portal Cautivo'}`);
+      
+      // Iniciar el recolector de estadísticas de consumo en background
+      statsWorker.startStatsWorker();
 
-    // Iniciar el programador de depuración automática en background
-    maintenanceWorker.startMaintenanceWorker();
-  });
+      // Iniciar el programador de depuración automática en background
+      maintenanceWorker.startMaintenanceWorker();
+    });
+  }
 }
 
-start().catch(err => {
-  console.error('[FATAL] No se pudo iniciar el servidor:', err.message);
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== 'test') {
+  start().catch(err => {
+    console.error('[FATAL] No se pudo iniciar el servidor:', err.message);
+    process.exit(1);
+  });
+} else {
+  // En testing, solo inicializamos la BD
+  db.connect().catch(err => console.error('[TEST-DB] Error de conexión:', err.message));
+}
 
 module.exports = app;

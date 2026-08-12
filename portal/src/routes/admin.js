@@ -2559,6 +2559,8 @@ router.get('/api/external-db/config', requireAdmin, async (req, res, next) => {
       colNombres:   config.colNombres || '',
       colApellidos: config.colApellidos || '',
       colEmail:     config.colEmail || '',
+      colStatus:    config.colStatus || '',
+      allowManualRegistration: config.allowManualRegistration !== false && config.allowManualRegistration !== 'false',
     });
   } catch (err) { next(err); }
 });
@@ -2633,10 +2635,16 @@ router.post('/api/external-db/test', requireAdmin, async (req, res, next) => {
       }
     });
 
-    await client.end();
     res.json({ success: true, schema });
   } catch (err) {
+    console.error('[EXT-DB] Error de prueba de conexión externa:', err.message, err.stack);
     res.json({ success: false, error: err.message });
+  } finally {
+    try {
+      await client.end();
+    } catch (e) {
+      // Ignorar si no se conectó o ya se cerró
+    }
   }
 });
 

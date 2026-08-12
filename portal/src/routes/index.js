@@ -267,7 +267,6 @@ router.post('/auth/check',
           const query = `SELECT ${selectFields} FROM "${escapedTable}" WHERE "${escapedCol}" = $1 LIMIT 1`;
           
           const extRes = await extClient.query(query, [ced]);
-          await extClient.end();
 
           const foundExternally = extRes.rowCount > 0;
           let userObj = null;
@@ -326,6 +325,12 @@ router.post('/auth/check',
             });
           }
           return res.json({ valid: true, exists: false, external: false });
+        } finally {
+          try {
+            await extClient.end();
+          } catch (e) {
+            // Ignorar
+          }
         }
       }
 
@@ -483,9 +488,14 @@ router.post('/auth/register',
               if (extRes.rowCount > 0) {
                 await db.updateUserType(ced, 'institucional');
               }
-              await extClient.end();
             } catch (e) {
               console.error('[EXT-DB] Error al consultar tipo de usuario en background:', e.message);
+            } finally {
+              try {
+                await extClient.end();
+              } catch (errEnd) {
+                // Ignorar
+              }
             }
           }
 

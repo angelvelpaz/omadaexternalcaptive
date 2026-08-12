@@ -2,8 +2,33 @@
 
 const request = require('supertest');
 const app = require('../../src/app');
+const db = require('../../src/services/database');
 
 describe('Integration: Auth Endpoints', () => {
+  beforeAll(async () => {
+    // Asegurar conexión a BD
+    await db.connect();
+    // Eliminar test user si ya existe para evitar colisión de claves únicas
+    try {
+      await db.deleteUser('1713175071', true);
+    } catch (e) {}
+    // Crear el usuario de prueba para el test de verificación
+    await db.createUser({
+      cedula: '1713175071',
+      nombres: 'Test',
+      apellidos: 'User',
+      email: 'test@user.com',
+      terminosAceptados: 'Aceptado por Test',
+      tipo_usuario: 'externo'
+    });
+  });
+
+  afterAll(async () => {
+    try {
+      await db.deleteUser('1713175071', true);
+    } catch (e) {}
+  });
+
   test('GET /auth/config retorna configuración del portal', async () => {
     const res = await request(app)
       .get('/auth/config')
@@ -41,7 +66,7 @@ describe('Integration: Auth Endpoints', () => {
   test('POST /auth/check con cédula inexistente retorna valid=true, exists=false', async () => {
     const res = await request(app)
       .post('/auth/check')
-      .send({ cedula: '0101010101' })
+      .send({ cedula: '1713175089' })
       .expect('Content-Type', /json/)
       .expect(200);
 

@@ -317,17 +317,29 @@ async function checkActiveSessionsStatus() {
       connectionTimeoutMillis: 4000,
     });
 
-    await extClient.connect();
+    let extRes;
+    try {
+      await extClient.connect();
 
-    const escapedTable = extConfig.tableName.replace(/"/g, '""');
-    const escapedColCed = extConfig.colCedula.replace(/"/g, '""');
-    const escapedColStatus = extConfig.colStatus.replace(/"/g, '""');
+      const escapedTable = extConfig.tableName.replace(/"/g, '""');
+      const escapedColCed = extConfig.colCedula.replace(/"/g, '""');
+      const escapedColStatus = extConfig.colStatus.replace(/"/g, '""');
 
-    const placeholders = activeCedulas.map((_, idx) => `$${idx + 1}`).join(', ');
-    const query = `SELECT "${escapedColCed}" AS cedula, "${escapedColStatus}" AS status FROM "${escapedTable}" WHERE "${escapedColCed}" IN (${placeholders})`;
+      const placeholders = activeCedulas.map((_, idx) => `$${idx + 1}`).join(', ');
+      const query = `SELECT "${escapedColCed}" AS cedula, "${escapedColStatus}" AS status FROM "${escapedTable}" WHERE "${escapedColCed}" IN (${placeholders})`;
 
-    const extRes = await extClient.query(query, activeCedulas);
-    await extClient.end();
+      extRes = await extClient.query(query, activeCedulas);
+    } catch (dbErr) {
+      console.error('[STATS-SYNC] Error al consultar estado de usuarios en BD externa:', dbErr.message);
+      // Retornar temprano ya que no pudimos obtener la info de la BD externa
+      return;
+    } finally {
+      try {
+        await extClient.end();
+      } catch (e) {
+        // Ignorar
+      }
+    }
 
     const statusMap = {};
     extRes.rows.forEach(row => {

@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+	<name>EAPENT</name>
+	<SSIDConfig>
+		<SSID>
+			<hex>454150454e54</hex> <!-- Hexadecimal de "EAPENT" -->
+			<name>EAPENT</name>
+		</SSID>
+	</SSIDConfig>
+	<connectionType>ESS</connectionType>
+	<connectionMode>auto</connectionMode>
+	<MSM>
+		<security>
+			<authEncryption>
+				<authentication>WPA2</authentication>
+				<encryption>AES</encryption>
+				<useOneX>true</useOneX>
+			</authEncryption>
+			<sharedKey>
+				<keyType>networkKey</keyType>
+				<protected>false</protected>
+				<keyMaterial></keyMaterial>
+			</sharedKey>
+			<OneX xmlns="http://www.microsoft.com/networking/OneX/v1">
+				<cacheUserData>true</cacheUserData>
+				<authMode>user</authMode>
+				<EAPConfig>
+					<EapHostConfig xmlns="http://www.microsoft.com/networking/EapHostConfig">
+						<EapMethod>
+							<Type xmlns="http://www.microsoft.com/dataType/v1">21</Type>
+							<VendorId xmlns="http://www.microsoft.com/dataType/v1">0</VendorId>
+							<TypeVal xmlns="http://www.microsoft.com/dataType/v1">0</TypeVal>
+							<AuthorId xmlns="http://www.microsoft.com/dataType/v1">0</AuthorId>
+						</EapMethod>
+						<Config xmlns="http://www.microsoft.com/networking/EapHostConfig">
+							<EapTtls xmlns="http://www.microsoft.com/networking/EapTtls">
+								<ServerValidation>
+									<DisableServerValidation>true</DisableServerValidation>
+								</ServerValidation>
+								<ClientValidation>
+									<InnerMethod>PAP</InnerMethod>
+								</ClientValidation>
+							</EapTtls>
+						</Config>
+					</EapHostConfig>
+				</EAPConfig>
+			</OneX>
+		</security>
+	</MSM>
+</WLANProfile>

@@ -116,8 +116,8 @@ router.get('/auth/config', async (req, res, next) => {
 
       if (activeAuthType === 'publicidad') {
         disableRegistration = true;
-        adImageUrl = sc.adImageUrl || '';
-        adImageUrlMobile = sc.adImageUrlMobile || '';
+        adImageUrl = sc.adImageUrl || branding.adImageUrl || '';
+        adImageUrlMobile = sc.adImageUrlMobile || branding.adImageUrlMobile || '';
         adSessionMinutes = sc.adSessionMinutes !== undefined ? sc.adSessionMinutes : adSessionMinutes;
         adAllowDirectRegister = sc.adAllowDirectRegister !== false;
       } else if (activeAuthType === 'ldap') {

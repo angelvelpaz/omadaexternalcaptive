@@ -359,10 +359,10 @@
         
         // Aplicar fondo publicitario adaptativo según el dispositivo (16:9 vs 9:16)
         const updateBackground = () => {
-          const isMobile = window.innerWidth < 768;
-          const adUrl = (isMobile && cfg.adImageUrlMobile)
+          const isPortrait = window.innerHeight > window.innerWidth;
+          const adUrl = (isPortrait && cfg.adImageUrlMobile)
             ? cfg.adImageUrlMobile
-            : (isMobile ? '/static/ad_placeholder_mobile.jpg' : (cfg.adImageUrl || '/static/ad_placeholder.jpg'));
+            : (isPortrait ? '/static/ad_placeholder_mobile.jpg' : (cfg.adImageUrl || '/static/ad_placeholder.jpg'));
           document.body.style.backgroundImage = `url('${adUrl}')`;
         };
         updateBackground();

@@ -1399,7 +1399,7 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
 
     let adImageUrl = input.adImageUrl || '';
     if (input.adBase64 && input.adBase64.startsWith('data:image/')) {
-      const v = validateBase64Image(input.adBase64);
+      const v = validateBase64Image(input.adBase64, { maxBytes: 3 * 1024 * 1024 });
       if (!v.valid) return res.status(400).json({ error: v.error });
       const fs = require('fs');
       const path = require('path');
@@ -1411,7 +1411,7 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
 
     let adImageUrlMobile = input.adImageUrlMobile || '';
     if (input.adMobileBase64 && input.adMobileBase64.startsWith('data:image/')) {
-      const v = validateBase64Image(input.adMobileBase64);
+      const v = validateBase64Image(input.adMobileBase64, { maxBytes: 3 * 1024 * 1024 });
       if (!v.valid) return res.status(400).json({ error: v.error });
       const fs = require('fs');
       const path = require('path');
@@ -1552,7 +1552,7 @@ router.post('/api/ssids', requireAdmin, async (req, res, next) => {
 
     let adImageUrl = configInput.adImageUrl || '';
     if (configInput.adBase64 && configInput.adBase64.startsWith('data:image/')) {
-      const v = validateBase64Image(configInput.adBase64);
+      const v = validateBase64Image(configInput.adBase64, { maxBytes: 3 * 1024 * 1024 });
       if (!v.valid) return res.status(400).json({ error: v.error });
       const filename = `ad_upload_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${v.ext}`;
       fs.writeFileSync(path.join(PUBLIC, filename), v.buffer);
@@ -1561,7 +1561,7 @@ router.post('/api/ssids', requireAdmin, async (req, res, next) => {
 
     let adImageUrlMobile = configInput.adImageUrlMobile || '';
     if (configInput.adMobileBase64 && configInput.adMobileBase64.startsWith('data:image/')) {
-      const v = validateBase64Image(configInput.adMobileBase64);
+      const v = validateBase64Image(configInput.adMobileBase64, { maxBytes: 3 * 1024 * 1024 });
       if (!v.valid) return res.status(400).json({ error: v.error });
       const filename = `ad_upload_mobile_${ssidName.replace(/[^a-zA-Z0-9]/g, '_')}.${v.ext}`;
       fs.writeFileSync(path.join(PUBLIC, filename), v.buffer);

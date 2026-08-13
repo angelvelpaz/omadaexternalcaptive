@@ -1451,8 +1451,35 @@ router.post('/auth/self-release',
       }
 
       if (type === 'ldap') {
+        let ldapUrl = process.env.LDAP_SERVER_URL;
+        let ldapBindDN = process.env.LDAP_BIND_DN;
+        let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
+        let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
+        let ldapAllowedGroup = process.env.LDAP_ALLOWED_GROUP;
+
+        try {
+          const ldapConfig = await db.getControllerConfig('ldap');
+          if (ldapConfig) {
+            if (ldapConfig.ldapServerUrl) ldapUrl = ldapConfig.ldapServerUrl;
+            if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
+            if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
+            if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
+            if (ldapConfig.ldapAllowedGroup !== undefined) ldapAllowedGroup = ldapConfig.ldapAllowedGroup;
+          }
+        } catch (dbErr) {
+          console.warn('[Release-LDAP] No se pudo leer la configuración global de LDAP:', dbErr.message);
+        }
+
         const ldapSvc = require('../services/ldap');
-        const authResult = await ldapSvc.authenticate({ username, password });
+        const authResult = await ldapSvc.authenticate({
+          url: ldapUrl,
+          bindDN: ldapBindDN,
+          bindPassword: ldapBindPassword,
+          searchBase: ldapSearchBase,
+          allowedGroup: ldapAllowedGroup,
+          username,
+          password
+        });
         if (!authResult.success) {
           return res.status(401).json({ error: 'Credenciales institucionales incorrectas.' });
         }

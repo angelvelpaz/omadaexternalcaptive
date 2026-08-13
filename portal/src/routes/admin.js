@@ -1964,6 +1964,85 @@ router.get('/api/active-sessions', requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/api/wpa-enterprise/active', requireAdmin, async (req, res, next) => {
+  try {
+    // 1. Obtener sesiones activas con firma RADIUS (802.1X)
+    const sessions = await db.getActiveWpaSessions();
+
+    // 2. Resolver configuración LDAP
+    let ldapServerUrl = process.env.LDAP_SERVER_URL;
+    let ldapBindDN = process.env.LDAP_BIND_DN;
+    let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
+    let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
+    let ldapAllowedGroup = process.env.LDAP_ALLOWED_GROUP;
+
+    try {
+      const ldapConfig = await db.getControllerConfig('ldap');
+      if (ldapConfig) {
+        if (ldapConfig.ldapServerUrl) ldapServerUrl = ldapConfig.ldapServerUrl;
+        if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
+        if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
+        if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
+        if (ldapConfig.ldapAllowedGroup !== undefined) ldapAllowedGroup = ldapConfig.ldapAllowedGroup;
+      }
+    } catch (dbErr) {
+      console.warn('[WPA-Active] No se pudo leer la configuración global de LDAP:', dbErr.message);
+    }
+
+    // Identificar grupos LDAP autorizados para WPA Enterprise (Global y específicos de VLAN)
+    let targetGroups = [];
+    if (ldapAllowedGroup && ldapAllowedGroup.trim()) {
+      targetGroups.push(ldapAllowedGroup.trim().toLowerCase());
+    }
+    try {
+      const vlanGroups = await db.listLdapGroupVlans();
+      vlanGroups.forEach(g => {
+        targetGroups.push(g.group_dn.trim().toLowerCase());
+      });
+    } catch (err) {
+      console.warn('[WPA-Active] No se pudo leer ldap_group_vlans:', err.message);
+    }
+
+    // Eliminar duplicados de grupos
+    const uniqueGroups = Array.from(new Set(targetGroups));
+
+    // Si no hay grupos LDAP autorizados configurados o falta configuración de red, no podemos filtrar
+    if (uniqueGroups.length === 0 || !ldapServerUrl || !ldapBindDN || !ldapSearchBase) {
+      return res.json([]);
+    }
+
+    // 3. Consultar los nombres de usuario en vivo pertenecientes a esos grupos en Active Directory
+    const allowedUsernames = new Set();
+    const ldapSvc = require('../services/ldap');
+    await Promise.all(uniqueGroups.map(async (groupDn) => {
+      try {
+        const list = await ldapSvc.getGroupMembers({
+          url: ldapServerUrl,
+          bindDN: ldapBindDN,
+          bindPassword: ldapBindPassword,
+          searchBase: ldapSearchBase,
+          allowedGroup: groupDn
+        });
+        list.forEach(m => {
+          if (m.username) {
+            allowedUsernames.add(String(m.username).toLowerCase().trim());
+          }
+        });
+      } catch (err) {
+        console.warn(`[WPA-Active] Error al consultar miembros del grupo ${groupDn}:`, err.message);
+      }
+    }));
+
+    // 4. Filtrar las sesiones activas para retornar únicamente las de los miembros de los grupos autorizados
+    const result = sessions.filter(s => {
+      const username = String(s.username).toLowerCase().trim();
+      return allowedUsernames.has(username);
+    });
+
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // POST - Expulsar / Desconectar un usuario activo (Kick / CoA)
 router.post('/api/active-sessions/kick', requireAdmin, async (req, res, next) => {
   try {

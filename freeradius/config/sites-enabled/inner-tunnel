@@ -6,11 +6,19 @@ server inner-tunnel {
     # ── Sección authorize ──
     # Se ejecuta dentro del túnel TLS seguro.
     authorize {
-        # Buscar usuario en SQL (radcheck)
-        sql
-
-        # Consultar LDAP/Active Directory
+        # Consultar LDAP/Active Directory primero
         ldap
+        if (ok || updated) {
+            # Encontrado en LDAP: configuramos la autenticación contra LDAP (LDAP Bind)
+            # y evitamos cargar la base de datos SQL para que no sobreescriba la contraseña real con la UUID local.
+            update control {
+                Auth-Type := LDAP
+            }
+        }
+        else {
+            # Si no está en LDAP, buscamos en SQL local
+            sql
+        }
 
         # Validar fecha de expiración si el atributo Expiration está en radcheck
         expiration

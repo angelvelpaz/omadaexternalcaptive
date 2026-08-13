@@ -97,7 +97,8 @@ EOF
 # Habilitar copia de atributos del túnel interno al túnel externo (use_tunneled_reply = yes)
 if [ -f "$RADDB/mods-available/eap" ]; then
   sed -i 's/use_tunneled_reply = no/use_tunneled_reply = yes/g' "$RADDB/mods-available/eap"
-  echo "[FREERADIUS] Modificado: use_tunneled_reply = yes en mods-available/eap"
+  sed -i 's/default_eap_type = md5/default_eap_type = peap/g' "$RADDB/mods-available/eap"
+  echo "[FREERADIUS] Modificado: use_tunneled_reply = yes y default_eap_type = peap en mods-available/eap"
 fi
 
 # Hilo en segundo plano para recarga en caliente al detectar cambios en .reload

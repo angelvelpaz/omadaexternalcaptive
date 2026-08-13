@@ -814,7 +814,7 @@ function cleanVendorName(rawName) {
 }
 
 async function getStats() {
-  const [totals, today, byVendor, byResult, recentLogs, topUsers, allMacs] = await Promise.all([
+  const [totals, today, byVendor, byResult, recentLogs, topUsers, allMacs, wpaCountRes] = await Promise.all([
     pool.query(`
       SELECT
         COUNT(*) FILTER (WHERE activo = TRUE)  AS active_users,
@@ -822,7 +822,6 @@ async function getStats() {
         COUNT(*)                               AS total_users,
         COUNT(*) FILTER (WHERE tipo_usuario = 'ldap_portal') AS institutional_users,
         COUNT(*) FILTER (WHERE tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo' OR tipo_usuario = 'institucional') AS external_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'wpa_enterprise') AS wpa_enterprise_users,
         COUNT(*) FILTER (WHERE tipo_usuario = 'hotel')          AS hotel_users,
         COUNT(*) FILTER (WHERE tipo_usuario = 'restaurant')     AS restaurant_users
       FROM usuarios_portal
@@ -878,7 +877,13 @@ async function getStats() {
       ORDER BY created_at DESC
       LIMIT 300
     `),
+    pool.query(`
+      SELECT COUNT(DISTINCT username)::integer AS wpa_users FROM radacct WHERE acctauthentic = 'RADIUS'
+    `),
   ]);
+
+  const stats = totals.rows[0];
+  const wpaUsersCount = parseInt(wpaCountRes.rows[0]?.wpa_users || 0);
 
   const brandCounts = {};
   for (const row of allMacs.rows) {
@@ -894,7 +899,9 @@ async function getStats() {
     .slice(0, 10);
 
   return {
-    ...totals.rows[0],
+    active_users: parseInt(stats.active_users || 0),
+    inactive_users: parseInt(stats.inactive_users || 0),
+    total_users: parseInt(stats.total_users || 0) + wpaUsersCount,
     todayLogins: parseInt(today.rows[0].today_logins),
     byVendor: byVendor.rows,
     byResult: byResult.rows,
@@ -905,8 +912,11 @@ async function getStats() {
       total_bytes: parseFloat(row.total_bytes || 0)
     })),
     topBrands,
-    institutional_users: parseInt(totals.rows[0].institutional_users || 0),
-    external_users: parseInt(totals.rows[0].external_users || 0)
+    institutional_users: parseInt(stats.institutional_users || 0),
+    external_users: parseInt(stats.external_users || 0),
+    wpa_enterprise_users: wpaUsersCount,
+    hotel_users: parseInt(stats.hotel_users || 0),
+    restaurant_users: parseInt(stats.restaurant_users || 0)
   };
 }
 
@@ -1299,6 +1309,31 @@ async function deleteUserDevice(cedula, macAddress) {
     [cedula, cleanMac]
   );
   await pool.query('DELETE FROM radreply WHERE username = $1', [cleanMac]);
+}
+
+async function getActiveWpaSessions() {
+  const query = `
+    SELECT 
+      r.radacctid,
+      r.username,
+      u.nombres,
+      u.apellidos,
+      r.callingstationid AS mac_address,
+      r.framedipaddress AS ip_address,
+      r.nasipaddress::text AS nas_ip,
+      r.calledstationid AS ssid,
+      r.acctstarttime AS start_time,
+      r.acctsessiontime AS session_time,
+      r.acctinputoctets AS upload,
+      r.acctoutputoctets AS download
+    FROM radacct r
+    LEFT JOIN usuarios_portal u ON r.username = u.cedula
+    WHERE r.acctstoptime IS NULL
+      AND r.acctauthentic = 'RADIUS'
+    ORDER BY r.acctstarttime DESC
+  `;
+  const result = await pool.query(query);
+  return result.rows;
 }
 
 async function getActiveSessions() {
@@ -2361,7 +2396,7 @@ module.exports = {
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,
-  getRandomMacStats, getRandomMacPreview, purgeRandomMacs, runScheduledMaintenance, getActiveSessions, disconnectRadiusClient,
+  getRandomMacStats, getRandomMacPreview, purgeRandomMacs, runScheduledMaintenance, getActiveSessions, getActiveWpaSessions, disconnectRadiusClient,
   // administradores y auditoría
   verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,

@@ -614,94 +614,147 @@
     <!-- ── TAB USUARIOS LDAP ── -->
     <div id="tab-ldap-users" class="tab-content hidden">
 
-      <!-- Tarjeta de Mapeo de VLANs por Grupo LDAP -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <h2 class="text-base font-bold text-gray-800 mb-2">Asignación Dinámica de VLANs por Grupo (WPA-Enterprise 802.1X)</h2>
-        <p class="text-xs text-gray-500 mb-4">Asigne un ID de VLAN específico a diferentes grupos de Active Directory. Cuando un dispositivo se autentique mediante 802.1X, FreeRADIUS le asignará esta VLAN de forma dinámica.</p>
-        
-        <div class="flex flex-col md:flex-row gap-4 items-end mb-6">
-          <div class="flex-1 w-full">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre Distinguido del Grupo (Group DN)</label>
-            <input type="text" id="ldap-vlan-group-dn" placeholder="CN=Ventas,OU=Grupos,DC=empresa,DC=local" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-          </div>
-          <div class="w-full md:w-32">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">ID de VLAN</label>
-            <input type="number" id="ldap-vlan-id" min="1" max="4094" placeholder="10" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-          </div>
-          <div>
-            <button onclick="addLdapGroupVlan()" class="w-full sm:w-auto px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer whitespace-nowrap">
-              ➕ Agregar Mapeo
-            </button>
-          </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                <th class="p-3">Grupo de Active Directory (DN)</th>
-                <th class="p-3">VLAN ID</th>
-                <th class="p-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="ldap-group-vlans-tbody" class="divide-y divide-gray-100">
-              <!-- Cargado dinámicamente -->
-            </tbody>
-          </table>
-        </div>
+      <!-- Navegación de Sub-pestañas WPA Enterprise -->
+      <div class="flex border-b border-gray-200 mb-6 gap-6">
+        <button onclick="switchWpaSubTab('config')" id="wpa-subtab-config" class="border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer">
+          ⚙️ Configuración y Miembros
+        </button>
+        <button onclick="switchWpaSubTab('sessions')" id="wpa-subtab-sessions" class="border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer">
+          🔌 Equipos Conectados (En Vivo)
+        </button>
       </div>
 
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 overflow-hidden">
-        <div class="flex justify-between items-center mb-4">
-          <div>
-            <h2 class="text-lg font-bold text-gray-800">Miembros del Grupo de Active Directory</h2>
-            <p class="text-xs text-gray-500 mt-1">Lista en vivo de usuarios pertenecientes al grupo autorizado de seguridad configurado en el servidor LDAP.</p>
+      <!-- Contenedor 1: Configuración y Miembros de Grupo -->
+      <div id="wpa-container-config" class="space-y-6">
+        <!-- Tarjeta de Mapeo de VLANs por Grupo LDAP -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h2 class="text-base font-bold text-gray-800 mb-2">Asignación Dinámica de VLANs por Grupo (WPA-Enterprise 802.1X)</h2>
+          <p class="text-xs text-gray-500 mb-4">Asigne un ID de VLAN específico a diferentes grupos de Active Directory. Cuando un dispositivo se autentique mediante 802.1X, FreeRADIUS le asignará esta VLAN de forma dinámica.</p>
+          
+          <div class="flex flex-col md:flex-row gap-4 items-end mb-6">
+            <div class="flex-1 w-full">
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre Distinguido del Grupo (Group DN)</label>
+              <input type="text" id="ldap-vlan-group-dn" placeholder="CN=Ventas,OU=Grupos,DC=empresa,DC=local" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="w-full md:w-32">
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">ID de VLAN</label>
+              <input type="number" id="ldap-vlan-id" min="1" max="4094" placeholder="10" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <button onclick="addLdapGroupVlan()" class="w-full sm:w-auto px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer whitespace-nowrap">
+                ➕ Agregar Mapeo
+              </button>
+            </div>
           </div>
-          <button onclick="loadLdapUsers()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
-            🔄 Sincronizar / Actualizar
-          </button>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                  <th class="p-3">Grupo de Active Directory (DN)</th>
+                  <th class="p-3">VLAN ID</th>
+                  <th class="p-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ldap-group-vlans-tbody" class="divide-y divide-gray-100">
+                <!-- Cargado dinámicamente -->
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- Buscador de Usuarios LDAP -->
-        <div class="mb-4 flex flex-col sm:flex-row gap-3">
-          <div class="relative flex-1">
-            <input type="text" id="ldap-search-input" placeholder="Buscar por nombre, usuario o correo..." 
-              oninput="onLdapSearchInput(this.value)"
-              class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
-              🔍
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 overflow-hidden">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800">Miembros del Grupo de Active Directory</h2>
+              <p class="text-xs text-gray-500 mt-1">Lista en vivo de usuarios pertenecientes al grupo autorizado de seguridad configurado en el servidor LDAP.</p>
+            </div>
+            <button onclick="loadLdapUsers()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+              🔄 Sincronizar / Actualizar
+            </button>
+          </div>
+
+          <!-- Buscador de Usuarios LDAP -->
+          <div class="mb-4 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <input type="text" id="ldap-search-input" placeholder="Buscar por nombre, usuario o correo..." 
+                oninput="onLdapSearchInput(this.value)"
+                class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
+                🔍
+              </div>
+            </div>
+          </div>
+          
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                  <th class="p-4">Usuario (sAMAccountName)</th>
+                  <th class="p-4">Nombre Completo</th>
+                  <th class="p-4">Correo Electrónico</th>
+                  <th class="p-4">Grupo de AD</th>
+                  <th class="p-4">VLAN / SSID</th>
+                  <th class="p-4">Estado de Conexión</th>
+                  <th class="p-4">Acceso Local</th>
+                  <th class="p-4">Detalles / Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ldap-users-tbody" class="divide-y divide-gray-100">
+                <!-- Cargado dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
+            <span id="ldap-users-count">0 usuarios encontrados en Active Directory</span>
+            <div class="flex items-center gap-2" id="ldap-pagination-controls">
+              <button onclick="changeLdapPage(-1)" id="btn-ldap-prev" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
+              <span id="ldap-page-info" class="text-xs font-medium">Página 1 de 1</span>
+              <button onclick="changeLdapPage(1)" id="btn-ldap-next" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Siguiente</button>
             </div>
           </div>
         </div>
-        
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                <th class="p-4">Usuario (sAMAccountName)</th>
-                <th class="p-4">Nombre Completo</th>
-                <th class="p-4">Correo Electrónico</th>
-                <th class="p-4">Grupo de AD</th>
-                <th class="p-4">VLAN / SSID</th>
-                <th class="p-4">Estado de Conexión</th>
-                <th class="p-4">Acceso Local</th>
-                <th class="p-4">Detalles / Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="ldap-users-tbody" class="divide-y divide-gray-100">
-              <!-- Cargado dinámicamente -->
-            </tbody>
-          </table>
-        </div>
-        <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
-          <span id="ldap-users-count">0 usuarios encontrados en Active Directory</span>
-          <div class="flex items-center gap-2" id="ldap-pagination-controls">
-            <button onclick="changeLdapPage(-1)" id="btn-ldap-prev" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
-            <span id="ldap-page-info" class="text-xs font-medium">Página 1 de 1</span>
-            <button onclick="changeLdapPage(1)" id="btn-ldap-next" class="px-3 py-1 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Siguiente</button>
+      </div> <!-- Fin wpa-container-config -->
+
+      <!-- Contenedor 2: Equipos Conectados (En Vivo) -->
+      <div id="wpa-container-sessions" class="hidden space-y-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 overflow-hidden">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800">Equipos Conectados (En Vivo WPA-Enterprise)</h2>
+              <p class="text-xs text-gray-500 mt-1">Lista en tiempo real de dispositivos conectados y autenticados directamente a través de 802.1X / WPA Enterprise.</p>
+            </div>
+            <button onclick="loadWpaSessions()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+              🔄 Actualizar en Vivo
+            </button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                  <th class="p-4">Usuario (sAMAccountName)</th>
+                  <th class="p-4">Nombre Completo</th>
+                  <th class="p-4">Dirección MAC</th>
+                  <th class="p-4">IP Asignada</th>
+                  <th class="p-4">SSID / Antena</th>
+                  <th class="p-4">Fecha de Conexión</th>
+                  <th class="p-4">Tiempo Conectado</th>
+                  <th class="p-4">Consumo (▲/▼)</th>
+                  <th class="p-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="wpa-sessions-tbody" class="divide-y divide-gray-100">
+                <!-- Cargado dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 border-t text-sm text-gray-500">
+            <span id="wpa-sessions-count">0 equipos conectados actualmente</span>
           </div>
         </div>
-      </div>
+      </div> <!-- Fin wpa-container-sessions -->
+
     </div>
 
     <!-- ── TAB USUARIOS PORTAL LDAP ── -->
@@ -2266,8 +2319,7 @@ function switchTab(tab) {
   else if (tab === 'ldap-users') {
     api('GET', '/controllers').then(cfg => {
       window._ctrlCfg = cfg;
-      loadLdapUsers();
-      loadLdapGroupVlans();
+      switchWpaSubTab('config');
     });
   }
   else if (tab === 'ldap-portal-users') {
@@ -6764,6 +6816,109 @@ async function kickSession(mac) {
     await loadActiveSessions();
   } catch (err) {
     alert('Error al enviar comando: ' + err.message);
+  }
+}
+
+// ── WPA Enterprise Sub-tabs & Sessions ──
+function switchWpaSubTab(tabName) {
+  if (tabName === 'config') {
+    document.getElementById('wpa-container-config').classList.remove('hidden');
+    document.getElementById('wpa-container-sessions').classList.add('hidden');
+    document.getElementById('wpa-subtab-config').className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer';
+    document.getElementById('wpa-subtab-sessions').className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer';
+    loadLdapUsers();
+    loadLdapGroupVlans();
+  } else {
+    document.getElementById('wpa-container-config').classList.add('hidden');
+    document.getElementById('wpa-container-sessions').classList.remove('hidden');
+    document.getElementById('wpa-subtab-config').className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer';
+    document.getElementById('wpa-subtab-sessions').className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer';
+    loadWpaSessions();
+  }
+}
+
+async function loadWpaSessions() {
+  const tbody = document.getElementById('wpa-sessions-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando equipos conectados...</td></tr>';
+  
+  try {
+    const list = await api('GET', '/wpa-enterprise/active');
+    renderWpaSessionsTable(list);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar equipos: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function renderWpaSessionsTable(list) {
+  const tbody = document.getElementById('wpa-sessions-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay equipos conectados a WPA-Enterprise en este momento.</td></tr>';
+    document.getElementById('wpa-sessions-count').textContent = '0 equipos conectados actualmente';
+    return;
+  }
+  
+  list.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-50/50 transition-colors';
+    
+    const startTime = new Date(s.start_time).toLocaleString('es-EC');
+    
+    // Format session time
+    const sec = parseInt(s.session_time || 0);
+    const hrs = Math.floor(sec / 3600);
+    const mins = Math.floor((sec % 3600) / 60);
+    const activeTimeStr = `${hrs}h ${mins}m`;
+
+    // Format bytes
+    const upBytes = parseInt(s.upload || 0);
+    const downBytes = parseInt(s.download || 0);
+    const formatBytes = (bytes) => {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+      return (bytes / 1073741824).toFixed(1) + ' GB';
+    };
+    
+    const fullName = (s.nombres || s.apellidos) ? `${s.nombres || ''} ${s.apellidos || ''}`.trim() : 'Usuario LDAP';
+    
+    tr.innerHTML = `
+      <td class="p-4 font-semibold text-gray-800">${esc(s.username)}</td>
+      <td class="p-4 text-gray-700 font-medium">${esc(fullName)}</td>
+      <td class="p-4 font-mono text-gray-600">${esc(s.mac_address)}</td>
+      <td class="p-4 font-mono text-gray-600">${esc(s.ip_address || '—')}</td>
+      <td class="p-4 font-mono text-gray-600">${esc(s.ssid || 'WPA-Enterprise')}</td>
+      <td class="p-4 text-gray-500">${startTime}</td>
+      <td class="p-4 text-gray-500 font-medium">${activeTimeStr}</td>
+      <td class="p-4 text-gray-500 font-mono text-xs">▲ ${formatBytes(upBytes)} / ▼ ${formatBytes(downBytes)}</td>
+      <td class="p-4 text-right">
+        <button onclick="kickWpaSession('${esc(s.mac_address)}')"
+          class="text-xs font-semibold border border-red-300 hover:bg-red-50 text-red-700 px-2.5 py-1.5 rounded transition-colors shadow-sm cursor-pointer">
+          Expulsar (Kick)
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  document.getElementById('wpa-sessions-count').textContent = `${list.length} equipo${list.length === 1 ? '' : 's'} conectado${list.length === 1 ? '' : 's'} actualmente`;
+}
+
+async function kickWpaSession(mac) {
+  if (!confirm(`¿Estás seguro de que deseas expulsar al dispositivo ${mac}?\nSe le enviará una solicitud de desconexión inmediata.`)) return;
+  try {
+    const res = await api('POST', '/active-sessions/kick', { mac });
+    if (res.success) {
+      alert('Solicitud de desconexión enviada exitosamente.');
+    } else {
+      alert('Se envió el comando, pero la sesión no fue encontrada o la antena no respondió.');
+    }
+    loadWpaSessions();
+  } catch (err) {
+    alert('Error al expulsar sesión: ' + err.message);
   }
 }
 

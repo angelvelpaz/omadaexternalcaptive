@@ -2374,10 +2374,8 @@ async function loadDashboard() {
     document.getElementById('stat-today').textContent         = s.todayLogins;
 
     const typeLabels = {
-      autoregistro: 'Autoregistro',
-      external: 'Autoregistro (Externo)',
-      ldap_portal: 'Portal LDAP',
-      institutional: 'Portal LDAP (AD)',
+      autoregistro: 'Autoregistro / Cédula',
+      ldap_portal: 'Portal LDAP (Usuario/Pass)',
       wpa_enterprise: 'WPA Enterprise',
       hotel: 'Huésped (Hotel)',
       restaurant: 'PIN (Restaurante)'
@@ -2601,14 +2599,16 @@ async function loadUsers() {
         <td class="px-4 py-3 text-gray-500 hidden md:table-cell text-xs">${esc(u.email)}</td>
         <td class="px-4 py-3 hidden md:table-cell text-xs">
           <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-            u.tipo_usuario === 'ldap_portal' || u.tipo_usuario === 'institucional' ? 'bg-indigo-100 text-indigo-700' :
+            u.tipo_usuario === 'ldap_portal' ? 'bg-indigo-100 text-indigo-700' :
+            u.tipo_usuario === 'institucional' ? 'bg-amber-100 text-amber-700' :
             u.tipo_usuario === 'wpa_enterprise' ? 'bg-blue-100 text-blue-700' :
             u.tipo_usuario === 'hotel' ? 'bg-yellow-100 text-yellow-700' :
             u.tipo_usuario === 'restaurant' ? 'bg-purple-100 text-purple-700' :
             'bg-green-100 text-green-700'
           }">
             ${
-              u.tipo_usuario === 'ldap_portal' || u.tipo_usuario === 'institucional' ? 'Portal LDAP' :
+              u.tipo_usuario === 'ldap_portal' ? 'Portal LDAP' :
+              u.tipo_usuario === 'institucional' ? 'Institucional' :
               u.tipo_usuario === 'wpa_enterprise' ? 'WPA Enterprise' :
               u.tipo_usuario === 'hotel' ? 'Huésped' :
               u.tipo_usuario === 'restaurant' ? 'PIN' :
@@ -3823,7 +3823,8 @@ async function viewUser(cedula) {
           <select id="user-detail-tipo-select" onchange="changeUserType('${user.cedula}', this.value)"
             class="text-xs font-semibold rounded-lg border border-gray-300 bg-white px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-750 cursor-pointer">
             <option value="autoregistro" ${user.tipo_usuario === 'autoregistro' || user.tipo_usuario === 'externo' ? 'selected' : ''}>Autoregistro</option>
-            <option value="ldap_portal" ${user.tipo_usuario === 'ldap_portal' || user.tipo_usuario === 'institucional' ? 'selected' : ''}>Portal LDAP</option>
+            <option value="institucional" ${user.tipo_usuario === 'institucional' ? 'selected' : ''}>Institucional (Cédula)</option>
+            <option value="ldap_portal" ${user.tipo_usuario === 'ldap_portal' ? 'selected' : ''}>Portal LDAP</option>
             <option value="wpa_enterprise" ${user.tipo_usuario === 'wpa_enterprise' ? 'selected' : ''}>WPA Enterprise</option>
             <option value="hotel" ${user.tipo_usuario === 'hotel' ? 'selected' : ''}>Huésped</option>
             <option value="restaurant" ${user.tipo_usuario === 'restaurant' ? 'selected' : ''}>PIN</option>

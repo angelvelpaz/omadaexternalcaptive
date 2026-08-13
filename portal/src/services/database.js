@@ -374,7 +374,7 @@ async function listUsers({
     SELECT * FROM (
       SELECT u.id, u.cedula, u.nombres, u.apellidos, u.email, u.activo, u.fecha_registro, u.tipo_usuario,
              (
-               SELECT MAX(r.acctstarttime) 
+               SELECT MAX(r.acctstarttime + INTERVAL '0 seconds') 
                FROM radacct r 
                WHERE r.username = u.cedula 
              ) AS ultima_conexion,
@@ -431,9 +431,9 @@ async function listUsers({
   // Filtro por Tipo de Usuario
   if (tipo_usuario) {
     if (tipo_usuario === 'autoregistro') {
-      sql += ` AND (tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo')`;
+      sql += ` AND (tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo' OR tipo_usuario = 'institucional')`;
     } else if (tipo_usuario === 'ldap_portal') {
-      sql += ` AND (tipo_usuario = 'ldap_portal' OR tipo_usuario = 'institucional')`;
+      sql += ` AND tipo_usuario = 'ldap_portal'`;
     } else {
       sql += ` AND tipo_usuario = $${paramIdx}`;
       params.push(tipo_usuario);
@@ -820,8 +820,8 @@ async function getStats() {
         COUNT(*) FILTER (WHERE activo = TRUE)  AS active_users,
         COUNT(*) FILTER (WHERE activo = FALSE) AS inactive_users,
         COUNT(*)                               AS total_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'ldap_portal' OR tipo_usuario = 'institucional') AS institutional_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo')       AS external_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'ldap_portal') AS institutional_users,
+        COUNT(*) FILTER (WHERE tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo' OR tipo_usuario = 'institucional') AS external_users,
         COUNT(*) FILTER (WHERE tipo_usuario = 'wpa_enterprise') AS wpa_enterprise_users,
         COUNT(*) FILTER (WHERE tipo_usuario = 'hotel')          AS hotel_users,
         COUNT(*) FILTER (WHERE tipo_usuario = 'restaurant')     AS restaurant_users

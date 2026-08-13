@@ -167,7 +167,8 @@ async function listUsers({
   orderDir = 'DESC', 
   filterLastConnStart = '', 
   filterLastConnEnd = '', 
-  filterConsumption = 'all' 
+  filterConsumption = 'all',
+  tipo_usuario = ''
 } = {}) {
   const trimmed = (search || '').trim();
   const searchParam = `%${trimmed}%`;
@@ -188,11 +189,11 @@ async function listUsers({
     SELECT * FROM (
       SELECT u.id, u.cedula, u.nombres, u.apellidos, u.email, u.activo, u.fecha_registro, u.tipo_usuario,
              (
-               SELECT MAX(r.acctstarttime) 
-               FROM radacct r 
-               WHERE r.username = u.cedula 
-             ) AS ultima_conexion,
-             0::bigint AS consumo_total
+                SELECT MAX(r.acctstarttime + INTERVAL '0 seconds') 
+                FROM radacct r 
+                WHERE r.username = u.cedula 
+              ) AS ultima_conexion,
+              0::bigint AS consumo_total
       FROM usuarios_portal u
     ) u_agg
     WHERE 1=1
@@ -240,6 +241,19 @@ async function listUsers({
     sql += ` AND consumo_total >= 100 * 1024 * 1024 AND consumo_total <= 1024 * 1024 * 1024`;
   } else if (filterConsumption === 'high') {
     sql += ` AND consumo_total > 1024 * 1024 * 1024`;
+  }
+
+  // Filtro por Tipo de Usuario
+  if (tipo_usuario) {
+    if (tipo_usuario === 'autoregistro') {
+      sql += ` AND (tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo' OR tipo_usuario = 'institucional')`;
+    } else if (tipo_usuario === 'ldap_portal') {
+      sql += ` AND tipo_usuario = 'ldap_portal'`;
+    } else {
+      sql += ` AND tipo_usuario = $${paramIdx}`;
+      params.push(tipo_usuario);
+      paramIdx++;
+    }
   }
 
   // Consulta para obtener el total de registros filtrados

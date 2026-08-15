@@ -45,6 +45,7 @@ El portal queda disponible en:
 | `RADIUS_SECRET` | Shared secret RADIUS (debe coincidir con el equipo de red) |
 | `SESSION_SECRET` | Secreto para sesiones Express |
 | `PORTAL_NAME` | Nombre que aparece en la UI del portal |
+| `CAPTIVE_PORTAL_LDAP_ENABLED` | Activa LDAP para el portal cautivo. Por defecto `false`; no desactiva LDAP para WPA-Enterprise |
 
 ---
 
@@ -267,5 +268,20 @@ Internet / Equipo Wi-Fi
 7. Si `Access-Accept`:
    - **MikroTik**: frontend hace POST automático a `link-login` con username/password
    - **UniFi**: portal llama API del controlador (`POST /api/s/{site}/cmd/stamgr`)
+
    - **Omada**: portal obtiene token OAuth2 y llama API extPortal
 8. Usuario accede a internet
+
+### Independencia del portal respecto a LDAP
+
+El portal cautivo resuelve primero las credenciales locales en PostgreSQL. LDAP se
+consulta únicamente cuando no existe una credencial local y se mantiene disponible
+para WPA-Enterprise. Para una instalación donde el portal no usa LDAP, mantenga:
+
+```env
+CAPTIVE_PORTAL_LDAP_ENABLED=false
+```
+
+Una caída de LDAP no debe impedir el acceso de usuarios locales del portal ni de
+usuarios WPA locales. Los usuarios que existan únicamente en LDAP necesitarán que
+el directorio vuelva a estar disponible.

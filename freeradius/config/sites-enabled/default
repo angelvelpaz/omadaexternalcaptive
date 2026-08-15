@@ -26,11 +26,15 @@ server default {
     # Se ejecuta para cada Access-Request recibido.
     # Busca el usuario en radcheck vía SQL y establece Auth-Type.
     authorize {
-        # Buscar usuario en SQL (radcheck)
+        # Resolver primero usuarios locales. Esto evita que una caída de LDAP
+        # bloquee el portal cautivo y los usuarios WPA locales.
         sql
 
-        # Si no se encuentra en SQL local, consultar LDAP/Active Directory
-        ldap
+        # LDAP solo se consulta si no hay credenciales locales y no es la
+        # solicitud EAP exterior. La identidad EAP se resuelve en inner-tunnel.
+        if (!control:Cleartext-Password && !control:NT-Password && !request:EAP-Message) {
+            ldap
+        }
 
         # Validar fecha de expiración del usuario si el atributo Expiration está en radcheck
         expiration

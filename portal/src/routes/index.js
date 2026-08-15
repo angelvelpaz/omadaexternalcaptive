@@ -14,6 +14,12 @@ const omadaSvc   = require('../services/omada');
 const ldapSvc    = require('../services/ldap');
 const externalApi = require('../services/externalApi');
 
+function isCaptivePortalLdapEnabled() {
+  return ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CAPTIVE_PORTAL_LDAP_ENABLED || '').trim().toLowerCase()
+  );
+}
+
 // ─── Detección de vendor ─────────────────────────────────────────────────────
 
 /**
@@ -126,6 +132,14 @@ router.get('/auth/config', async (req, res, next) => {
       } else {
         disableRegistration = false;
       }
+    }
+
+    // LDAP sigue disponible para WPA-Enterprise, pero el portal cautivo debe
+    // optar explícitamente por este flujo para no depender del directorio.
+    if (activeAuthType === 'ldap' && !isCaptivePortalLdapEnabled()) {
+      activeAuthType = 'cedula';
+      ldapEnabled = false;
+      disableRegistration = false;
     }
 
     res.json({
@@ -859,6 +873,10 @@ router.post('/auth/ldap',
   body('mac').isString().trim().notEmpty().withMessage('La dirección MAC es obligatoria.'),
   async (req, res, next) => {
     try {
+      if (!isCaptivePortalLdapEnabled()) {
+        return res.status(403).json({ error: 'La autenticación LDAP del portal cautivo está desactivada.' });
+      }
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });

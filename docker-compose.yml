@@ -63,6 +63,8 @@ services:
       RADIUS_PORT: 1812
       RADIUS_SECRET: ${RADIUS_SECRET}
       RADIUS_TIMEOUT: ${RADIUS_TIMEOUT:-5000}
+      # LDAP se conserva para WPA-Enterprise, pero el portal cautivo usa SQL por defecto.
+      CAPTIVE_PORTAL_LDAP_ENABLED: ${CAPTIVE_PORTAL_LDAP_ENABLED:-false}
       SESSION_SECRET: ${SESSION_SECRET}
       ADMIN_SECRET: ${ADMIN_SECRET}
       PORTAL_NAME: ${PORTAL_NAME:-Portal Cautivo}

@@ -40,6 +40,31 @@ describe('Integration: Auth Endpoints', () => {
     expect(res.body).toHaveProperty('sessionMinutes');
   });
 
+  test('GET /auth/config no activa LDAP del portal por defecto', async () => {
+    await db.saveSsidConfig('test-ldap-disabled', 'ldap', {});
+
+    try {
+      const res = await request(app)
+        .get('/auth/config?ssid=test-ldap-disabled')
+        .expect('Content-Type', /json/)
+        .expect(200);
+
+      expect(res.body.authType).toBe('cedula');
+      expect(res.body.ldapEnabled).toBe(false);
+    } finally {
+      await db.deleteSsidConfig('test-ldap-disabled');
+    }
+  });
+
+  test('POST /auth/ldap se bloquea si LDAP del portal está desactivado', async () => {
+    const res = await request(app)
+      .post('/auth/ldap')
+      .send({ username: 'usuario', password: 'password', mac: 'AA-BB-CC-DD-EE-FF' })
+      .expect(403);
+
+    expect(res.body.error).toContain('LDAP del portal cautivo está desactivada');
+  });
+
   test('POST /auth/check con cédula inválida retorna valid=false', async () => {
     const res = await request(app)
       .post('/auth/check')

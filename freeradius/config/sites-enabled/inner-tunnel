@@ -6,26 +6,28 @@ server inner-tunnel {
     # ── Sección authorize ──
     # Se ejecuta dentro del túnel TLS seguro.
     authorize {
-        # Consultar LDAP/Active Directory primero
-        ldap
-        if (ok || updated) {
-            # Encontrado en LDAP: configuramos la autenticación contra LDAP (LDAP Bind)
-            # y evitamos cargar la base de datos SQL para que no sobreescriba la contraseña real con la UUID local.
-            update control {
-                Auth-Type := LDAP
-            }
+        filter_username
+        chap
+        mschap
+
+        # Procesar la negociación EAP antes de buscar credenciales.
+        eap {
+            ok = return
         }
-        else {
-            # Si no está en LDAP, buscamos en SQL local
-            sql
+
+        # Usuarios locales primero; LDAP queda como fallback para WPA.
+        sql
+        if (!control:Cleartext-Password && !control:NT-Password) {
+            ldap
+            if (ok || updated) {
+                update control {
+                    Auth-Type := LDAP
+                }
+            }
         }
 
         # Validar fecha de expiración si el atributo Expiration está en radcheck
         expiration
-
-        # Módulos para diferentes tipos de autenticación interna
-        chap
-        mschap
         pap
     }
 
@@ -40,7 +42,10 @@ server inner-tunnel {
         Auth-Type MS-CHAP {
             mschap
         }
-        ldap
+        Auth-Type LDAP {
+            ldap
+        }
+        eap
     }
 
     # ── Sección post-auth ──

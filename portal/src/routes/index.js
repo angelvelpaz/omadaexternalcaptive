@@ -4,6 +4,7 @@ const express = require('express');
 const path = require('path');
 const { body, validationResult } = require('express-validator');
 const axios = require('axios');
+const crypto = require('crypto');
 const router = express.Router();
 
 const cedula     = require('../services/cedula');
@@ -18,6 +19,26 @@ function isCaptivePortalLdapEnabled() {
   return ['1', 'true', 'yes', 'on'].includes(
     String(process.env.CAPTIVE_PORTAL_LDAP_ENABLED || '').trim().toLowerCase()
   );
+}
+
+function normalizeMacAddress(mac) {
+  return String(mac || '').trim().toUpperCase().replace(/:/g, '-');
+}
+
+function isValidMacAddress(mac) {
+  return /^(?:[0-9A-F]{2}-){5}[0-9A-F]{2}$/.test(mac);
+}
+
+async function getSsidConfigForParams(params = {}) {
+  const ssid = String(params.ssidName || params.ssid || '').trim();
+  let ssidConfig = null;
+  if (ssid) {
+    ssidConfig = await db.getSsidConfig(ssid);
+  }
+  if (!ssidConfig && ssid !== 'default') {
+    ssidConfig = await db.getSsidConfig('default');
+  }
+  return ssidConfig;
 }
 
 // ─── Detección de vendor ─────────────────────────────────────────────────────
@@ -241,14 +262,14 @@ router.post('/auth/check',
       if (extConfig && extConfig.enabled && extConfig.host && extConfig.tableName && extConfig.colCedula) {
         // Whitelist estricta de tablas y columnas permitidas (admite '*' como comodín general)
         const ALLOWED_TABLES = (process.env.EXT_DB_ALLOWED_TABLES || '').split(',').map(s => s.trim()).filter(Boolean);
-        const ALLOWED_COLS = (process.env.EXT_DB_ALLOWED_COLS || 'cedula,nombres,apellidos,email,documento,id').split(',').map(s => s.trim());
+        const ALLOWED_COLS = (process.env.EXT_DB_ALLOWED_COLS || 'cedula,nombres,apellidos,email,documento,id,estado,status,activo,active').split(',').map(s => s.trim());
 
         if (ALLOWED_TABLES.length > 0 && !ALLOWED_TABLES.includes('*') && !ALLOWED_TABLES.includes(extConfig.tableName.trim())) {
           console.error(`[EXT-DB] Tabla no autorizada: ${extConfig.tableName}`);
           return res.json({ valid: false, exists: false, error: 'Configuración de base de datos externa no autorizada.' });
         }
 
-        const rawCols = [extConfig.colCedula, extConfig.colNombres, extConfig.colApellidos, extConfig.colEmail].filter(Boolean);
+        const rawCols = [extConfig.colCedula, extConfig.colNombres, extConfig.colApellidos, extConfig.colEmail, extConfig.colStatus].filter(Boolean);
         if (!ALLOWED_COLS.includes('*')) {
           for (const c of rawCols) {
             if (!ALLOWED_COLS.includes(c.trim())) {
@@ -275,6 +296,7 @@ router.post('/auth/check',
           // Consulta dinámica segura escapando nombres de tabla y columnas
           const escapedTable = extConfig.tableName.replace(/"/g, '""');
           const escapedCol = extConfig.colCedula.replace(/"/g, '""');
+          const escapedStatusCol = extConfig.colStatus ? extConfig.colStatus.replace(/"/g, '""') : '';
           
           const colsToFetch = [];
           if (extConfig.colNombres) colsToFetch.push(`"${extConfig.colNombres.replace(/"/g, '""')}" AS nombres`);
@@ -282,7 +304,10 @@ router.post('/auth/check',
           if (extConfig.colEmail) colsToFetch.push(`"${extConfig.colEmail.replace(/"/g, '""')}" AS email`);
           
           const selectFields = colsToFetch.length > 0 ? colsToFetch.join(', ') : '1';
-          const query = `SELECT ${selectFields} FROM "${escapedTable}" WHERE "${escapedCol}" = $1 LIMIT 1`;
+          const statusCondition = escapedStatusCol
+            ? ` AND LOWER(CAST("${escapedStatusCol}" AS TEXT)) IN ('true', 't', '1', 'activo', 'active', 'a', 'si')`
+            : '';
+          const query = `SELECT ${selectFields} FROM "${escapedTable}" WHERE "${escapedCol}" = $1${statusCondition} LIMIT 1`;
           
           const extRes = await extClient.query(query, [ced]);
 
@@ -400,6 +425,24 @@ router.post('/auth/register',
 
       const { cedula: ced, nombres, apellidos, email, vendor, vendorParams } = req.body;
       const clientIp = req.ip || req.connection.remoteAddress;
+      const params = typeof vendorParams === 'object' ? vendorParams : {};
+
+      const ssidConfig = await getSsidConfigForParams(params);
+      if (ssidConfig && !['cedula', 'autoregistro'].includes(ssidConfig.auth_type)) {
+        return res.status(403).json({ error: 'El registro por cédula no está habilitado para este SSID.' });
+      }
+      if (!ssidConfig) {
+        const branding = await db.getControllerConfig('branding') || {};
+        if (branding.disableRegistration === true) {
+          return res.status(403).json({ error: 'El registro de usuarios está desactivado para esta red.' });
+        }
+      }
+
+      const extConfig = await db.getControllerConfig('external_db_config');
+      if (extConfig && (extConfig.enabled === true || extConfig.enabled === 'true') &&
+          (extConfig.allowManualRegistration === false || extConfig.allowManualRegistration === 'false')) {
+        return res.status(403).json({ error: 'Debe validar la cédula mediante la base institucional antes de registrarse.' });
+      }
 
       if (vendor && ['unifi', 'omada', 'freeradius'].includes(vendor)) {
         const ctrlCfg = await db.getControllerConfig(vendor);
@@ -461,7 +504,6 @@ router.post('/auth/register',
       const user = await db.createUser({ cedula: ced, nombres: finalNombres, apellidos: finalApellidos, email, terminosAceptados, tipo_usuario: 'autoregistro' });
 
       // Registrar dispositivo del usuario si viene la MAC
-      const params = typeof vendorParams === 'object' ? vendorParams : {};
       const mac = params.mac || params.clientMac;
       if (mac) {
         await db.registerUserDevice(ced, mac);
@@ -761,14 +803,15 @@ router.post('/auth/free-access',
 
       // Recuperar la duración configurada para la sesión publicitaria
       let adSessionMinutes = 30;
-      const ssidParam = (params.ssid || '').trim();
-      let ssidConfig = null;
-      if (ssidParam) {
-        ssidConfig = await db.getSsidConfig(ssidParam);
+      const ssidConfig = await getSsidConfigForParams(params);
+      const branding = await db.getControllerConfig('branding') || {};
+      const publicityEnabled = ssidConfig
+        ? ssidConfig.auth_type === 'publicidad'
+        : branding.disableRegistration === true;
+      if (!publicityEnabled) {
+        return res.status(403).json({ error: 'El acceso publicitario no está habilitado para esta red.' });
       }
-      if (!ssidConfig && ssidParam !== 'default') {
-        ssidConfig = await db.getSsidConfig('default');
-      }
+
       if (ssidConfig && ssidConfig.config) {
         const sc = ssidConfig.config;
         if (sc.adSessionMinutes !== undefined) {
@@ -802,13 +845,27 @@ router.post('/auth/free-access',
         await db.setUserMaxDevices('9999999999', 0);
       }
 
-      const normalizedMac = mac.trim().toUpperCase().replace(/:/g, '-');
+      const normalizedMac = normalizeMacAddress(mac);
+      if (!isValidMacAddress(normalizedMac)) {
+        return res.status(400).json({ error: 'La dirección MAC no tiene un formato válido.' });
+      }
       let detectedVendor = vendor;
+      if (!['mikrotik', 'unifi', 'omada', 'coovachilli', 'openwrt'].includes(detectedVendor)) {
+        return res.status(400).json({ error: 'No se pudo identificar el controlador de red.' });
+      }
+      const controllerConfig = await db.getControllerConfig(detectedVendor);
+      if (controllerConfig && (controllerConfig.activo === false || controllerConfig.activo === 'false')) {
+        return res.status(403).json({ error: 'El controlador de red está desactivado.' });
+      }
       const finalParams = { ...params };
 
       // Forzar que los parámetros usen la MAC correcta si no venían
       if (!finalParams.clientMac) finalParams.clientMac = normalizedMac;
       if (!finalParams.mac) finalParams.mac = normalizedMac;
+      const reportedMac = normalizeMacAddress(finalParams.clientMac || finalParams.mac);
+      if (!isValidMacAddress(reportedMac) || reportedMac !== normalizedMac) {
+        return res.status(400).json({ error: 'La MAC del controlador no coincide con la MAC solicitada.' });
+      }
 
       // 2. Asociar el dispositivo al usuario genérico y actualizar reglas en RADIUS (incluyendo límite de tiempo)
       await db.registerUserDevice('9999999999', normalizedMac, adSessionMinutes);
@@ -952,6 +1009,7 @@ router.post('/auth/ldap',
 
       // 3. LDAP exitoso: asegurar que el usuario existe en DB local del portal
       const normalizedUsername = username.trim().toLowerCase();
+      const portalRadiusUsername = `portal_ldap_${crypto.createHash('md5').update(normalizedUsername).digest('hex')}`;
       let user = await db.getUserByCedula(normalizedUsername);
       if (!user) {
         user = await db.createUser({
@@ -960,7 +1018,8 @@ router.post('/auth/ldap',
           apellidos: authResult.apellidos,
           email: authResult.email,
           terminosAceptados: 'Aceptado por Login LDAP',
-          tipo_usuario: 'ldap_portal'
+          tipo_usuario: 'ldap_portal',
+          radius_username: portalRadiusUsername
         });
         await db.setUserMaxDevices(normalizedUsername, 1);
       } else if (!user.activo) {
@@ -977,6 +1036,9 @@ router.post('/auth/ldap',
         });
         
         return res.status(403).json({ error: warningMsg });
+      } else if (!user.radius_username || user.radius_username === normalizedUsername) {
+        await db.setUserRadiusUsername(normalizedUsername, portalRadiusUsername);
+        user = await db.getUserByCedula(normalizedUsername);
       }
 
       const normalizedMac = mac.trim().toUpperCase().replace(/:/g, '-');
@@ -1016,7 +1078,8 @@ router.post('/auth/ldap',
       }
 
       // Autenticar vía RADIUS
-      const radiusOk = await radius.authenticate(normalizedUsername, user.radius_password);
+      const radiusUsername = user.radius_username || normalizedUsername;
+      const radiusOk = await radius.authenticate(radiusUsername, user.radius_password);
       if (!radiusOk) {
         return res.status(401).json({ error: 'Fallo al autenticar la cuenta local en RADIUS.' });
       }
@@ -1026,7 +1089,7 @@ router.post('/auth/ldap',
 
       let redirectUrl = finalParams.redirectUrl || '/success';
       if (detectedVendor === 'mikrotik') {
-        redirectUrl = await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+        redirectUrl = await authorizeVendor(detectedVendor, finalParams, radiusUsername, user.radius_password);
       }
 
       // 5. Responder al cliente
@@ -1043,7 +1106,7 @@ router.post('/auth/ldap',
           await new Promise(resolve => setTimeout(resolve, 300));
           
           if (detectedVendor !== 'mikrotik') {
-            await authorizeVendor(detectedVendor, finalParams, normalizedUsername, user.radius_password);
+            await authorizeVendor(detectedVendor, finalParams, radiusUsername, user.radius_password);
           }
           
           await db.startAcctSession({
@@ -1282,8 +1345,12 @@ router.post('/auth/restaurant',
           return res.status(400).json({ error: `Límite de dispositivos alcanzado para este PIN.` });
         }
         await db.registerUserDevice(normalizedUsername, normalizedMac);
-        // Incrementar el uso del PIN solo para nuevos dispositivos
-        await db.incrementPinUsage(pinObj.pin);
+        // Incrementar el uso del PIN solo para nuevos dispositivos de forma atómica.
+        const updatedPin = await db.incrementPinUsage(pinObj.pin);
+        if (!updatedPin) {
+          await db.deleteUserDevice(normalizedUsername, normalizedMac);
+          return res.status(401).json({ error: 'Este código PIN alcanzó su límite de dispositivos.' });
+        }
       }
 
       // 4. Si es la primera conexión del PIN, iniciar el contador absoluto de tiempo
@@ -1452,10 +1519,17 @@ router.post('/auth/self-release',
       const { username, password, macToDelete, type, vendor, vendorParams } = req.body;
       const clientIp = req.ip || req.connection.remoteAddress;
       const params = typeof vendorParams === 'object' ? vendorParams : {};
-      const newMac = (params.mac || params.clientMac || '').trim().toUpperCase().replace(/:/g, '-');
-      const cleanMacToDelete = macToDelete.trim().toUpperCase().replace(/:/g, '-');
+      const newMac = normalizeMacAddress(params.mac || params.clientMac);
+      const cleanMacToDelete = normalizeMacAddress(macToDelete);
 
-      if (!newMac) {
+      if (type === 'cedula') {
+        return res.status(403).json({ error: 'La liberación por cédula requiere un factor de autenticación adicional.' });
+      }
+      if (!isCaptivePortalLdapEnabled()) {
+        return res.status(403).json({ error: 'La liberación LDAP del portal cautivo está desactivada.' });
+      }
+
+      if (!isValidMacAddress(newMac) || !isValidMacAddress(cleanMacToDelete)) {
         return res.status(400).json({ error: 'No se detectó la MAC del dispositivo actual.' });
       }
 
@@ -1540,12 +1614,13 @@ router.post('/auth/self-release',
 
       // 6. Autorizar el nuevo dispositivo
       let redirectUrl = params.redirectUrl || '/success';
+      const radiusUsername = user.radius_username || user.cedula;
       const finalParams = { ...params };
       if (!finalParams.clientMac) finalParams.clientMac = newMac;
       if (!finalParams.mac) finalParams.mac = newMac;
 
       if (detectedVendor === 'mikrotik') {
-        redirectUrl = await authorizeVendor(detectedVendor, finalParams, user.cedula, user.radius_password);
+        redirectUrl = await authorizeVendor(detectedVendor, finalParams, radiusUsername, user.radius_password);
       }
 
       res.json({
@@ -1561,7 +1636,7 @@ router.post('/auth/self-release',
           await new Promise(resolve => setTimeout(resolve, 300));
 
           if (detectedVendor !== 'mikrotik') {
-            await authorizeVendor(detectedVendor, finalParams, user.cedula, user.radius_password);
+            await authorizeVendor(detectedVendor, finalParams, radiusUsername, user.radius_password);
           }
           
           await db.startAcctSession({

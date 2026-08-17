@@ -48,4 +48,8 @@ describe('services/radius', () => {
   test('authenticate es una función', () => {
     expect(typeof radius.authenticate).toBe('function');
   });
+
+  test('probe es una función', () => {
+    expect(typeof radius.probe).toBe('function');
+  });
 });

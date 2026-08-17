@@ -11,8 +11,8 @@ ON CONFLICT DO NOTHING;
 
 -- Usuario de prueba (cédula válida de prueba: 1713175071)
 -- password: test-uuid-1234-5678-abcd (se usa en radcheck)
-INSERT INTO usuarios_portal (cedula, nombres, apellidos, email, radius_password)
-VALUES ('1713175071', 'Usuario', 'Prueba', 'prueba@example.com', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
+INSERT INTO usuarios_portal (cedula, nombres, apellidos, email, radius_password, radius_username)
+VALUES ('1713175071', 'Usuario', 'Prueba', 'prueba@example.com', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', '1713175071')
 ON CONFLICT (cedula) DO NOTHING;
 
 INSERT INTO radcheck (username, attribute, op, value)

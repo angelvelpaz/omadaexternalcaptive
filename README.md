@@ -12,6 +12,9 @@ Autentica usuarios mediante número de cédula ecuatoriana y autoriza el acceso 
 - Docker Compose v2+
 - Puertos libres en el host: `80`, `443`, `1812/udp`, `1813/udp`
 
+El gestor Winbind usa el puerto interno `8765` únicamente en la red Docker. No
+se publica al host y no requiere ni permite montar `/var/run/docker.sock`.
+
 ---
 
 ## Instalación
@@ -43,9 +46,14 @@ El portal queda disponible en:
 |---|---|
 | `POSTGRES_PASSWORD` | Contraseña de la base de datos |
 | `RADIUS_SECRET` | Shared secret RADIUS (debe coincidir con el equipo de red) |
+| `RADIUS_PROBE_TIMEOUT` | Tiempo máximo del probe RADIUS del health check, en milisegundos |
 | `SESSION_SECRET` | Secreto para sesiones Express |
 | `PORTAL_NAME` | Nombre que aparece en la UI del portal |
 | `CAPTIVE_PORTAL_LDAP_ENABLED` | Activa LDAP para el portal cautivo. Por defecto `false`; no desactiva LDAP para WPA-Enterprise |
+| `COOVACHILLI_ENABLED` | Activa la integración CoovaChilli. Mantener `false` si no se utiliza |
+| `WINBIND_MANAGER_ENABLED` | Activa el agente interno Winbind. `false` conserva el arranque LDAP/WPA sin AD |
+| `WINBIND_MANAGER_TOKEN` | Token compartido entre portal y FreeRADIUS; usar un valor aleatorio y no publicarlo |
+| `WINBIND_AGENT_PORT` | Puerto interno del agente, por defecto `8765`; no añadirlo a `ports` |
 
 ---
 
@@ -120,6 +128,32 @@ OMADA_CLIENT_SECRET=<client_secret>
 
 El portal recibirá:
 ```
+
+### Winbind / Active Directory
+
+Para habilitar la gestión gráfica, defina en `.env` un token largo y active el
+agente:
+
+```env
+WINBIND_MANAGER_ENABLED=true
+WINBIND_MANAGER_TOKEN=<token-aleatorio-sin-compartir>
+WINBIND_AGENT_PORT=8765
+```
+
+El portal recibe el mismo token mediante Compose y consulta
+`http://freeradius:8765` dentro de la red Docker. La pestaña **Winbind / NTLM**
+está restringida al rol `superadministrador` y permite:
+
+1. Consultar `net ads testjoin`, `wbinfo -t` e información no sensible del dominio.
+2. Probar un usuario con `ntlm_auth` sin guardar ni escribir la contraseña en logs.
+3. Guardar la configuración Samba y solicitar la unión al dominio.
+
+El agente solo ejecuta operaciones fijas (`net ads testjoin`, `wbinfo -t`, `net
+ads info`, `ntlm_auth` y `net ads join`) mediante argumentos validados, nunca un
+comando proporcionado por el usuario. Las credenciales de prueba o de unión se
+reciben por stdin y son transitorias; la unión requiere un controlador AD/DNS,
+sincronización horaria y un usuario con permisos. No se incluyen secretos reales
+en el repositorio.
 https://<IP_PORTAL>/?clientMac=XX:XX:XX&apMac=XX:XX:XX&ssidName=<SSID>&radioId=0&vid=1&redirectUrl=<URL>
 ```
 
@@ -285,3 +319,7 @@ CAPTIVE_PORTAL_LDAP_ENABLED=false
 Una caída de LDAP no debe impedir el acceso de usuarios locales del portal ni de
 usuarios WPA locales. Los usuarios que existan únicamente en LDAP necesitarán que
 el directorio vuelva a estar disponible.
+
+Los certificados WPA-Enterprise se leen desde `freecerts/` y se instalan en el
+volumen de FreeRADIUS al iniciar. Este directorio contiene una clave privada y no
+debe versionarse.

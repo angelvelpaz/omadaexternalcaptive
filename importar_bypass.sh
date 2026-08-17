@@ -16,7 +16,11 @@ fi
 
 # Copiar el archivo CSV temporalmente dentro del contenedor
 echo "Copiando archivo CSV al contenedor..."
-docker cp "$CSV_FILE" captive_portal:/tmp/import.csv
+docker compose exec -T portal rm -f /tmp/import.csv
+if ! docker cp "$CSV_FILE" captive_portal:/tmp/import.csv; then
+  echo "Error: no se pudo copiar el CSV al contenedor captive_portal."
+  exit 1
+fi
 
 # Ejecutar el script importador dentro del contenedor pasándole las variables de entorno correctas
 echo "Ejecutando proceso de importación masiva..."

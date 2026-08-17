@@ -11,6 +11,8 @@ ssl/*.key
 ssl/*.crt
 ssl/*.csr
 ssl/*.pem
+ssl/*.key.bak
+ssl/*.crt.bak
 
 # Docker y base de datos
 postgres_data/
@@ -20,4 +22,11 @@ postgres_data/
 .claude/
 .system_generated/
 *.log
+__pycache__/
 backups/
+
+# Certificados privados de FreeRADIUS fuera del repositorio
+freecerts/
+/ca.pem
+/server.crt
+/server.key

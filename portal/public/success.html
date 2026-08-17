@@ -97,7 +97,16 @@
 
     // Auto-redirección si hay URL de destino
     const defaultUrl = 'http://www.google.com';
-    const targetUrl = (redirect && redirect !== '/success' && redirect !== '') ? redirect : defaultUrl;
+    function sanitizeTargetUrl(raw) {
+      if (!raw || raw === '/success') return defaultUrl;
+      try {
+        const parsed = new URL(raw, window.location.origin);
+        return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : defaultUrl;
+      } catch (err) {
+        return defaultUrl;
+      }
+    }
+    const targetUrl = sanitizeTargetUrl(redirect);
 
     const redirectSection = document.getElementById('redirect-section');
     redirectSection.classList.remove('hidden');

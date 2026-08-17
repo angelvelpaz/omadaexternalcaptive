@@ -40,7 +40,7 @@ read -p "Ingrese el nombre de usuario administrador [admin]: " ADMIN_USER
 ADMIN_USER=${ADMIN_USER:-admin}
 
 # Validar si el usuario existe en la base de datos
-USER_EXISTS=$(docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -t -A -c "SELECT COUNT(1) FROM administradores WHERE username = '${ADMIN_USER}';")
+USER_EXISTS=$(docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -v admin_user="$ADMIN_USER" -t -A -c "SELECT COUNT(1) FROM administradores WHERE username = :'admin_user';")
 
 if [ "$USER_EXISTS" != "1" ]; then
   echo -e "${RED}Error: El usuario administrador '${ADMIN_USER}' no existe en la base de datos.${NC}"
@@ -81,7 +81,9 @@ fi
 
 # Actualizar el hash en la base de datos
 echo -e "${YELLOW}Actualizando la base de datos...${NC}"
-docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c "UPDATE administradores SET password_hash = '${PWD_HASH}', activo = TRUE WHERE username = '${ADMIN_USER}';" >/dev/null
+docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
+  -v admin_user="$ADMIN_USER" -v pwd_hash="$PWD_HASH" \
+  -c "UPDATE administradores SET password_hash = :'pwd_hash', activo = TRUE WHERE username = :'admin_user';" >/dev/null
 
 if [ $? -eq 0 ]; then
   echo -e "${GREEN}✓ La contraseña del administrador '${ADMIN_USER}' ha sido restablecida exitosamente.${NC}"

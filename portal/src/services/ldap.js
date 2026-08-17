@@ -1,5 +1,25 @@
 const ldap = require('ldapjs');
 
+function escapeLdapFilter(value) {
+  return String(value || '').replace(/[\\*()\0]/g, ch => ({
+    '\\': '\\5c',
+    '*': '\\2a',
+    '(': '\\28',
+    ')': '\\29',
+    '\0': '\\00'
+  }[ch]));
+}
+
+function normalizeDn(value) {
+  return String(value || '').split(',').map(part => part.trim().toLowerCase()).join(',');
+}
+
+function tlsOptions() {
+  return {
+    rejectUnauthorized: process.env.LDAP_TLS_REJECT_UNAUTHORIZED !== 'false'
+  };
+}
+
 /**
  * Autentica un usuario contra el Active Directory / LDAP.
  */
@@ -9,7 +29,7 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
     try {
       client = ldap.createClient({
         url: url,
-        tlsOptions: { rejectUnauthorized: false },
+        tlsOptions: tlsOptions(),
         connectTimeout: 5000,
         timeout: 5000
       });
@@ -29,7 +49,8 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
       }
 
       // 2. Buscar el DN del usuario y sus grupos
-      const filter = `(|(sAMAccountName=${username})(userPrincipalName=${username}))`;
+       const safeUsername = escapeLdapFilter(username);
+       const filter = `(|(sAMAccountName=${safeUsername})(userPrincipalName=${safeUsername}))`;
       const opts = {
         filter: filter,
         scope: 'sub',
@@ -76,9 +97,8 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
             const memberOf = userEntry.memberOf || [];
             const groups = Array.isArray(memberOf) ? memberOf : [memberOf];
             
-            const belongs = groups.some(g => {
-              return g.toLowerCase().includes(allowedGroup.toLowerCase());
-            });
+            const allowedDn = normalizeDn(allowedGroup);
+            const belongs = groups.some(g => normalizeDn(g) === allowedDn);
 
             if (!belongs) {
               client.destroy();
@@ -113,7 +133,7 @@ function searchUser({ url, bindDN, bindPassword, searchBase, username }) {
     try {
       client = ldap.createClient({
         url: url,
-        tlsOptions: { rejectUnauthorized: false },
+        tlsOptions: tlsOptions(),
         connectTimeout: 5000,
         timeout: 5000
       });
@@ -131,7 +151,8 @@ function searchUser({ url, bindDN, bindPassword, searchBase, username }) {
         return reject(new Error('Fallo de conexión Bind LDAP Administrador: ' + err.message));
       }
 
-      const filter = `(|(sAMAccountName=${username})(userPrincipalName=${username}))`;
+      const safeUsername = escapeLdapFilter(username);
+      const filter = `(|(sAMAccountName=${safeUsername})(userPrincipalName=${safeUsername}))`;
       const opts = {
         filter: filter,
         scope: 'sub',
@@ -186,7 +207,7 @@ function getGroupMembers({ url, bindDN, bindPassword, searchBase, allowedGroup }
     try {
       client = ldap.createClient({
         url: url,
-        tlsOptions: { rejectUnauthorized: false },
+        tlsOptions: tlsOptions(),
         connectTimeout: 5000,
         timeout: 5000
       });
@@ -205,7 +226,7 @@ function getGroupMembers({ url, bindDN, bindPassword, searchBase, allowedGroup }
       }
 
       // En Active Directory buscamos usuarios miembros del grupo allowedGroup
-      const filter = `(&(objectClass=user)(memberOf=${allowedGroup}))`;
+      const filter = `(&(objectClass=user)(memberOf=${escapeLdapFilter(allowedGroup)}))`;
       const opts = {
         filter: filter,
         scope: 'sub',

@@ -7,6 +7,11 @@ set -e
 
 RADDB=/etc/raddb
 
+if [ -z "$RADIUS_SECRET" ] || [ -z "$POSTGRES_HOST" ] || [ -z "$POSTGRES_DB" ] || [ -z "$POSTGRES_USER" ] || [ -z "$POSTGRES_PASSWORD" ]; then
+  echo "[FREERADIUS] RADIUS_SECRET y las credenciales de PostgreSQL son obligatorios."
+  exit 1
+fi
+
 echo "[FREERADIUS] Procesando configuración con variables de entorno..."
 
 if [ -f "$RADDB/clients.conf.template" ]; then
@@ -21,6 +26,22 @@ if [ -f "$RADDB/mods-available/sql.template" ]; then
     < "$RADDB/mods-available/sql.template" \
     > "$RADDB/mods-available/sql"
   echo "[FREERADIUS] Generado: $RADDB/mods-available/sql"
+fi
+
+# Instalar certificados WPA-Enterprise externos y generar el PEM que usa EAP.
+CERT_SOURCE="$RADDB/custom-certs"
+if [ -f "$CERT_SOURCE/ca.pem" ] && [ -f "$CERT_SOURCE/server.crt" ] && [ -f "$CERT_SOURCE/server.key" ]; then
+  echo "[FREERADIUS] Instalando certificados WPA-Enterprise desde $CERT_SOURCE..."
+  cp "$CERT_SOURCE/ca.pem" "$RADDB/certs/ca.pem"
+  cp "$CERT_SOURCE/server.crt" "$RADDB/certs/server.crt"
+  cp "$CERT_SOURCE/server.key" "$RADDB/certs/server.key"
+  # El cliente Android necesita recibir el certificado del servidor seguido
+  # por toda la cadena intermedia antes de la clave privada.
+  cat "$CERT_SOURCE/server.crt" "$CERT_SOURCE/ca.pem" "$CERT_SOURCE/server.key" > "$RADDB/certs/server.pem"
+  chown freerad:freerad "$RADDB/certs/ca.pem" "$RADDB/certs/server.crt" "$RADDB/certs/server.key" "$RADDB/certs/server.pem"
+  chmod 640 "$RADDB/certs/ca.pem" "$RADDB/certs/server.crt" "$RADDB/certs/server.key" "$RADDB/certs/server.pem"
+else
+  echo "[FREERADIUS] Advertencia: no se encontraron certificados completos en $CERT_SOURCE."
 fi
 
 # Esperar a que la base de datos PostgreSQL esté en línea
@@ -55,6 +76,11 @@ ldap {
 	base_dn = '${LDAP_BASE}'
 
 	sasl {
+	}
+
+	options {
+		chase_referrals = yes
+		rebind = yes
 	}
 
 	tls {
@@ -99,6 +125,21 @@ if [ -f "$RADDB/mods-available/eap" ]; then
   sed -i 's/use_tunneled_reply = no/use_tunneled_reply = yes/g' "$RADDB/mods-available/eap"
   sed -i 's/default_eap_type = md5/default_eap_type = peap/g' "$RADDB/mods-available/eap"
   echo "[FREERADIUS] Modificado: use_tunneled_reply = yes y default_eap_type = peap en mods-available/eap"
+fi
+
+# El agente se limita a la red Docker (no hay puerto publicado en Compose).
+# Si Winbind no se configura, FreeRADIUS mantiene su arranque normal.
+if [ "${WINBIND_MANAGER_ENABLED:-false}" = "true" ] && [ -n "${WINBIND_MANAGER_TOKEN:-}" ]; then
+  if getent group sambashare >/dev/null 2>&1; then
+    usermod -a -G sambashare freerad || true
+  fi
+  mkdir -p /var/lib/samba/winbindd_privileged
+  chgrp sambashare /var/lib/samba/winbindd_privileged 2>/dev/null || true
+  chmod 750 /var/lib/samba/winbindd_privileged 2>/dev/null || true
+  echo "[FREERADIUS] Iniciando agente interno Winbind en ${WINBIND_AGENT_PORT:-8765}..."
+  python3 /usr/local/bin/winbind_manager.py >/var/log/winbind-manager.log 2>&1 &
+else
+  echo "[FREERADIUS] Agente Winbind desactivado; se conserva el flujo LDAP/WPA existente."
 fi
 
 # Hilo en segundo plano para recarga en caliente al detectar cambios en .reload

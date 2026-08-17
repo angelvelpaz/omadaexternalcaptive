@@ -18,5 +18,3 @@ services:
       - RADIUS_HOST=${RADIUS_HOST:-127.0.0.1}
       - RADIUS_SECRET=${RADIUS_SECRET:-shared_secret_muy_seguro}
       - GATEWAY_UAM_SECRET=${GATEWAY_UAM_SECRET:-uam_secret_compartido_seguro}
-    env_file:
-      - .env

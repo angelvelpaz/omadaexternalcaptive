@@ -22,6 +22,11 @@ ldap {
 	sasl {
 	}
 
+	options {
+		chase_referrals = yes
+		rebind = yes
+	}
+
 	# Parámetros TLS / Certificados
 	tls {
 		start_tls = no

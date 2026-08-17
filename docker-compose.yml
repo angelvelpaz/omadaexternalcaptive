@@ -14,7 +14,7 @@ services:
     networks:
       - captive_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -33,6 +33,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       RADIUS_SECRET: ${RADIUS_SECRET}
+      WINBIND_MANAGER_ENABLED: ${WINBIND_MANAGER_ENABLED:-false}
+      WINBIND_MANAGER_TOKEN: ${WINBIND_MANAGER_TOKEN:-}
+      WINBIND_AGENT_PORT: ${WINBIND_AGENT_PORT:-8765}
     ports:
       - "1812:1812/udp"
       - "1813:1813/udp"
@@ -40,6 +43,10 @@ services:
       - captive_net
     volumes:
       - freeradius_certs:/etc/raddb/certs
+      - freeradius_winbind:/etc/samba
+      - freeradius_samba:/var/lib/samba
+      - freeradius_winbind_state:/var/lib/winbind
+      - ./freecerts:/etc/raddb/custom-certs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,8 +70,12 @@ services:
       RADIUS_PORT: 1812
       RADIUS_SECRET: ${RADIUS_SECRET}
       RADIUS_TIMEOUT: ${RADIUS_TIMEOUT:-5000}
+      RADIUS_PROBE_TIMEOUT: ${RADIUS_PROBE_TIMEOUT:-1000}
+      WINBIND_MANAGER_TOKEN: ${WINBIND_MANAGER_TOKEN:-}
+      WINBIND_AGENT_URL: http://freeradius:${WINBIND_AGENT_PORT:-8765}
       # LDAP se conserva para WPA-Enterprise, pero el portal cautivo usa SQL por defecto.
       CAPTIVE_PORTAL_LDAP_ENABLED: ${CAPTIVE_PORTAL_LDAP_ENABLED:-false}
+      COOVACHILLI_ENABLED: ${COOVACHILLI_ENABLED:-false}
       SESSION_SECRET: ${SESSION_SECRET}
       ADMIN_SECRET: ${ADMIN_SECRET}
       PORTAL_NAME: ${PORTAL_NAME:-Portal Cautivo}
@@ -113,3 +124,6 @@ networks:
 volumes:
   postgres_data:
   freeradius_certs:
+  freeradius_winbind:
+  freeradius_samba:
+  freeradius_winbind_state:

@@ -65,6 +65,54 @@ describe('Integration: Auth Endpoints', () => {
     expect(res.body.error).toContain('LDAP del portal cautivo está desactivada');
   });
 
+  test('POST /auth/self-release no usa la cédula como autenticación', async () => {
+    const res = await request(app)
+      .post('/auth/self-release')
+      .send({
+        username: '1713175071',
+        password: 'ignored',
+        macToDelete: 'AA-BB-CC-DD-EE-FF',
+        type: 'cedula',
+        vendorParams: { mac: '11-22-33-44-55-66' }
+      })
+      .expect(403);
+
+    expect(res.body.error).toContain('factor de autenticación adicional');
+  });
+
+  test('usuarios LDAP usan una identidad RADIUS local separada', async () => {
+    const cedula = 'ldap.integration.user';
+    const radiusUsername = 'portal_ldap_integration_hash';
+
+    try {
+      await db.deleteUser(cedula, true);
+    } catch (e) {}
+
+    await db.createUser({
+      cedula,
+      nombres: 'LDAP',
+      apellidos: 'Integration',
+      email: 'ldap@example.com',
+      terminosAceptados: 'Test',
+      tipo_usuario: 'ldap_portal',
+      radius_username: radiusUsername
+    });
+
+    try {
+      const result = await db.getPool().query(
+        'SELECT u.radius_username, r.username FROM usuarios_portal u JOIN radcheck r ON r.username = u.radius_username WHERE u.cedula = $1 AND r.attribute = $2',
+        [cedula, 'Cleartext-Password']
+      );
+
+      expect(result.rows[0]).toEqual(expect.objectContaining({
+        radius_username: radiusUsername,
+        username: radiusUsername
+      }));
+    } finally {
+      await db.deleteUser(cedula, true);
+    }
+  });
+
   test('POST /auth/check con cédula inválida retorna valid=false', async () => {
     const res = await request(app)
       .post('/auth/check')

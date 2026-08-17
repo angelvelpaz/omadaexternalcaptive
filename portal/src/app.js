@@ -16,6 +16,15 @@ const { setupSwagger } = require('./swagger');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+function validateProductionEnvironment() {
+  if (process.env.NODE_ENV !== 'production') return;
+  const required = ['POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD', 'RADIUS_SECRET', 'ADMIN_SECRET', 'SESSION_SECRET'];
+  const missing = required.filter(name => !String(process.env[name] || '').trim());
+  if (missing.length > 0) {
+    throw new Error(`Faltan variables de entorno obligatorias: ${missing.join(', ')}`);
+  }
+}
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.set('trust proxy', 1); // nginx está delante
 
@@ -29,6 +38,14 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiados intentos. Espere un minuto e intente nuevamente.' },
+});
+
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de administración. Espere antes de reintentar.' },
 });
 
 // Archivos estáticos
@@ -48,6 +65,17 @@ app.use('/auth/ldap', authLimiter);
 app.use('/auth/hotel', authLimiter);
 app.use('/auth/restaurant', authLimiter);
 app.use('/auth/free-access', authLimiter);
+app.use('/auth/check', authLimiter);
+app.use('/auth/check-mac', authLimiter);
+app.use('/auth/self-release', authLimiter);
+app.use('/admin/api/login', adminLoginLimiter);
+
+app.use('/auth', (req, res, next) => {
+  if (process.env.COOVACHILLI_ENABLED !== 'true' && req.body && req.body.vendor === 'coovachilli') {
+    return res.status(403).json({ error: 'La integración CoovaChilli está desactivada.' });
+  }
+  next();
+});
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   const checks = {
@@ -65,14 +93,13 @@ app.get('/health', async (req, res) => {
   }
 
   try {
-    const { authenticate } = require('./services/radius');
-    // No hacemos ping real a RADIUS en health check para no bloquear
-    checks.freeradius = process.env.RADIUS_SECRET ? 'ok' : 'unconfigured';
+    const { probe } = require('./services/radius');
+    checks.freeradius = await probe() ? 'ok' : 'fail';
   } catch (e) {
     checks.freeradius = 'fail';
   }
 
-  const status = checks.postgres === 'ok' ? 'ok' : 'degraded';
+  const status = checks.postgres === 'ok' && checks.freeradius === 'ok' ? 'ok' : 'degraded';
   res.status(status === 'ok' ? 200 : 503).json({
     status,
     checks,
@@ -99,6 +126,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 
 // ─── Inicio ───────────────────────────────────────────────────────────────────
 async function start() {
+  validateProductionEnvironment();
   await db.connect();
   if (process.env.NODE_ENV !== 'test') {
     app.listen(PORT, '0.0.0.0', () => {
@@ -120,8 +148,7 @@ if (process.env.NODE_ENV !== 'test') {
     process.exit(1);
   });
 } else {
-  // En testing, solo inicializamos la BD
-  db.connect().catch(err => console.error('[TEST-DB] Error de conexión:', err.message));
+  // Las suites de prueba inicializan la BD explícitamente en sus hooks.
 }
 
 module.exports = app;

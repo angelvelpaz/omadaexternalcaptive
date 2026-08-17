@@ -4,11 +4,12 @@
 -- ─── Tabla de usuarios del portal ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS usuarios_portal (
     id                     SERIAL PRIMARY KEY,
-    cedula                 VARCHAR(10) UNIQUE NOT NULL,
+    cedula                 VARCHAR(150) UNIQUE NOT NULL,
     nombres                VARCHAR(100) NOT NULL,
     apellidos              VARCHAR(100) NOT NULL,
     email                  VARCHAR(150) NOT NULL,
     radius_password        VARCHAR(36) NOT NULL,
+    radius_username        VARCHAR(150) UNIQUE NOT NULL,
     fecha_registro         TIMESTAMPTZ DEFAULT NOW(),
     activo                 BOOLEAN DEFAULT TRUE,
     acepta_terminos        BOOLEAN NOT NULL DEFAULT TRUE,
@@ -111,7 +112,7 @@ CREATE INDEX IF NOT EXISTS radacct_acctsessionid   ON radacct(acctsessionid);
 -- ─── Tabla de registro de accesos (auditoría) ────────────────────────────────
 CREATE TABLE IF NOT EXISTS access_log (
     id          SERIAL PRIMARY KEY,
-    cedula      VARCHAR(10) NOT NULL,
+    cedula      VARCHAR(150) NOT NULL,
     vendor      VARCHAR(20),
     mac_address VARCHAR(17),
     ip_address  INET,
@@ -125,7 +126,7 @@ CREATE INDEX IF NOT EXISTS idx_access_log_created_at ON access_log(created_at);
 -- ─── Tabla de dispositivos registrados por usuario ───────────────────────────
 CREATE TABLE IF NOT EXISTS dispositivos_usuario (
     id          SERIAL PRIMARY KEY,
-    cedula      VARCHAR(10) NOT NULL REFERENCES usuarios_portal(cedula) ON DELETE CASCADE,
+    cedula      VARCHAR(150) NOT NULL REFERENCES usuarios_portal(cedula) ON DELETE CASCADE,
     mac_address VARCHAR(17) NOT NULL,
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(cedula, mac_address)
@@ -157,4 +158,3 @@ CREATE TABLE IF NOT EXISTS ldap_group_vlans (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ldap_group_vlans_group_dn ON ldap_group_vlans(group_dn);
-

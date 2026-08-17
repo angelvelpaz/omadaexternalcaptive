@@ -5,12 +5,23 @@ const { v4: uuidv4 } = require('uuid');
 const { getVendor } = require('mac-oui-lookup');
 
 let pool;
+let connectPromise;
 
 function getPool() {
   return pool;
 }
 
 async function connect() {
+  if (!connectPromise) {
+    connectPromise = connectOnce().catch(err => {
+      connectPromise = null;
+      throw err;
+    });
+  }
+  return connectPromise;
+}
+
+async function connectOnce() {
   pool = new Pool({
     host:     process.env.POSTGRES_HOST || 'postgres',
     port:     parseInt(process.env.POSTGRES_PORT || '5432'),
@@ -25,6 +36,26 @@ async function connect() {
   // Verificar conexión e inicializar esquema adicional
   const client = await pool.connect();
   await client.query('SELECT 1');
+  await client.query('SELECT pg_advisory_lock(14082026)');
+
+  // Los usuarios LDAP pueden tener identificadores mayores a una cédula y
+  // usan una identidad RADIUS local separada para no colisionar con WPA.
+  await client.query('ALTER TABLE usuarios_portal ALTER COLUMN cedula TYPE VARCHAR(150)');
+  await client.query('ALTER TABLE usuarios_portal ADD COLUMN IF NOT EXISTS radius_username VARCHAR(150)');
+  await client.query('UPDATE usuarios_portal SET radius_username = cedula WHERE radius_username IS NULL');
+  await client.query(`
+    DO $migration$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes WHERE indexname = 'idx_usuarios_portal_radius_username'
+      ) THEN
+        CREATE UNIQUE INDEX idx_usuarios_portal_radius_username ON usuarios_portal(radius_username);
+      END IF;
+    END
+    $migration$;
+  `);
+  await client.query('ALTER TABLE access_log ALTER COLUMN cedula TYPE VARCHAR(150)');
+  await client.query('ALTER TABLE dispositivos_usuario ALTER COLUMN cedula TYPE VARCHAR(150)');
   await client.query(`
     CREATE TABLE IF NOT EXISTS controller_config (
       vendor      TEXT PRIMARY KEY,
@@ -144,6 +175,29 @@ async function connect() {
     console.error('[DB] Advertencia al validar columnas adicionales:', colErr.message);
   }
 
+  // Migrar usuarios LDAP existentes a su namespace local del portal antes de
+  // que puedan colisionar con la identidad LDAP usada por WPA-Enterprise.
+  await client.query(`
+    UPDATE usuarios_portal
+    SET radius_username = 'portal_ldap_' || SUBSTRING(md5(LOWER(cedula)) FROM 1 FOR 32)
+    WHERE tipo_usuario = 'ldap_portal' AND radius_username = cedula
+  `);
+  await client.query(`
+    UPDATE radcheck r
+    SET username = u.radius_username
+    FROM usuarios_portal u
+    WHERE u.tipo_usuario = 'ldap_portal'
+      AND r.username = u.cedula
+      AND r.attribute = 'Cleartext-Password'
+  `);
+  await client.query(`
+    UPDATE radusergroup g
+    SET username = u.radius_username
+    FROM usuarios_portal u
+    WHERE u.tipo_usuario = 'ldap_portal'
+      AND g.username = u.cedula
+  `);
+
   // Inicializar grupos RADIUS por defecto si no existen
   try {
     await client.query(`
@@ -168,6 +222,7 @@ async function connect() {
     console.error('[DB] Advertencia al sembrar grupos RADIUS:', grpErr.message);
   }
 
+  await client.query('SELECT pg_advisory_unlock(14082026)');
   client.release();
   console.log('[DB] Conexión a PostgreSQL establecida');
 }
@@ -190,7 +245,7 @@ async function userExists(cedula) {
  */
 async function getUserByCedula(cedula) {
   const result = await pool.query(
-    'SELECT id, cedula, nombres, apellidos, email, radius_password, max_dispositivos, activo FROM usuarios_portal WHERE cedula = $1 LIMIT 1',
+    'SELECT id, cedula, nombres, apellidos, email, radius_password, radius_username, max_dispositivos, activo FROM usuarios_portal WHERE cedula = $1 LIMIT 1',
     [cedula]
   );
   return result.rows[0] || null;
@@ -201,7 +256,7 @@ async function getUserByCedula(cedula) {
  * Usa una transacción para garantizar consistencia.
  * @returns {Object} usuario creado
  */
-async function createUser({ cedula, nombres, apellidos, email, terminosAceptados, tipo_usuario = 'autoregistro' }) {
+async function createUser({ cedula, nombres, apellidos, email, terminosAceptados, tipo_usuario = 'autoregistro', radius_username = cedula }) {
   const radiusPassword = uuidv4();
   const client = await pool.connect();
 
@@ -210,10 +265,10 @@ async function createUser({ cedula, nombres, apellidos, email, terminosAceptados
 
     // Insertar en tabla de usuarios del portal
     const userResult = await client.query(
-      `INSERT INTO usuarios_portal (cedula, nombres, apellidos, email, radius_password, acepta_terminos, fecha_acepta_terminos, terminos_aceptados, tipo_usuario)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), $6, $7)
-       RETURNING id, cedula, nombres, apellidos, email, radius_password, tipo_usuario, max_dispositivos`,
-      [cedula, nombres.trim(), apellidos.trim(), (email || '').trim().toLowerCase(), radiusPassword, terminosAceptados || null, tipo_usuario]
+      `INSERT INTO usuarios_portal (cedula, nombres, apellidos, email, radius_password, radius_username, acepta_terminos, fecha_acepta_terminos, terminos_aceptados, tipo_usuario)
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW(), $7, $8)
+       RETURNING id, cedula, nombres, apellidos, email, radius_password, radius_username, tipo_usuario, max_dispositivos`,
+      [cedula, nombres.trim(), apellidos.trim(), (email || '').trim().toLowerCase(), radiusPassword, radius_username, terminosAceptados || null, tipo_usuario]
     );
 
     const user = userResult.rows[0];
@@ -222,7 +277,7 @@ async function createUser({ cedula, nombres, apellidos, email, terminosAceptados
     await client.query(
       `INSERT INTO radcheck (username, attribute, op, value)
        VALUES ($1, 'Cleartext-Password', ':=', $2)`,
-      [cedula, radiusPassword]
+      [radius_username, radiusPassword]
     );
 
     // Asignar al grupo de RADIUS correcto
@@ -231,12 +286,37 @@ async function createUser({ cedula, nombres, apellidos, email, terminosAceptados
       `INSERT INTO radusergroup (username, groupname, priority)
        VALUES ($1, $2, 1)
        ON CONFLICT DO NOTHING`,
-      [cedula, groupName]
+      [radius_username, groupName]
     );
 
     await client.query('COMMIT');
     console.log(`[DB] Usuario registrado (${tipo_usuario}): ${cedula}`);
     return user;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function setUserRadiusUsername(cedula, radiusUsername) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query(
+      'SELECT radius_username FROM usuarios_portal WHERE cedula = $1 FOR UPDATE',
+      [cedula]
+    );
+    if (!current.rows[0]) throw new Error('Usuario no encontrado.');
+    const previous = current.rows[0].radius_username || cedula;
+
+    await client.query('DELETE FROM radcheck WHERE username = $1 AND username <> $2', [radiusUsername, previous]);
+    await client.query('DELETE FROM radusergroup WHERE username = $1 AND username <> $2', [radiusUsername, previous]);
+    await client.query('UPDATE usuarios_portal SET radius_username = $1 WHERE cedula = $2', [radiusUsername, cedula]);
+    await client.query('UPDATE radcheck SET username = $1 WHERE username = $2', [radiusUsername, previous]);
+    await client.query('UPDATE radusergroup SET username = $1 WHERE username = $2', [radiusUsername, previous]);
+    await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -281,6 +361,11 @@ async function updateUserType(cedula, tipoUsuario) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const identity = await client.query(
+      'SELECT COALESCE(radius_username, cedula) AS radius_username FROM usuarios_portal WHERE cedula = $1 FOR UPDATE',
+      [cedula]
+    );
+    const radiusUsername = identity.rows[0]?.radius_username || cedula;
     await client.query(
       `UPDATE usuarios_portal SET tipo_usuario = $1 WHERE cedula = $2`,
       [tipoUsuario, cedula]
@@ -289,13 +374,13 @@ async function updateUserType(cedula, tipoUsuario) {
     
     // Delete previous groups
     await client.query(
-      `DELETE FROM radusergroup WHERE username = $1`,
-      [cedula]
+      `DELETE FROM radusergroup WHERE username IN ($1, $2)`,
+      [cedula, radiusUsername]
     );
     // Insert new group
     await client.query(
       `INSERT INTO radusergroup (username, groupname, priority) VALUES ($1, $2, 1)`,
-      [cedula, groupName]
+      [radiusUsername, groupName]
     );
     await client.query('COMMIT');
   } catch (err) {
@@ -315,19 +400,25 @@ async function bulkUpdateUserType(cedulas, tipoUsuario) {
       `UPDATE usuarios_portal SET tipo_usuario = $1 WHERE cedula = ANY($2)`,
       [tipoUsuario, cedulas]
     );
+    const identities = await client.query(
+      'SELECT cedula, COALESCE(radius_username, cedula) AS radius_username FROM usuarios_portal WHERE cedula = ANY($1)',
+      [cedulas]
+    );
     const groupName = tipoUsuario === 'institucional' ? 'captive-portal-users-institucional' : 'captive-portal-users-externo';
     
     // Delete old groups
     await client.query(
-      `DELETE FROM radusergroup WHERE username = ANY($1)`,
+      `DELETE FROM radusergroup
+       WHERE username = ANY($1)
+          OR username IN (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = ANY($1))`,
       [cedulas]
     );
     
     // Insert new groups
-    for (const ced of cedulas) {
+    for (const user of identities.rows) {
       await client.query(
         `INSERT INTO radusergroup (username, groupname, priority) VALUES ($1, $2, 1) ON CONFLICT DO NOTHING`,
-        [ced, groupName]
+        [user.radius_username, groupName]
       );
     }
     await client.query('COMMIT');
@@ -376,7 +467,7 @@ async function listUsers({
              (
                SELECT MAX(r.acctstarttime + INTERVAL '0 seconds') 
                FROM radacct r 
-               WHERE r.username = u.cedula 
+               WHERE r.username IN (u.cedula, u.radius_username)
              ) AS ultima_conexion,
              0::bigint AS consumo_total
       FROM usuarios_portal u
@@ -475,8 +566,11 @@ async function getUserDetail(cedula) {
       [cedula]
     ),
     pool.query(
-      `SELECT ug.groupname, ug.priority
-       FROM radusergroup ug WHERE ug.username = $1 ORDER BY ug.priority`,
+     `SELECT ug.groupname, ug.priority
+        FROM radusergroup ug
+        WHERE ug.username = $1
+           OR ug.username = (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = $1)
+        ORDER BY ug.priority`,
       [cedula]
     ),
     pool.query(
@@ -514,7 +608,7 @@ async function setUserActive(cedula, active) {
     if (active) {
       // Re-insertar radcheck si fue eliminado
       const u = await client.query(
-        `SELECT radius_password FROM usuarios_portal WHERE cedula = $1`,
+        `SELECT radius_password, radius_username FROM usuarios_portal WHERE cedula = $1`,
         [cedula]
       );
       if (u.rows[0]) {
@@ -522,12 +616,12 @@ async function setUserActive(cedula, active) {
           `INSERT INTO radcheck (username, attribute, op, value)
            VALUES ($1, 'Cleartext-Password', ':=', $2)
            ON CONFLICT DO NOTHING`,
-          [cedula, u.rows[0].radius_password]
+            [u.rows[0].radius_username || cedula, u.rows[0].radius_password]
         );
       }
     } else {
       await client.query(
-        `DELETE FROM radcheck WHERE username = $1 AND attribute = 'Cleartext-Password'`,
+        `DELETE FROM radcheck WHERE username = (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = $1) AND attribute = 'Cleartext-Password'`,
         [cedula]
       );
     }
@@ -579,9 +673,15 @@ async function bulkDeleteUsers(cedulas, purgeHistory = false) {
     }
 
     // 5. Eliminar credenciales y perfil (siempre se ejecuta)
-    await client.query(`DELETE FROM radcheck    WHERE username = ANY($1)`, [cedulas]);
-    await client.query(`DELETE FROM radreply    WHERE username = ANY($1)`, [cedulas]);
-    await client.query(`DELETE FROM radusergroup WHERE username = ANY($1)`, [cedulas]);
+    await client.query(`DELETE FROM radcheck
+      WHERE username = ANY($1)
+         OR username IN (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = ANY($1))`, [cedulas]);
+    await client.query(`DELETE FROM radreply
+      WHERE username = ANY($1)
+         OR username IN (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = ANY($1))`, [cedulas]);
+    await client.query(`DELETE FROM radusergroup
+      WHERE username = ANY($1)
+         OR username IN (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = ANY($1))`, [cedulas]);
     await client.query(`DELETE FROM usuarios_portal WHERE cedula = ANY($1)`, [cedulas]);
     await client.query('COMMIT');
   } catch (err) {
@@ -605,7 +705,7 @@ async function bulkUpdateUserActive(cedulas, active) {
     if (active) {
       // Re-insertar radcheck para cada usuario de la lista
       const users = await client.query(
-        `SELECT cedula, radius_password FROM usuarios_portal WHERE cedula = ANY($1)`,
+        `SELECT cedula, radius_username, radius_password FROM usuarios_portal WHERE cedula = ANY($1)`,
         [cedulas]
       );
       for (const u of users.rows) {
@@ -613,13 +713,16 @@ async function bulkUpdateUserActive(cedulas, active) {
           `INSERT INTO radcheck (username, attribute, op, value)
            VALUES ($1, 'Cleartext-Password', ':=', $2)
            ON CONFLICT DO NOTHING`,
-          [u.cedula, u.radius_password]
+          [u.radius_username || u.cedula, u.radius_password]
         );
       }
     } else {
       // Eliminar de radcheck
       await client.query(
-        `DELETE FROM radcheck WHERE username = ANY($1) AND attribute = 'Cleartext-Password'`,
+        `DELETE FROM radcheck
+         WHERE attribute = 'Cleartext-Password'
+           AND (username = ANY($1)
+             OR username IN (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = ANY($1)))`,
         [cedulas]
       );
     }
@@ -674,9 +777,15 @@ async function deleteUser(cedula, purgeHistory = false) {
     }
 
     // 5. Eliminar credenciales y perfil (siempre se ejecuta)
-    await client.query(`DELETE FROM radcheck    WHERE username = $1`, [cedula]);
-    await client.query(`DELETE FROM radreply    WHERE username = $1`, [cedula]);
-    await client.query(`DELETE FROM radusergroup WHERE username = $1`, [cedula]);
+    await client.query(`DELETE FROM radcheck
+      WHERE username = $1
+         OR username = (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = $1)`, [cedula]);
+    await client.query(`DELETE FROM radreply
+      WHERE username = $1
+         OR username = (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = $1)`, [cedula]);
+    await client.query(`DELETE FROM radusergroup
+      WHERE username = $1
+         OR username = (SELECT COALESCE(radius_username, cedula) FROM usuarios_portal WHERE cedula = $1)`, [cedula]);
     await client.query(`DELETE FROM usuarios_portal WHERE cedula = $1`, [cedula]);
     await client.query('COMMIT');
   } catch (err) {
@@ -695,11 +804,16 @@ async function setUserGroups(cedula, groups) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(`DELETE FROM radusergroup WHERE username = $1`, [cedula]);
+    const identity = await client.query(
+      'SELECT COALESCE(radius_username, cedula) AS radius_username FROM usuarios_portal WHERE cedula = $1',
+      [cedula]
+    );
+    const radiusUsername = identity.rows[0]?.radius_username || cedula;
+    await client.query(`DELETE FROM radusergroup WHERE username IN ($1, $2)`, [cedula, radiusUsername]);
     for (const g of groups) {
       await client.query(
         `INSERT INTO radusergroup (username, groupname, priority) VALUES ($1, $2, $3)`,
-        [cedula, g.groupname, g.priority || 1]
+        [radiusUsername, g.groupname, g.priority || 1]
       );
     }
     await client.query('COMMIT');
@@ -867,7 +981,7 @@ async function getStats() {
         COALESCE(NULLIF(TRIM(u.nombres || ' ' || u.apellidos), ''), u.cedula) AS nombre_completo,
         t.total_bytes
       FROM user_traffic t
-      JOIN usuarios_portal u ON u.cedula = t.cedula
+      JOIN usuarios_portal u ON u.cedula = t.cedula OR u.radius_username = t.cedula
       ORDER BY t.total_bytes DESC
       LIMIT 10
     `),
@@ -1327,7 +1441,7 @@ async function getActiveWpaSessions() {
       r.acctinputoctets AS upload,
       r.acctoutputoctets AS download
     FROM radacct r
-    LEFT JOIN usuarios_portal u ON r.username = u.cedula
+     LEFT JOIN usuarios_portal u ON r.username = u.cedula OR r.username = u.radius_username
     WHERE r.acctstoptime IS NULL
       AND r.acctauthentic = 'RADIUS'
     ORDER BY r.acctstarttime DESC
@@ -1384,22 +1498,33 @@ async function disconnectRadiusClient(macAddress) {
     console.log(`[RADIUS-CoA] Active session found. NAS IP: ${cleanNasIp}, Session ID: ${acctsessionid}. Sending disconnect...`);
 
     const secret = process.env.RADIUS_SECRET || 'shared_secret_muy_seguro';
-    const { exec } = require('child_process');
+    const { spawn } = require('child_process');
 
-    // Construir comando radclient
+    // Pasar los datos por stdin y argumentos, sin interpolarlos en un shell.
     const payload = `Acct-Session-Id = "${acctsessionid}", User-Name = "${username}", Calling-Station-Id = "${colonMac}"`;
-    const cmd = `echo '${payload}' | radclient -t 1 -r 2 -x ${cleanNasIp}:3799 disconnect ${secret}`;
 
     return new Promise((resolve) => {
-      exec(cmd, (err, stdout, stderr) => {
-        if (err) {
-          console.error(`[RADIUS-CoA] radclient error: ${err.message}. Output: ${stdout}, Stderr: ${stderr}`);
+      const child = spawn('radclient', ['-t', '1', '-r', '2', `${cleanNasIp}:3799`, 'disconnect', secret], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', chunk => { stdout += chunk; });
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      child.on('error', err => {
+        console.error(`[RADIUS-CoA] radclient error: ${err.message}. Output: ${stdout}, Stderr: ${stderr}`);
+        resolve(false);
+      });
+      child.on('close', code => {
+        if (code !== 0) {
+          console.error(`[RADIUS-CoA] radclient exited with code ${code}. Output: ${stdout}, Stderr: ${stderr}`);
           resolve(false);
         } else {
           console.log(`[RADIUS-CoA] Disconnect sent successfully to ${cleanNasIp}:3799. Response: ${stdout}`);
           resolve(true);
         }
       });
+      child.stdin.end(payload);
     });
   } catch (err) {
     console.error('[RADIUS-CoA] Error in disconnectRadiusClient:', err.message);
@@ -1858,7 +1983,7 @@ async function getAdminBySessionToken(token) {
     `SELECT s.username, a.rol, a.nombres
      FROM admin_sessions s
      JOIN administradores a ON a.username = s.username
-     WHERE s.token = $1 AND s.expires_at > NOW() LIMIT 1`,
+     WHERE s.token = $1 AND s.expires_at > NOW() AND a.activo = TRUE LIMIT 1`,
     [token]
   );
   const session = res.rows[0];
@@ -2358,10 +2483,11 @@ async function createRestaurantPin({ pin, duracion_minutos, limite_dispositivos,
 
 async function incrementPinUsage(pin) {
   const result = await pool.query(
-    `UPDATE restaurant_pins 
-     SET dispositivos_usados = dispositivos_usados + 1,
-         activo = CASE WHEN (dispositivos_usados + 1) >= limite_dispositivos THEN FALSE ELSE TRUE END
-     WHERE pin = $1 RETURNING *`,
+    `UPDATE restaurant_pins
+      SET dispositivos_usados = dispositivos_usados + 1,
+          activo = CASE WHEN (dispositivos_usados + 1) >= limite_dispositivos THEN FALSE ELSE TRUE END
+      WHERE pin = $1 AND activo = TRUE AND dispositivos_usados < limite_dispositivos
+      RETURNING *`,
     [pin.trim()]
   );
   return result.rows[0];
@@ -2386,7 +2512,7 @@ module.exports = {
   deleteLdapGroupVlan,
   startAcctSession,
   closeExpiredSessions,
-  userExists, getUserByCedula, createUser, logAccess, updateTermsAcceptance,
+  userExists, getUserByCedula, createUser, setUserRadiusUsername, logAccess, updateTermsAcceptance,
   // admin
   listUsers, getUserDetail, setUserActive, bulkUpdateUserActive, deleteUser, bulkDeleteUsers, setUserGroups, updateUserType, bulkUpdateUserType,
   listGroups, addGroupAttribute, deleteGroupAttribute, deleteGroup,

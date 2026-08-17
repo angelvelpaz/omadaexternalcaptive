@@ -1,5 +1,6 @@
 #!/bin/bash
 # Script de Backup para el Portal Cautivo
+umask 077
 
 # Directorio de destino para los backups
 BACKUP_DIR="./backups"
@@ -53,13 +54,25 @@ cp .env "${TEMP_DIR}/.env.backup"
 # 3. Respaldo de los directorios de configuración de los servicios
 echo -e "${YELLOW}[3/4] Copiando archivos de configuración de servicios (nginx, freeradius, ssl)...${NC}"
 mkdir -p "${TEMP_DIR}/config"
-cp -r nginx freeradius ssl "${TEMP_DIR}/config/" 2>/dev/null || true
+if ! cp -r nginx freeradius ssl "${TEMP_DIR}/config/"; then
+  echo -e "${RED}Error al copiar configuraciones locales.${NC}"
+  rm -rf "${TEMP_DIR}"
+  exit 1
+fi
+
+# Los certificados WPA se almacenan en el volumen de FreeRADIUS, no en el repo.
+if ! docker cp captive_freeradius:/etc/raddb/certs "${TEMP_DIR}/config/freeradius-certs"; then
+  echo -e "${RED}Error al respaldar los certificados WPA-Enterprise.${NC}"
+  rm -rf "${TEMP_DIR}"
+  exit 1
+fi
 
 # 4. Empaquetar todo en un archivo comprimido .tar.gz
 echo -e "${YELLOW}[4/4] Comprimiendo archivos de respaldo...${NC}"
 tar -czf "${BACKUP_DIR}/${BACKUP_NAME}.tar.gz" -C "/tmp" "${BACKUP_NAME}"
 
 if [ $? -eq 0 ]; then
+  chmod 600 "${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
   echo -e "${GREEN}✓ Archivo comprimido creado: ${BACKUP_DIR}/${BACKUP_NAME}.tar.gz${NC}"
   # Limpieza de archivos temporales
   rm -rf "${TEMP_DIR}"

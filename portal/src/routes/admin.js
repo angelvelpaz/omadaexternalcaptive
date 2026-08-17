@@ -10,6 +10,7 @@ const controllerTest = require('../services/controllerTest');
 const omadaSvc       = require('../services/omada');
 const unifiSvc       = require('../services/unifi');
 const ldapSvc        = require('../services/ldap');
+const winbindManager = require('../services/winbindManager');
 const axios          = require('axios');
 const externalApi    = require('../services/externalApi');
 const { getClientIp, validateBase64Image } = require('../services/utils');
@@ -131,14 +132,14 @@ router.use(async (req, res, next) => {
 
 async function requireAdmin(req, res, next) {
   const auth = req.headers.authorization || '';
-  let token = auth.startsWith('Bearer ') ? auth.slice(7) : (req.headers['x-admin-token'] || req.query.token || null);
+  let token = auth.startsWith('Bearer ') ? auth.slice(7) : (req.headers['x-admin-token'] || null);
   if (!token) {
     return res.status(401).json({ error: 'No autorizado. Se requiere token.' });
   }
 
   try {
     // 1. Verificar si es el token del administrador legacy (compatibilidad)
-    if (token === ADMIN_SECRET) {
+    if (process.env.NODE_ENV !== 'production' && token === ADMIN_SECRET) {
       req.adminUser = 'admin';
       req.adminRol = 'superadministrador';
       return next();
@@ -171,6 +172,15 @@ function requireRol(...roles) {
       return res.status(403).json({ error: 'No tienes permisos suficientes para esta acción.' });
     }
     next();
+  };
+}
+
+function requireSelfOrRol(...roles) {
+  return (req, res, next) => {
+    if (req.adminUser === String(req.params.username || '').trim().toLowerCase()) {
+      return next();
+    }
+    return requireRol(...roles)(req, res, next);
   };
 }
 
@@ -1162,7 +1172,7 @@ function buildControllerConfig(vendor, dbCfg) {
 }
 
 // GET — configuración actual (secretos enmascarados)
-router.get('/api/controllers', requireAdmin, async (req, res, next) => {
+router.get('/api/controllers', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const vendors = ['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap', 'ldap'];
     const result  = {};
@@ -1175,7 +1185,7 @@ router.get('/api/controllers', requireAdmin, async (req, res, next) => {
 });
 
 // PUT — guarda configuración en DB
-router.put('/api/controllers/:vendor', requireAdmin,
+router.put('/api/controllers/:vendor', requireAdmin, requireRol('superadministrador'),
   param('vendor').isIn(['freeradius', 'unifi', 'omada', 'mikrotik', 'coovachilli', 'secap', 'ldap']),
   async (req, res, next) => {
     try {
@@ -1270,7 +1280,7 @@ router.put('/api/controllers/:vendor', requireAdmin,
 );
 
 // Test LDAP connection endpoint
-router.post('/api/controllers/ldap/test', requireAdmin, async (req, res, next) => {
+router.post('/api/controllers/ldap/test', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { serverUrl, bindDN, bindCredentials, searchBase, allowedGroup, testUser, testPassword } = req.body;
     if (!serverUrl || !bindDN || !searchBase || !testUser || !testPassword) {
@@ -1325,6 +1335,86 @@ router.post('/api/controllers/:vendor/test', requireAdmin,
     } catch (err) { next(err); }
   }
 );
+
+// ─── Winbind / ntlm_auth (solo superadministrador) ────────────────────────────
+const WINBIND_REALM = /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
+const WINBIND_NETBIOS = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$/;
+const WINBIND_DC = /^(?:(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?|(?:[0-9]{1,3}\.){3}[0-9]{1,3})$/;
+const WINBIND_USER = /^[A-Za-z0-9_.@\\-]{1,128}$/;
+
+const winbindDomainValidators = [
+  body('realm').isString().trim().matches(WINBIND_REALM),
+  body('netbios_domain').isString().trim().matches(WINBIND_NETBIOS),
+  body('dc').optional({ values: 'falsy' }).isString().trim().matches(WINBIND_DC),
+];
+
+function winbindError(res, error) {
+  const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 600
+    ? error.status
+    : 503;
+  return res.status(status).json({ error: error.message || 'Operación Winbind no disponible.' });
+}
+
+router.get('/api/winbind/status', requireAdmin, requireRol('superadministrador'), async (req, res) => {
+  try {
+    res.json(await winbindManager.getStatus());
+  } catch (error) {
+    winbindError(res, error);
+  }
+});
+
+router.post('/api/winbind/test', requireAdmin, requireRol('superadministrador'), [
+  body('username').isString().trim().matches(WINBIND_USER),
+  body('password').isString().isLength({ min: 1, max: 512 }).custom(value => !/[\0\r\n]/.test(value)),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ error: 'Usuario o contraseña de prueba inválidos.' });
+  try {
+    const result = await winbindManager.testCredentials({
+      username: req.body.username.trim(),
+      password: req.body.password,
+    });
+    res.json({ ok: !!result.ok, authenticated: !!result.authenticated, message: result.message });
+  } catch (error) {
+    winbindError(res, error);
+  }
+});
+
+router.post('/api/winbind/configure', requireAdmin, requireRol('superadministrador'), winbindDomainValidators, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ error: 'Realm, dominio NetBIOS o controlador inválido.' });
+  try {
+    const result = await winbindManager.configureDomain({
+      realm: req.body.realm.trim(),
+      netbios_domain: req.body.netbios_domain.trim(),
+      dc: (req.body.dc || '').trim(),
+    });
+    res.json({ ok: !!result.ok, message: result.message });
+  } catch (error) {
+    winbindError(res, error);
+  }
+});
+
+router.post('/api/winbind/join', requireAdmin, requireRol('superadministrador'), [
+  ...winbindDomainValidators,
+  body('username').isString().trim().matches(WINBIND_USER),
+  body('password').isString().isLength({ min: 1, max: 512 }).custom(value => !/[\0\r\n]/.test(value)),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ error: 'Complete una configuración de dominio y credenciales válidas.' });
+  try {
+    const result = await winbindManager.joinDomain({
+      realm: req.body.realm.trim(),
+      netbios_domain: req.body.netbios_domain.trim(),
+      dc: (req.body.dc || '').trim(),
+      username: req.body.username.trim(),
+      password: req.body.password,
+    });
+    res.status(result.ok ? 200 : 502).json({ ok: !!result.ok, message: result.message });
+  } catch (error) {
+    winbindError(res, error);
+  }
+});
 
 // GET — configuración de branding
 router.get('/api/branding', requireAdmin, async (req, res, next) => {
@@ -1628,7 +1718,7 @@ router.delete('/api/ssids/:ssidName', requireAdmin, async (req, res, next) => {
 // ─── RUTAS PARA LISTA BLANCA DE DISPOSITIVOS (MAC BYPASS) ─────────────────────
 
 // GET - Listar todos los bypass
-router.get('/api/mac-bypass', requireAdmin, async (req, res, next) => {
+router.get('/api/mac-bypass', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const list = await db.listMacBypass();
     res.json(list);
@@ -1636,7 +1726,7 @@ router.get('/api/mac-bypass', requireAdmin, async (req, res, next) => {
 });
 
 // POST - Registrar nueva MAC en bypass
-router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
+router.post('/api/mac-bypass', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { macAddress, propietario, alias, ppsk, vlanId, cedula } = req.body;
     if (!macAddress || !propietario) {
@@ -1669,7 +1759,7 @@ router.post('/api/mac-bypass', requireAdmin, async (req, res, next) => {
 });
 
 // PUT - Actualizar un bypass (Editar propietario, alias, ppsk, vlan_id, mac_address)
-router.put('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
+router.put('/api/mac-bypass/:id', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { macAddress, propietario, alias, ppsk, vlanId, cedula } = req.body;
@@ -1713,7 +1803,7 @@ router.put('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
 });
 
 // PUT - Cambiar estado activo
-router.put('/api/mac-bypass/:id/active', requireAdmin, async (req, res, next) => {
+router.put('/api/mac-bypass/:id/active', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { activo } = req.body;
@@ -1746,7 +1836,7 @@ router.put('/api/mac-bypass/:id/active', requireAdmin, async (req, res, next) =>
 });
 
 // DELETE - Eliminar de la lista de bypass
-router.delete('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
+router.delete('/api/mac-bypass/:id', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -1776,7 +1866,7 @@ router.delete('/api/mac-bypass/:id', requireAdmin, async (req, res, next) => {
 });
 
 // POST - Actualizar clave PPSK en lote
-router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, async (req, res, next) => {
+router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { ids, ppsk } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -1814,7 +1904,7 @@ router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, async (req, res, next) =>
 });
 
 // POST - Actualizar VLAN en lote
-router.post('/api/mac-bypass/bulk-vlan', requireAdmin, async (req, res, next) => {
+router.post('/api/mac-bypass/bulk-vlan', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { ids, vlanId } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -2565,7 +2655,7 @@ function sanitizePem(pemText) {
     .trim() + '\n';
 }
 
-router.post('/api/ssl', requireAdmin, async (req, res, next) => {
+router.post('/api/ssl', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { cert, key } = req.body;
     console.log('[SSL] Intento de carga de certificados. Tamaño cert:', cert ? cert.length : 0, 'Tamaño key:', key ? key.length : 0);
@@ -2596,6 +2686,8 @@ router.post('/api/ssl', requireAdmin, async (req, res, next) => {
 
     fs.writeFileSync(path.join(sslDir, 'portal.crt'), cleanCert, 'utf8');
     fs.writeFileSync(path.join(sslDir, 'portal.key'), cleanKey, 'utf8');
+    fs.chmodSync(path.join(sslDir, 'portal.crt'), 0o640);
+    fs.chmodSync(path.join(sslDir, 'portal.key'), 0o640);
     fs.writeFileSync(path.join(sslDir, '.reload'), new Date().toISOString(), 'utf8');
 
     console.log('[SSL] Nuevos certificados cargados con éxito. Solicitando recarga de Nginx...');
@@ -2605,7 +2697,7 @@ router.post('/api/ssl', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.post('/api/wpa-certs', requireAdmin, async (req, res, next) => {
+router.post('/api/wpa-certs', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const { ca, cert, key } = req.body;
     console.log('[WPA-Certs] Intento de carga de certificados. ca:', ca ? ca.length : 0, 'cert:', cert ? cert.length : 0, 'key:', key ? key.length : 0);
@@ -2663,7 +2755,7 @@ router.post('/api/wpa-certs', requireAdmin, async (req, res, next) => {
 const { Client } = require('pg');
 
 // GET — obtener configuración de base de datos externa
-router.get('/api/external-db/config', requireAdmin, async (req, res, next) => {
+router.get('/api/external-db/config', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const config = await db.getControllerConfig('external_db_config') || {};
     res.json({
@@ -2672,7 +2764,7 @@ router.get('/api/external-db/config', requireAdmin, async (req, res, next) => {
       port:         config.port || 5432,
       database:     config.database || '',
       user:         config.user || '',
-      password:     config.password || '',
+      password:     '',
       ssl:          config.ssl || false,
       tableName:    config.tableName || '',
       colCedula:    config.colCedula || '',
@@ -2686,16 +2778,17 @@ router.get('/api/external-db/config', requireAdmin, async (req, res, next) => {
 });
 
 // PUT — guardar configuración de base de datos externa
-router.put('/api/external-db/config', requireAdmin, async (req, res, next) => {
+router.put('/api/external-db/config', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const input = req.body;
+    const existing = await db.getControllerConfig('external_db_config') || {};
     const newCfg = {
       enabled:      !!input.enabled,
       host:         (input.host || '').trim(),
       port:         parseInt(input.port) || 5432,
       database:     (input.database || '').trim(),
       user:         (input.user || '').trim(),
-      password:     input.password || '',
+      password:     input.password || existing.password || '',
       ssl:          !!input.ssl,
       tableName:    (input.tableName || '').trim(),
       colCedula:    (input.colCedula || '').trim(),
@@ -2711,7 +2804,7 @@ router.put('/api/external-db/config', requireAdmin, async (req, res, next) => {
 });
 
 // POST — probar conexión y obtener tablas/columnas
-router.post('/api/external-db/test', requireAdmin, async (req, res, next) => {
+router.post('/api/external-db/test', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   const { host, port, database, user, password, ssl } = req.body;
 
   const client = new Client({
@@ -2953,7 +3046,7 @@ router.put('/api/admins/:username/status', requireAdmin, requireRol('administrad
   }
 );
 
-router.put('/api/admins/:username/password', requireAdmin,
+router.put('/api/admins/:username/password', requireAdmin, requireSelfOrRol('superadministrador'),
   param('username').isString().trim().notEmpty(),
   body('password').isString().isLength({ min: 6 }),
   async (req, res, next) => {
@@ -3075,7 +3168,7 @@ router.get('/api/maintenance/preview', requireAdmin,
   }
 );
 
-router.post('/api/maintenance/purge', requireAdmin,
+router.post('/api/maintenance/purge', requireAdmin, requireRol('superadministrador'),
   body('purgeDevices').isBoolean(),
   body('purgeAcct').isBoolean(),
   body('purgeLogs').isBoolean(),
@@ -3120,7 +3213,7 @@ router.get('/api/maintenance/schedule', requireAdmin, async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-router.post('/api/maintenance/schedule', requireAdmin,
+router.post('/api/maintenance/schedule', requireAdmin, requireRol('superadministrador'),
   body('enabled').isBoolean(),
   body('frequency').isIn(['daily', 'weekly', 'monthly']),
   body('ageDays').isInt({ min: 1, max: 365 }),

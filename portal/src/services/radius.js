@@ -7,6 +7,7 @@ const RADIUS_HOST    = process.env.RADIUS_HOST    || 'freeradius';
 const RADIUS_PORT    = parseInt(process.env.RADIUS_PORT || '1812');
 const RADIUS_SECRET  = process.env.RADIUS_SECRET  || '';
 const RADIUS_TIMEOUT = parseInt(process.env.RADIUS_TIMEOUT || '5000');
+const RADIUS_PROBE_TIMEOUT = parseInt(process.env.RADIUS_PROBE_TIMEOUT || '1000');
 
 /**
  * Autentica un usuario contra FreeRADIUS usando PAP (Access-Request).
@@ -80,4 +81,47 @@ function authenticate(username, password) {
   });
 }
 
-module.exports = { authenticate };
+function probe() {
+  return new Promise((resolve) => {
+    if (!RADIUS_SECRET) return resolve(false);
+
+    const socket = dgram.createSocket('udp4');
+    let settled = false;
+    const timer = setTimeout(() => finish(false), RADIUS_PROBE_TIMEOUT);
+
+    function finish(value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.close();
+      resolve(value);
+    }
+
+    socket.on('error', () => finish(false));
+    socket.on('message', (msg) => {
+      try {
+        const response = radius.decode({ packet: msg, no_secret: true });
+        const verified = radius.verify_response({
+          request: packet,
+          response: msg,
+          secret: RADIUS_SECRET
+        });
+        finish(response.code === 'Access-Accept' && verified);
+      } catch (err) {
+        finish(false);
+      }
+    });
+
+    const packet = radius.encode({
+      code: 'Status-Server',
+      secret: RADIUS_SECRET,
+      attributes: []
+    });
+
+    socket.send(packet, 0, packet.length, RADIUS_PORT, RADIUS_HOST, err => {
+      if (err) finish(false);
+    });
+  });
+}
+
+module.exports = { authenticate, probe };

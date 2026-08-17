@@ -1,14 +1,67 @@
 services:
   postgres:
+    container_name: captive_postgres_test
     environment:
       POSTGRES_DB: portal_cautivo_test
       POSTGRES_USER: portal_user
       POSTGRES_PASSWORD: portal_password_seguro
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
 
   portal:
+    container_name: captive_portal_test
+    build:
+      context: ./portal
+      dockerfile: Dockerfile.test
     environment:
       NODE_ENV: test
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
       POSTGRES_DB: portal_cautivo_test
+      POSTGRES_USER: portal_user
+      POSTGRES_PASSWORD: portal_password_seguro
+      RADIUS_HOST: freeradius
+      RADIUS_PORT: 1812
+      RADIUS_SECRET: test_radius_secret
+      SESSION_SECRET: test_session_secret
+      ADMIN_SECRET: test_admin_secret
+      CAPTIVE_PORTAL_LDAP_ENABLED: false
+      WINBIND_MANAGER_TOKEN: test_winbind_manager_token
+      WINBIND_AGENT_URL: http://freeradius:8765
       PORT: 3000
+    volumes:
+      - ./ssl:/app/ssl:ro
+      - freeradius_test_certs:/app/freeradius-certs
     ports:
       - "3001:3000"
+
+  freeradius:
+    container_name: captive_freeradius_test
+    ports: !reset []
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: portal_cautivo_test
+      POSTGRES_USER: portal_user
+      POSTGRES_PASSWORD: portal_password_seguro
+      RADIUS_SECRET: test_radius_secret
+      WINBIND_MANAGER_ENABLED: "true"
+      WINBIND_MANAGER_TOKEN: test_winbind_manager_token
+      WINBIND_AGENT_PORT: 8765
+    volumes:
+      - freeradius_test_certs:/etc/raddb/certs
+      - freeradius_test_winbind:/etc/samba
+      - freeradius_test_samba:/var/lib/samba
+      - freeradius_test_winbind_state:/var/lib/winbind
+      - freeradius_test_winbind:/etc/samba
+
+  nginx:
+    container_name: captive_nginx_test
+    ports: !reset []
+
+volumes:
+  postgres_test_data:
+  freeradius_test_certs:
+  freeradius_test_winbind:
+  freeradius_test_samba:
+  freeradius_test_winbind_state:

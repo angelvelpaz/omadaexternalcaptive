@@ -15,13 +15,27 @@ server inner-tunnel {
             ok = return
         }
 
-        # Usuarios locales primero; LDAP queda como fallback para WPA.
+        # Usuarios locales primero; LDAP queda como fallback para TTLS/PAP.
         sql
-        if (!control:Cleartext-Password && !control:NT-Password) {
-            ldap
-            if (ok || updated) {
-                update control {
-                    Auth-Type := LDAP
+
+        # Para PEAP/MSCHAPv2, esperar a que el paquete interno contenga el
+        # desafío y la respuesta antes de consultar grupos LDAP y delegar la
+        # contraseña a Winbind.
+        if (request:MS-CHAP-Challenge && request:MS-CHAP2-Response) {
+            if (!control:Cleartext-Password && !control:NT-Password) {
+                ldap
+            }
+            update control {
+                Auth-Type := MS-CHAP
+            }
+        }
+        else {
+            if (!request:EAP-Message && !control:Cleartext-Password && !control:NT-Password) {
+                ldap
+                if (ok || updated) {
+                    update control {
+                        Auth-Type := LDAP
+                    }
                 }
             }
         }

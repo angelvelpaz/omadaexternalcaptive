@@ -338,6 +338,10 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
+    const secureApiOrigin = window.location.protocol === 'http:'
+      ? `https://${window.location.hostname}${window.location.port && window.location.port !== '80' ? ':' + window.location.port : ''}`
+      : window.location.origin;
+    const secureApiFetch = (url, options) => fetch(`${secureApiOrigin}${url}`, options);
 
     fetch(`/auth/config?ssid=${encodeURIComponent(ssidVal)}`).then(r => r.json()).then(cfg => {
       if (cfg.name) PORTAL_NAME.textContent = cfg.name;
@@ -625,7 +629,7 @@
       document.getElementById('terms-error').classList.add('hidden');
 
       try {
-        const resp = await fetch('/auth/check', {
+        const resp = await secureApiFetch('/auth/check', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cedula: ced }),
@@ -662,7 +666,7 @@
 
     async function doLogin(ced, isAuto = false) {
       try {
-        const resp = await fetch('/auth/login', {
+        const resp = await secureApiFetch('/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cedula: ced, terms: true, vendor, vendorParams: getVendorParams() }),
@@ -771,7 +775,7 @@
       }
 
       try {
-        const resp = await fetch('/auth/check-mac?mac=' + encodeURIComponent(clientMac));
+        const resp = await secureApiFetch('/auth/check-mac?mac=' + encodeURIComponent(clientMac));
         const data = await resp.json();
 
         if (data.registered) {
@@ -818,7 +822,7 @@
       btnSpinner.classList.remove('hidden');
 
       try {
-        const resp = await fetch('/auth/free-access', {
+        const resp = await secureApiFetch('/auth/free-access', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mac: clientMac, vendor, vendorParams: getVendorParams() }),
@@ -886,7 +890,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
 
-        const resp = await fetch('/auth/ldap', {
+        const resp = await secureApiFetch('/auth/ldap', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -968,7 +972,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
 
-        const resp = await fetch('/auth/hotel', {
+        const resp = await secureApiFetch('/auth/hotel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1048,7 +1052,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
 
-        const resp = await fetch('/auth/restaurant', {
+        const resp = await secureApiFetch('/auth/restaurant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1190,7 +1194,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
 
-        const resp = await fetch('/auth/self-release', {
+        const resp = await secureApiFetch('/auth/self-release', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

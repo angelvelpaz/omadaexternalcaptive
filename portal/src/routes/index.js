@@ -181,7 +181,8 @@ router.get('/auth/config', async (req, res, next) => {
       adSessionMinutes: parseInt(adSessionMinutes),
       adAllowDirectRegister: adAllowDirectRegister,
       ldapEnabled: ldapEnabled,
-      authType: activeAuthType
+      authType: activeAuthType,
+      timezone: branding.timezone || 'America/Guayaquil',
     });
   } catch (err) { next(err); }
 });

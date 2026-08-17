@@ -40,13 +40,14 @@
     fetch('/auth/config')
       .then(r => r.json())
       .then(cfg => {
+        const tz = cfg.timezone || 'America/Guayaquil';
         if (cfg.termsUpdatedAt) {
           const date = new Date(cfg.termsUpdatedAt);
-          const options = { year: 'numeric', month: 'long', day: 'numeric' };
+          const options = { year: 'numeric', month: 'long', day: 'numeric', timeZone: tz };
           document.getElementById('last-update').textContent = 'Última actualización: ' + date.toLocaleDateString('es-EC', options);
         } else {
           const date = new Date();
-          const options = { year: 'numeric', month: 'long', day: 'numeric' };
+          const options = { year: 'numeric', month: 'long', day: 'numeric', timeZone: tz };
           document.getElementById('last-update').textContent = 'Última actualización: ' + date.toLocaleDateString('es-EC', options);
         }
 

@@ -340,7 +340,7 @@ router.put('/api/devices', requireAdmin,
 );
 
 router.delete('/api/devices', requireAdmin,
-  body('cedula').isString().trim().isLength({ min: 10, max: 10 }).isNumeric(),
+  body('cedula').isString().trim().isLength({ min: 1, max: 150 }),
   body('mac_address').isString().trim().matches(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/),
   async (req, res, next) => {
     try {
@@ -1435,6 +1435,7 @@ router.get('/api/branding', requireAdmin, async (req, res, next) => {
       adImageUrlMobile: config.adImageUrlMobile || '',
       adSessionMinutes: config.adSessionMinutes !== undefined ? config.adSessionMinutes : 30,
       adAllowDirectRegister: config.adAllowDirectRegister !== false,
+      timezone: config.timezone || 'America/Guayaquil',
     });
   } catch (err) { next(err); }
 });
@@ -1527,6 +1528,7 @@ router.put('/api/branding', requireAdmin, async (req, res, next) => {
       adImageUrlMobile: adImageUrlMobile,
       adSessionMinutes: parseInt(input.adSessionMinutes !== undefined ? input.adSessionMinutes : '30'),
       adAllowDirectRegister: input.adAllowDirectRegister !== false,
+      timezone: (input.timezone || 'America/Guayaquil').trim(),
     };
     await db.saveControllerConfig('branding', newCfg);
 

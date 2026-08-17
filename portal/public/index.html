@@ -335,6 +335,11 @@
     // ── Configuración desde el servidor ──────────────────────────────────────
     const PORTAL_NAME = document.getElementById('portal-name');
     const PORTAL_LOGO = document.getElementById('portal-logo');
+    let APP_TIMEZONE = 'America/Guayaquil';
+    function fmtDatePortal(d, opts) {
+      try { return new Date(d).toLocaleDateString('es-EC', { timeZone: APP_TIMEZONE, ...opts }); }
+      catch (e) { return new Date(d).toLocaleDateString('es-EC', opts); }
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
     const ssidVal = urlParams.get('ssidName') || urlParams.get('ssid') || '';
@@ -347,6 +352,7 @@
       if (cfg.name) PORTAL_NAME.textContent = cfg.name;
       document.title = cfg.name || 'Portal Wi-Fi';
       if (cfg.logo) PORTAL_LOGO.src = cfg.logo;
+      if (cfg.timezone) APP_TIMEZONE = cfg.timezone;
       
       if (cfg.disableRegistration) {
         document.getElementById('form-cedula').classList.add('hidden');
@@ -1119,7 +1125,7 @@
           const div = document.createElement('div');
           div.className = 'flex items-center justify-between p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-blue-50 transition select-none';
           
-          const dateStr = new Date(dev.created_at).toLocaleDateString('es-EC', {
+          const dateStr = fmtDatePortal(dev.created_at, {
             day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
           });
 

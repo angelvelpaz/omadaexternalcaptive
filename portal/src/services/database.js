@@ -175,6 +175,25 @@ async function connectOnce() {
     console.error('[DB] Advertencia al validar columnas adicionales:', colErr.message);
   }
 
+  // Ampliar resultado de access_log para mensajes LDAP más descriptivos
+  try {
+    await client.query(`
+      DO $migration$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'access_log' AND column_name = 'resultado'
+          AND character_maximum_length < 40
+        ) THEN
+          ALTER TABLE access_log ALTER COLUMN resultado TYPE VARCHAR(40);
+        END IF;
+      END
+      $migration$;
+    `);
+  } catch (colErr) {
+    console.error('[DB] Advertencia al ampliar resultado de access_log:', colErr.message);
+  }
+
   // Migrar usuarios LDAP existentes a su namespace local del portal antes de
   // que puedan colisionar con la identidad LDAP usada por WPA-Enterprise.
   await client.query(`

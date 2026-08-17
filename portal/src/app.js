@@ -37,6 +37,7 @@ const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
   message: { error: 'Demasiados intentos. Espere un minuto e intente nuevamente.' },
 });
 
@@ -59,6 +60,16 @@ app.use((req, res, next) => {
 });
 
 // ─── Rutas ────────────────────────────────────────────────────────────────────
+// Manejar preflights CORS globalmente antes de los limiters de autenticación
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS' && req.path.startsWith('/auth/')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.sendStatus(204);
+  }
+  next();
+});
 app.use('/auth/login', authLimiter);
 app.use('/auth/register', authLimiter);
 app.use('/auth/ldap', authLimiter);
@@ -69,6 +80,12 @@ app.use('/auth/check', authLimiter);
 app.use('/auth/check-mac', authLimiter);
 app.use('/auth/self-release', authLimiter);
 app.use('/admin/api/login', adminLoginLimiter);
+
+// Headers CORS para todas las rutas de autenticación
+app.use('/auth', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
 
 app.use('/auth', (req, res, next) => {
   if (process.env.COOVACHILLI_ENABLED !== 'true' && req.body && req.body.vendor === 'coovachilli') {

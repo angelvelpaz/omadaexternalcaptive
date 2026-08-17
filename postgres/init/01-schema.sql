@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS access_log (
     vendor      VARCHAR(20),
     mac_address VARCHAR(17),
     ip_address  INET,
-    resultado   VARCHAR(20) NOT NULL,  -- 'success', 'failed', 'registered'
+    resultado   VARCHAR(40) NOT NULL,  -- 'success', 'failed', 'registered'
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 

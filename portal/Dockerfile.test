@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app
+RUN apk add --no-cache freeradius-utils
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tailwind.config.js ./
+COPY src/ ./src/
+COPY public/ ./public/
+COPY tests/ ./tests/
+COPY jest.config.js ./
+
+CMD ["sleep", "infinity"]

@@ -1,0 +1,9 @@
+mschap {
+    use_mppe = yes
+    require_encryption = yes
+    require_strong = yes
+
+    # PEAP/MSCHAPv2 de Windows se valida contra Active Directory mediante
+    # Winbind. El dominio se resuelve desde smb.conf/krb5.conf.
+    ntlm_auth = "/usr/bin/ntlm_auth --request-nt-key --allow-mschapv2 --username=%{%{Stripped-User-Name}:-%{%{User-Name}:-None}} --challenge=%{%{mschap:Challenge}:-00} --nt-response=%{%{mschap:NT-Response}:-00}"
+}

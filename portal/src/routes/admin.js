@@ -2281,15 +2281,19 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
 
     const members = Array.from(allMembersMap.values());
 
-    // Obtener sesiones activas para cruzar conexión
+    // Obtener sesiones activas para cruzar conexión (solo la más reciente por usuario)
+    // La query ordena por acctstarttime DESC, así que la primera es la más reciente
     const activeSessions = await db.getActiveSessions();
     const activeSessionsMap = new Map();
     activeSessions.forEach(s => {
-      activeSessionsMap.set(String(s.username).toLowerCase(), {
-        macAddress: s.mac_address,
-        ipAddress: s.ip_address,
-        startTime: s.start_time
-      });
+      const key = String(s.username).toLowerCase();
+      if (!activeSessionsMap.has(key)) {
+        activeSessionsMap.set(key, {
+          macAddress: s.mac_address,
+          ipAddress: s.ip_address,
+          startTime: s.start_time
+        });
+      }
     });
 
     // Consultar estado local de estos usuarios
@@ -2423,15 +2427,19 @@ router.get('/api/ldap/portal-members', requireAdmin, async (req, res, next) => {
 
     const members = Array.from(allMembersMap.values());
 
-    // Obtener sesiones activas para cruzar conexión
+    // Obtener sesiones activas para cruzar conexión (solo la más reciente por usuario)
+    // La query ordena por acctstarttime DESC, así que la primera es la más reciente
     const activeSessions = await db.getActiveSessions();
     const activeSessionsMap = new Map();
     activeSessions.forEach(s => {
-      activeSessionsMap.set(String(s.username).toLowerCase(), {
-        macAddress: s.mac_address,
-        ipAddress: s.ip_address,
-        startTime: s.start_time
-      });
+      const key = String(s.username).toLowerCase();
+      if (!activeSessionsMap.has(key)) {
+        activeSessionsMap.set(key, {
+          macAddress: s.mac_address,
+          ipAddress: s.ip_address,
+          startTime: s.start_time
+        });
+      }
     });
 
     // Consultar estado local de estos usuarios

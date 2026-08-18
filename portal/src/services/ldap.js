@@ -1,4 +1,12 @@
 const ldap = require('ldapjs');
+const { SimpleCircuitBreaker } = require('./circuitBreaker');
+
+// Circuit breaker global para LDAP: tras 5 fallos consecutivos, rechaza inmediatamente por 60s
+const ldapBreaker = new SimpleCircuitBreaker({
+  failureThreshold: 5,
+  resetTimeoutMs: 60000,
+  name: 'ldap-auth'
+});
 
 function escapeLdapFilter(value) {
   return String(value || '').replace(/[\\*()\0]/g, ch => ({
@@ -24,8 +32,17 @@ function tlsOptions() {
  * Autentica un usuario contra el Active Directory / LDAP.
  */
 function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, username, password }) {
-  return new Promise((resolve, reject) => {
+  return ldapBreaker.execute(() => new Promise((resolve, reject) => {
+    let settled = false;
     let client;
+
+    function finish(fn, value) {
+      if (settled) return;
+      settled = true;
+      try { client.destroy(); } catch (_) {}
+      fn(value);
+    }
+
     try {
       client = ldap.createClient({
         url: url,
@@ -39,13 +56,13 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
 
     client.on('error', (err) => {
       console.error('[LDAP] Error del cliente:', err.message);
+      finish(reject, new Error('El directorio activo no está disponible. Intente de nuevo más tarde.'));
     });
 
     // 1. Bind inicial del Administrador
     client.bind(bindDN, bindPassword, (err) => {
       if (err) {
-        client.destroy();
-        return reject(new Error('Fallo de conexión Bind LDAP Administrador: ' + err.message));
+        return finish(reject, new Error('El directorio activo no está disponible. Intente de nuevo más tarde.'));
       }
 
       // 2. Buscar el DN del usuario y sus grupos
@@ -59,8 +76,7 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
 
       client.search(searchBase, opts, (err, res) => {
         if (err) {
-          client.destroy();
-          return reject(new Error('Error en búsqueda LDAP: ' + err.message));
+          return finish(reject, new Error('Error en búsqueda LDAP: ' + err.message));
         }
 
         let userEntry = null;
@@ -80,14 +96,12 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
         });
 
         res.on('error', (err) => {
-          client.destroy();
-          return reject(new Error('Error en el stream de búsqueda LDAP: ' + err.message));
+          finish(reject, new Error('Error en el stream de búsqueda LDAP: ' + err.message));
         });
 
         res.on('end', (result) => {
           if (!userEntry) {
-            client.destroy();
-            return resolve({ success: false, error: 'Usuario no encontrado en el directorio.' });
+            return finish(resolve, { success: false, error: 'Usuario no encontrado en el directorio.' });
           }
 
           const userDN = userEntry.dn || userEntry.DN;
@@ -101,19 +115,17 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
             const belongs = groups.some(g => normalizeDn(g) === allowedDn);
 
             if (!belongs) {
-              client.destroy();
-              return resolve({ success: false, error: 'Acceso no autorizado: su usuario no pertenece al grupo Wi-Fi autorizado.' });
+              return finish(resolve, { success: false, error: 'Acceso no autorizado: su usuario no pertenece al grupo Wi-Fi autorizado.' });
             }
           }
 
           // 4. Autenticar Contraseña (Bind del usuario)
           client.bind(userDN, password, (err) => {
-            client.destroy();
             if (err) {
-              return resolve({ success: false, error: 'Usuario o contraseña incorrectos.' });
+              return finish(resolve, { success: false, error: 'Usuario o contraseña incorrectos.' });
             }
 
-            resolve({
+            finish(resolve, {
               success: true,
               dn: userDN,
               nombres: userEntry.givenName || userEntry.cn || username,
@@ -124,7 +136,7 @@ function authenticate({ url, bindDN, bindPassword, searchBase, allowedGroup, use
         });
       });
     });
-  });
+  }));
 }
 
 function searchUser({ url, bindDN, bindPassword, searchBase, username }) {

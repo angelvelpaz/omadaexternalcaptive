@@ -986,15 +986,31 @@ router.post('/auth/ldap',
       }
 
       // 2. Autenticar en el Directorio Activo / LDAP
-      const authResult = await ldapSvc.authenticate({
-        url: ldapUrl,
-        bindDN: ldapBindDN,
-        bindPassword: ldapBindPassword,
-        searchBase: ldapSearchBase,
-        allowedGroup: ldapAllowedGroup,
-        username,
-        password
-      });
+      let authResult;
+      try {
+        authResult = await ldapSvc.authenticate({
+          url: ldapUrl,
+          bindDN: ldapBindDN,
+          bindPassword: ldapBindPassword,
+          searchBase: ldapSearchBase,
+          allowedGroup: ldapAllowedGroup,
+          username,
+          password
+        });
+      } catch (ldapErr) {
+        console.error('[LDAP-Auth] Error de conexión al directorio:', ldapErr.message);
+        await db.logAccess({
+          cedula: username.substring(0, 15),
+          vendor: vendor || 'unknown',
+          macAddress: mac.trim().toUpperCase().replace(/:/g, '-'),
+          ipAddress: clientIp,
+          resultado: 'failure: ldap_unavailable'
+        });
+        return res.status(503).json({
+          error: 'El servicio de directorio está temporalmente no disponible. Intente de nuevo más tarde.',
+          ldapError: true
+        });
+      }
 
       if (!authResult.success) {
         // Guardar logs de acceso fallido
@@ -1564,15 +1580,24 @@ router.post('/auth/self-release',
         }
 
         const ldapSvc = require('../services/ldap');
-        const authResult = await ldapSvc.authenticate({
-          url: ldapUrl,
-          bindDN: ldapBindDN,
-          bindPassword: ldapBindPassword,
-          searchBase: ldapSearchBase,
-          allowedGroup: ldapAllowedGroup,
-          username,
-          password
-        });
+        let authResult;
+        try {
+          authResult = await ldapSvc.authenticate({
+            url: ldapUrl,
+            bindDN: ldapBindDN,
+            bindPassword: ldapBindPassword,
+            searchBase: ldapSearchBase,
+            allowedGroup: ldapAllowedGroup,
+            username,
+            password
+          });
+        } catch (ldapErr) {
+          console.error('[Release-LDAP] Error de conexión al directorio:', ldapErr.message);
+          return res.status(503).json({
+            error: 'El servicio de directorio está temporalmente no disponible. Intente de nuevo más tarde.',
+            ldapError: true
+          });
+        }
         if (!authResult.success) {
           return res.status(401).json({ error: 'Credenciales institucionales incorrectas.' });
         }

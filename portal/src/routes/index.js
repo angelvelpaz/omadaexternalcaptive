@@ -964,7 +964,7 @@ router.post('/auth/ldap',
         console.warn('[LDAP-Auth] No se pudo leer la configuración global de LDAP:', dbErr.message);
       }
 
-      // Buscar si el SSID actual tiene un grupo LDAP específico para anular el global
+      // Buscar si el SSID actual tiene config LDAP específica que anule la global
       const ssidParam = (ssid || '').trim();
       if (ssidParam) {
         try {
@@ -973,9 +973,12 @@ router.post('/auth/ldap',
             ssidConfig = await db.getSsidConfig('default');
           }
           const sc = ssidConfig ? (ssidConfig.config || {}) : {};
-          if (sc.ldapAllowedGroup) {
-            ldapAllowedGroup = sc.ldapAllowedGroup;
-          }
+          // Prioridad: SSID config > controller_config global > env vars
+          if (sc.ldapServerUrl) ldapUrl = sc.ldapServerUrl;
+          if (sc.ldapBindDN) ldapBindDN = sc.ldapBindDN;
+          if (sc.ldapBindCredentials) ldapBindPassword = sc.ldapBindCredentials;
+          if (sc.ldapSearchBase) ldapSearchBase = sc.ldapSearchBase;
+          if (sc.ldapAllowedGroup) ldapAllowedGroup = sc.ldapAllowedGroup;
         } catch (dbErr) {
           console.warn('[LDAP-Auth] No se pudo leer la configuración específica de SSID:', dbErr.message);
         }
@@ -1577,6 +1580,19 @@ router.post('/auth/self-release',
           }
         } catch (dbErr) {
           console.warn('[Release-LDAP] No se pudo leer la configuración global de LDAP:', dbErr.message);
+        }
+
+        // Override con config LDAP del SSID default si existe
+        try {
+          const ssidConfig = await db.getSsidConfig('default');
+          const sc = ssidConfig ? (ssidConfig.config || {}) : {};
+          if (sc.ldapServerUrl) ldapUrl = sc.ldapServerUrl;
+          if (sc.ldapBindDN) ldapBindDN = sc.ldapBindDN;
+          if (sc.ldapBindCredentials) ldapBindPassword = sc.ldapBindCredentials;
+          if (sc.ldapSearchBase) ldapSearchBase = sc.ldapSearchBase;
+          if (sc.ldapAllowedGroup) ldapAllowedGroup = sc.ldapAllowedGroup;
+        } catch (dbErr) {
+          console.warn('[Release-LDAP] No se pudo leer config SSID default:', dbErr.message);
         }
 
         const ldapSvc = require('../services/ldap');

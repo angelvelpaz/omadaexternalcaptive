@@ -2159,16 +2159,29 @@ router.post('/api/active-sessions/kick', requireAdmin, async (req, res, next) =>
       return res.status(400).json({ error: 'La dirección MAC es obligatoria.' });
     }
 
-    const success = await db.disconnectRadiusClient(mac);
+    const normalizedMac = mac.toUpperCase().replace(/:/g, '-');
+
+    // 1. Desconectar vía CoA RADIUS
+    const coaSuccess = await db.disconnectRadiusClient(normalizedMac);
+
+    // 2. Desautorizar en Omada (desconectar del WiFi)
+    let omadaSuccess = false;
+    try {
+      await omadaSvc.unauthorizeClient({ clientMac: normalizedMac });
+      omadaSuccess = true;
+      console.log(`[KICK] Omada unauthorize enviado para MAC ${normalizedMac}`);
+    } catch (omadaErr) {
+      console.error(`[KICK] Error Omada para ${normalizedMac}:`, omadaErr.message);
+    }
 
     await db.logAdminAudit({
       username: req.adminUser,
       ipAddress: getClientIp(req),
       accion: 'EXPULSAR_SESION_ACTIVA',
-      detalles: `Envió desconexión CoA para el dispositivo MAC: ${mac}`
+      detalles: `Expulsó dispositivo MAC: ${normalizedMac} (CoA: ${coaSuccess}, Omada: ${omadaSuccess})`
     });
 
-    res.json({ ok: true, success });
+    res.json({ ok: true, coa: coaSuccess, omada: omadaSuccess });
   } catch (err) { next(err); }
 });
 

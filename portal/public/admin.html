@@ -7217,14 +7217,14 @@ async function kickWpaSession(mac) {
 }
 
 async function deleteWpaSessionDevice(username, mac) {
-  if (!confirm(`¿Eliminar y expulsar el dispositivo ${mac} de ${username}?\nSe eliminará el registro y se desconectará inmediatamente.`)) return;
   try {
     await api('DELETE', `/ldap/users/${encodeURIComponent(username)}/devices/${encodeURIComponent(mac)}`);
-    alert('Dispositivo eliminado y desconectado.');
+    showToast('Dispositivo eliminado y desconectado.', 'success');
     loadWpaSessions();
   } catch (err) {
-    alert('Error al eliminar dispositivo: ' + err.message);
+    showToast('Error: ' + err.message, 'error');
   }
+}
 }
 
 // ── Usuarios LDAP / Active Directory ──

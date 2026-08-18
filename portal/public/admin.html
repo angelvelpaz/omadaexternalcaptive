@@ -3931,15 +3931,16 @@ async function executeDelete(cedula) {
   try {
     await api('DELETE', `/users/${cedula}?purgeHistory=${purgeHistory}`);
     closeModal();
+    showToast('Usuario eliminado correctamente.', 'success');
     loadUsers();
   } catch (err) {
-    alert('Error al eliminar usuario: ' + err.message);
+    showToast('Error al eliminar: ' + err.message, 'error');
   }
 }
 
 function confirmBulkDelete() {
   if (!tieneRol('administrador')) {
-    alert('No tiene permisos para eliminar usuarios.');
+    showToast('No tiene permisos para eliminar usuarios.', 'error');
     return;
   }
 
@@ -3947,7 +3948,7 @@ function confirmBulkDelete() {
   const cedulas = Array.from(checkedBoxes).map(cb => cb.value);
 
   if (cedulas.length === 0) {
-    alert('Por favor seleccione al menos un usuario para eliminar.');
+    showToast('Seleccione al menos un usuario para eliminar.', 'error');
     return;
   }
 
@@ -4008,10 +4009,11 @@ async function executeBulkDelete(cedulas) {
     if (res.success) {
       closeModal();
       clearUserSelection();
+      showToast(`${cedulas.length} usuario(s) eliminado(s).`, 'success');
       loadUsers();
     }
   } catch (err) {
-    alert('Error al eliminar usuarios en lote: ' + err.message);
+    showToast('Error al eliminar: ' + err.message, 'error');
     if (btn) {
       btn.disabled = false;
       btn.textContent = `Eliminar ${cedulas.length} Usuarios`;

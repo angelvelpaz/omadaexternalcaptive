@@ -1282,9 +1282,25 @@ router.put('/api/controllers/:vendor', requireAdmin, requireRol('superadministra
 // Test LDAP connection endpoint
 router.post('/api/controllers/ldap/test', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
-    const { serverUrl, bindDN, bindCredentials, searchBase, allowedGroup, testUser, testPassword } = req.body;
-    if (!serverUrl || !bindDN || !searchBase || !testUser || !testPassword) {
-      return res.status(400).json({ error: 'Complete todos los campos del formulario y las credenciales de prueba.' });
+    let { serverUrl, bindDN, bindCredentials, searchBase, allowedGroup, testUser, testPassword } = req.body;
+
+    // Si no se enviaron campos en el body, leer de la config guardada en DB
+    if (!serverUrl && !bindDN && !searchBase) {
+      const dbCfg = await db.getControllerConfig('ldap');
+      if (dbCfg) {
+        serverUrl     = serverUrl     || dbCfg.ldapServerUrl;
+        bindDN        = bindDN        || dbCfg.ldapBindDN;
+        bindCredentials = bindCredentials || dbCfg.ldapBindCredentials;
+        searchBase    = searchBase    || dbCfg.ldapSearchBase;
+        allowedGroup  = allowedGroup  || dbCfg.ldapAllowedGroup;
+      }
+    }
+
+    if (!serverUrl || !bindDN || !searchBase) {
+      return res.status(400).json({ error: 'La configuración LDAP del servidor no está completa. Complete Server URL, Bind DN y Search Base.' });
+    }
+    if (!testUser || !testPassword) {
+      return res.status(400).json({ error: 'Ingrese un usuario y contraseña de prueba para validar la conexión.' });
     }
 
     const testResult = await ldapSvc.authenticate({

@@ -4895,7 +4895,24 @@ async function testController(vendor) {
   result.innerHTML = '<p class="text-gray-400 text-xs">Conectando...</p>';
 
   try {
-    const r = await api('POST', `/controllers/${vendor}/test`);
+    // Para LDAP: enviar campos del form si están visibles, si no el backend lee de DB
+    let body;
+    if (vendor === 'ldap') {
+      const el = (id) => document.getElementById(id);
+      const sv = el('cfg-ldap-ldapServerUrl');
+      if (sv && sv.value.trim()) {
+        body = {
+          serverUrl:     sv.value.trim(),
+          bindDN:        el('cfg-ldap-ldapBindDN')?.value?.trim() || '',
+          bindCredentials: el('cfg-ldap-ldapBindCredentials')?.value?.trim() || '',
+          searchBase:    el('cfg-ldap-ldapSearchBase')?.value?.trim() || '',
+          testUser:      el('test-ldap-user')?.value?.trim() || '',
+          testPassword:  el('test-ldap-pass')?.value?.trim() || ''
+        };
+      }
+      // Si sv está vacío o no existe, body queda undefined → backend lee de DB
+    }
+    const r = await api('POST', `/controllers/${vendor}/test`, body);
     const ts = fmtDate(r.testedAt);
     const okClass = r.ok
       ? 'bg-green-50 border border-green-200 text-green-800'

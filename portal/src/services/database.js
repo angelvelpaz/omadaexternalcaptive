@@ -2117,10 +2117,11 @@ async function getAdminAuditLogs({ search = '', limit = 50, offset = 0 }) {
 /**
  * Inicia una sesión de contabilidad (acct) en radacct para un dispositivo
  */
-async function startAcctSession({ username, macAddress, ipAddress, vendor }) {
+async function startAcctSession({ username, macAddress, ipAddress, vendor, nasIp }) {
   if (!macAddress) return;
   const crypto = require('crypto');
   const mac = macAddress.toUpperCase().replace(/:/g, '-');
+  const nas = nasIp || '127.0.0.1';
   
   try {
     // Comprobar si ya existe una sesión activa reciente para esta MAC+usuario (ventana de 5 minutos)
@@ -2167,8 +2168,8 @@ async function startAcctSession({ username, macAddress, ipAddress, vendor }) {
          acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
          acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
          acctinputoctets, acctoutputoctets, callingstationid, framedipaddress
-       ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', NOW(), NOW(), NULL, 0, 0, 0, $4, $5)`,
-      [sessionId, uniqueId, username, mac, ipAddress || null]
+       ) VALUES ($1, $2, $3, $4, NULL, 'Wireless-802.11', NOW(), NOW(), NULL, 0, 0, 0, $5, $6)`,
+      [sessionId, uniqueId, username, nas, mac, ipAddress || null]
     );
     
     console.log(`[STATS] Sesión de conexión iniciada en radacct para MAC: ${mac} y usuario: ${username}`);

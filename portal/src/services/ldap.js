@@ -1,11 +1,18 @@
 const ldap = require('ldapjs');
 const { SimpleCircuitBreaker } = require('./circuitBreaker');
 
-// Circuit breaker global para LDAP: tras 5 fallos consecutivos, rechaza inmediatamente por 60s
+// Circuit breaker para auth del portal: tras 5 fallos consecutivos, rechaza por 60s
 const ldapBreaker = new SimpleCircuitBreaker({
   failureThreshold: 5,
   resetTimeoutMs: 60000,
   name: 'ldap-auth'
+});
+
+// Circuit breaker separado para tests de conexión: threshold mayor (10)
+const ldapTestBreaker = new SimpleCircuitBreaker({
+  failureThreshold: 10,
+  resetTimeoutMs: 60000,
+  name: 'ldap-test'
 });
 
 function escapeLdapFilter(value) {
@@ -285,8 +292,115 @@ function getGroupMembers({ url, bindDN, bindPassword, searchBase, allowedGroup }
   });
 }
 
+/**
+ * Autenticación LDAP para tests de conexión (usa circuit breaker separado).
+ * No afecta al auth del portal cuando falla.
+ */
+function authenticateTest({ url, bindDN, bindPassword, searchBase, allowedGroup, username, password }) {
+  return ldapTestBreaker.execute(() => new Promise((resolve, reject) => {
+    let settled = false;
+    let client;
+
+    function finish(fn, value) {
+      if (settled) return;
+      settled = true;
+      try { client.destroy(); } catch (_) {}
+      fn(value);
+    }
+
+    try {
+      client = ldap.createClient({
+        url: url,
+        tlsOptions: tlsOptions(),
+        connectTimeout: 5000,
+        timeout: 5000
+      });
+    } catch (err) {
+      return reject(new Error('No se pudo crear el cliente LDAP: ' + err.message));
+    }
+
+    client.on('error', (err) => {
+      console.error('[LDAP-Test] Error del cliente:', err.message);
+      finish(reject, new Error('El directorio activo no está disponible. Intente de nuevo más tarde.'));
+    });
+
+    client.bind(bindDN, bindPassword, (err) => {
+      if (err) {
+        return finish(reject, new Error('El directorio activo no está disponible. Intente de nuevo más tarde.'));
+      }
+
+      const safeUsername = escapeLdapFilter(username);
+      const filter = `(|(sAMAccountName=${safeUsername})(userPrincipalName=${safeUsername}))`;
+      const opts = {
+        filter: filter,
+        scope: 'sub',
+        attributes: ['dn', 'memberOf', 'givenName', 'sn', 'mail', 'cn']
+      };
+
+      client.search(searchBase, opts, (err, res) => {
+        if (err) {
+          return finish(reject, new Error('Error en búsqueda LDAP: ' + err.message));
+        }
+
+        let userEntry = null;
+
+        res.on('searchEntry', (entry) => {
+          const obj = {};
+          const attrs = entry.pojo.attributes || [];
+          attrs.forEach(attr => {
+            if (attr.values && attr.values.length > 0) {
+              obj[attr.type] = attr.values.length === 1 ? attr.values[0] : attr.values;
+            } else {
+              obj[attr.type] = [];
+            }
+          });
+          obj.dn = entry.dn ? entry.dn.toString() : (entry.pojo.objectName || '');
+          userEntry = obj;
+        });
+
+        res.on('error', (err) => {
+          finish(reject, new Error('Error en el stream de búsqueda LDAP: ' + err.message));
+        });
+
+        res.on('end', (result) => {
+          if (!userEntry) {
+            return finish(resolve, { success: false, error: 'Usuario no encontrado en el directorio.' });
+          }
+
+          const userDN = userEntry.dn || userEntry.DN;
+
+          if (allowedGroup) {
+            const memberOf = userEntry.memberOf || [];
+            const groups = Array.isArray(memberOf) ? memberOf : [memberOf];
+            const allowedDn = normalizeDn(allowedGroup);
+            const belongs = groups.some(g => normalizeDn(g) === allowedDn);
+            if (!belongs) {
+              return finish(resolve, { success: false, error: 'Acceso no autorizado: su usuario no pertenece al grupo Wi-Fi autorizado.' });
+            }
+          }
+
+          client.bind(userDN, password, (err) => {
+            if (err) {
+              return finish(resolve, { success: false, error: 'Usuario o contraseña incorrectos.' });
+            }
+
+            finish(resolve, {
+              success: true,
+              dn: userDN,
+              nombres: userEntry.givenName || userEntry.cn || username,
+              apellidos: userEntry.sn || '',
+              email: userEntry.mail || `${username}@ldap.local`
+            });
+          });
+        });
+      });
+    });
+  }));
+}
+
 module.exports = {
   authenticate,
+  authenticateTest,
   searchUser,
   getGroupMembers
 };

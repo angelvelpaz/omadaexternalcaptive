@@ -1303,7 +1303,7 @@ router.post('/api/controllers/ldap/test', requireAdmin, requireRol('superadminis
       return res.status(400).json({ error: 'Ingrese un usuario y contraseña de prueba para validar la conexión.' });
     }
 
-    const testResult = await ldapSvc.authenticate({
+    const testResult = await ldapSvc.authenticateTest({
       url: serverUrl,
       bindDN,
       bindPassword: bindCredentials,

@@ -4223,11 +4223,13 @@ async function updateMaxDevices(cedula) {
 }
 
 async function deleteDevice(cedula, mac) {
-  if (!confirm(`¿Está seguro de eliminar el dispositivo ${mac}?`)) return;
   try {
     await api('DELETE', `/users/${cedula}/devices/${encodeURIComponent(mac)}`);
+    showToast('Dispositivo eliminado.', 'success');
     viewUser(cedula);
-  } catch (err) { alert(err.message); }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
 }
 
 function startEditDevice(mac) {
@@ -7596,12 +7598,12 @@ async function addWpaDevice(username, mac) {
 }
 
 async function deleteWpaDevice(username, mac) {
-  if (!confirm(`¿Eliminar el dispositivo ${mac} de ${username}? Se desconectará si está activo.`)) return;
   try {
     await api('DELETE', `/ldap/users/${encodeURIComponent(username)}/devices/${encodeURIComponent(mac)}`);
+    showToast('Dispositivo eliminado.', 'success');
     await loadLdapUsers();
   } catch (err) {
-    alert('Error al eliminar dispositivo: ' + err.message);
+    showToast('Error: ' + err.message, 'error');
   }
 }
 

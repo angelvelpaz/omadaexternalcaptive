@@ -621,7 +621,7 @@ async function setUserActive(cedula, active) {
   try {
     await client.query('BEGIN');
     await client.query(
-      `UPDATE usuarios_portal SET activo = $2 WHERE cedula = $1`,
+      `UPDATE usuarios_portal SET activo = $2, bloqueado = NOT $2 WHERE cedula = $1`,
       [cedula, active]
     );
     if (active) {
@@ -717,7 +717,7 @@ async function bulkUpdateUserActive(cedulas, active) {
   try {
     await client.query('BEGIN');
     await client.query(
-      `UPDATE usuarios_portal SET activo = $1 WHERE cedula = ANY($2)`,
+      `UPDATE usuarios_portal SET activo = $1, bloqueado = NOT $1 WHERE cedula = ANY($2)`,
       [active, cedulas]
     );
 

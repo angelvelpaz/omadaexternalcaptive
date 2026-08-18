@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS usuarios_portal (
     radius_username        VARCHAR(150) UNIQUE NOT NULL,
     fecha_registro         TIMESTAMPTZ DEFAULT NOW(),
     activo                 BOOLEAN DEFAULT TRUE,
+    bloqueado              BOOLEAN DEFAULT FALSE,
     acepta_terminos        BOOLEAN NOT NULL DEFAULT TRUE,
     fecha_acepta_terminos  TIMESTAMPTZ DEFAULT NOW(),
     max_dispositivos       INTEGER DEFAULT 1,

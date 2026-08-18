@@ -2534,10 +2534,18 @@ router.put('/api/ldap/users/:username/status', requireAdmin,
 
       // Si se desactiva, expulsar sus sesiones activas de red
       if (!active) {
+        // 1. Dispositivos de portal cautivo (dispositivos_usuario)
         const userDevices = await db.getUserDevices(normalized);
         for (const d of userDevices) {
           await db.disconnectRadiusClient(d.mac_address).catch(() => {});
         }
+        // 2. Sesiones activas WPA Enterprise (radacct)
+        const activeSessions = await db.getActiveSessions();
+        activeSessions
+          .filter(s => String(s.username).toLowerCase() === normalized)
+          .forEach(s => {
+            db.disconnectRadiusClient(s.mac_address).catch(() => {});
+          });
       }
 
       res.json({ success: true });

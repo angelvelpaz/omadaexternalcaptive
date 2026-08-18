@@ -7203,17 +7203,16 @@ function renderWpaSessionsTable(list) {
 }
 
 async function kickWpaSession(mac) {
-  if (!confirm(`¿Estás seguro de que deseas expulsar al dispositivo ${mac}?\nSe le enviará una solicitud de desconexión inmediata.`)) return;
   try {
     const res = await api('POST', '/active-sessions/kick', { mac });
     if (res.success) {
-      alert('Solicitud de desconexión enviada exitosamente.');
+      showToast('Dispositivo expulsado.', 'success');
     } else {
-      alert('Se envió el comando, pero la sesión no fue encontrada o la antena no respondió.');
+      showToast('Sesión no encontrada o antena no responde.', 'error');
     }
     loadWpaSessions();
   } catch (err) {
-    alert('Error al expulsar sesión: ' + err.message);
+    showToast('Error: ' + err.message, 'error');
   }
 }
 
@@ -7462,17 +7461,16 @@ async function toggleLdapUserStatus(username, active) {
 }
 
 async function kickLdapUserDevice(mac) {
-  if (!confirm(`¿Está seguro de expulsar al dispositivo con MAC ${mac}?`)) return;
   try {
     const res = await api('POST', '/active-sessions/kick', { mac });
     if (res.ok) {
-      alert('Dispositivo expulsado correctamente.');
+      showToast('Dispositivo expulsado.', 'success');
     } else {
-      alert('Error al expulsar dispositivo: ' + (res.error || 'error desconocido.'));
+      showToast('Error al expulsar: ' + (res.error || 'desconocido'), 'error');
     }
     await loadLdapUsers();
   } catch (err) {
-    alert('Error al conectar con la API: ' + err.message);
+    showToast('Error: ' + err.message, 'error');
   }
 }
 
@@ -8212,6 +8210,17 @@ function esc(str) {
     .replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&#39;');
+}
+
+function showToast(msg, type) {
+  const toast = document.createElement('div');
+  toast.className = `fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-opacity duration-300 ${
+    type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+  }`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+  setTimeout(() => { toast.remove(); }, 3000);
 }
 </script>
 </body>

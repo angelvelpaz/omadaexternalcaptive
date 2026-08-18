@@ -4269,14 +4269,15 @@ async function saveEditDevice(cedula, oldMac) {
 async function addDevice(cedula) {
   const mac = document.getElementById('add-device-mac-input').value.trim();
   if (!mac) {
-    alert('Por favor, ingresa una dirección MAC');
+    showToast('Ingresa una dirección MAC.', 'error');
     return;
   }
   try {
     await api('POST', `/users/${cedula}/devices`, { mac });
+    showToast('Dispositivo agregado.', 'success');
     viewUser(cedula);
   } catch (err) {
-    alert(err.message);
+    showToast('Error: ' + err.message, 'error');
   }
 }
 

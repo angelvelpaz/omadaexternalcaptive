@@ -7252,20 +7252,20 @@ async function loadLdapUsers() {
     
     // Enriquecer cada usuario con VLAN individual, límite y dispositivos
     for (const u of window._ldapUsersList) {
+      const prevMax = u.maxDispositivos;
       try {
         const [vlanRes, devicesRes] = await Promise.all([
           api('GET', `/ldap/users/${encodeURIComponent(u.username)}/vlan`).catch(() => ({ vlan_id: null })),
-          api('GET', `/ldap/users/${encodeURIComponent(u.username)}/devices`).catch(() => ({ devices: [], max_dispositivos: 0 }))
+          api('GET', `/ldap/users/${encodeURIComponent(u.username)}/devices`).catch(() => ({ devices: [], max_dispositivos: prevMax }))
         ]);
         u.userVlan = vlanRes.vlan_id || null;
         u.devices = devicesRes.devices || [];
         u.deviceCount = u.devices.length;
-        u.maxDispositivos = devicesRes.max_dispositivos || 0;
+        u.maxDispositivos = devicesRes.max_dispositivos != null ? devicesRes.max_dispositivos : (prevMax || 0);
       } catch (e) {
-        u.userVlan = null;
-        u.devices = [];
-        u.deviceCount = 0;
-        u.maxDispositivos = 0;
+        // Preservar valores previos en caso de error
+        u.devices = u.devices || [];
+        u.deviceCount = u.devices.length;
       }
     }
     

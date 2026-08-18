@@ -64,9 +64,19 @@ server inner-tunnel {
 
     # ── Sección post-auth ──
     post-auth {
-        # Asignar VLAN: prioridad a VLAN individual (radreply) sobre VLAN por grupo LDAP.
+        # Cargar VLAN individual desde radreply (authorize_reply_query no se ejecuta en inner-tunnel PEAP)
+        # Primero intentar individuo, luego grupo AD
         if (!&reply:Tunnel-Private-Group-ID) {
-            if (control:Auth-Type == LDAP) {
+            # 1. Intentar VLAN individual desde radreply
+            if ("%{sql:SELECT value FROM radreply WHERE username = '%{User-Name}' AND attribute = 'Tunnel-Private-Group-ID' LIMIT 1}") {
+                update reply {
+                    Tunnel-Type := VLAN
+                    Tunnel-Medium-Type := IEEE-802
+                    Tunnel-Private-Group-ID := "%{sql:SELECT value FROM radreply WHERE username = '%{User-Name}' AND attribute = 'Tunnel-Private-Group-ID' LIMIT 1}"
+                }
+            }
+            # 2. Si no hay VLAN individual, buscar VLAN por grupo LDAP
+            elsif (control:Auth-Type == LDAP) {
                 foreach &control:LDAP-Group {
                     if ("%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}") {
                         update reply {

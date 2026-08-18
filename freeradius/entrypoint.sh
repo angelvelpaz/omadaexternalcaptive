@@ -130,6 +130,17 @@ fi
 # El agente se limita a la red Docker (no hay puerto publicado en Compose).
 # Si Winbind no se configura, FreeRADIUS mantiene su arranque normal.
 if [ "${WINBIND_MANAGER_ENABLED:-false}" = "true" ] && [ -n "${WINBIND_MANAGER_TOKEN:-}" ]; then
+  # Asegurar que el DC sea resoluble via /etc/hosts para Kerberos/Samba
+  LDAP_DC=$(echo "$LDAP_URL" | sed 's|ldap[s]*://||' | sed 's|:.*||')
+  if [ -n "$LDAP_DC" ] && [ "$LDAP_DC" != "localhost" ]; then
+    LDAP_REALM=$(echo "$LDAP_GROUP" | grep -oP 'DC=\K[^,]+' | head -1 | tr '[:lower:]' '[:upper:]')
+    LDAP_REALM="${LDAP_REALM:-GPP}"
+    if ! grep -q "$LDAP_DC" /etc/hosts 2>/dev/null; then
+      echo "$LDAP_DC ${LDAP_REALM,,}.net ${LDAP_REALM,,}.net" >> /etc/hosts
+      echo "[FREERADIUS] Agregado $LDAP_DC a /etc/hosts para DNS resolution"
+    fi
+  fi
+
   if getent group sambashare >/dev/null 2>&1; then
     usermod -a -G sambashare freerad || true
   fi

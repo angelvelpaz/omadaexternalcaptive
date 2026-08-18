@@ -58,6 +58,7 @@ services:
       context: ./portal
       dockerfile: Dockerfile
     container_name: captive_portal
+    user: root
     restart: unless-stopped
     environment:
       NODE_ENV: production

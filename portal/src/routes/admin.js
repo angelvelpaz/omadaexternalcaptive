@@ -2552,13 +2552,16 @@ router.put('/api/ldap/users/:username/status', requireAdmin,
         for (const d of userDevices) {
           await db.disconnectRadiusClient(d.mac_address).catch(() => {});
         }
-        // 2. Sesiones activas WPA Enterprise (radacct)
+        // 2. Sesiones activas WPA Enterprise (radacct) — CoA + Omada
         const activeSessions = await db.getActiveSessions();
-        activeSessions
-          .filter(s => String(s.username).toLowerCase() === normalized)
-          .forEach(s => {
-            db.disconnectRadiusClient(s.mac_address).catch(() => {});
-          });
+        const userSessions = activeSessions
+          .filter(s => String(s.username).toLowerCase() === normalized);
+        for (const s of userSessions) {
+          // CoA disconnect
+          db.disconnectRadiusClient(s.mac_address).catch(() => {});
+          // Omada unauthorize
+          omadaSvc.unauthorizeClient({ clientMac: s.mac_address }).catch(() => {});
+        }
       }
 
       res.json({ success: true });
@@ -2981,11 +2984,11 @@ router.post('/api/ssl', requireAdmin, requireRol('superadministrador'), async (r
 
 router.post('/api/wpa-certs', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
-    const { ca, cert, key } = req.body;
-    console.log('[WPA-Certs] Intento de carga de certificados. ca:', ca ? ca.length : 0, 'cert:', cert ? cert.length : 0, 'key:', key ? key.length : 0);
+    const { ca, cert, key, pem } = req.body;
+    console.log('[WPA-Certs] Intento de carga de certificados. ca:', ca ? ca.length : 0, 'cert:', cert ? cert.length : 0, 'key:', key ? key.length : 0, 'pem:', pem ? pem.length : 0);
 
-    if (!ca || !cert || !key) {
-      return res.status(400).json({ error: 'Se requieren los tres archivos: Certificado de la CA (ca.pem), Certificado del Servidor (server.crt) y Clave Privada (server.key).' });
+    if (!ca || !cert || !key || !pem) {
+      return res.status(400).json({ error: 'Se requieren los cuatro archivos: CA (ca.pem), Servidor (server.crt), Clave Privada (server.key) y Combined PEM (server.pem).' });
     }
 
     // Validar formato PEM
@@ -2998,6 +3001,9 @@ router.post('/api/wpa-certs', requireAdmin, requireRol('superadministrador'), as
     if (!key.includes('-----BEGIN') || !key.includes('KEY')) {
       return res.status(400).json({ error: 'La clave privada del servidor no es una clave PEM válida.' });
     }
+    if (!pem.includes('-----BEGIN')) {
+      return res.status(400).json({ error: 'El archivo Combined PEM no es un archivo PEM válido.' });
+    }
 
     const certsDir = '/app/freeradius-certs';
     if (!fs.existsSync(certsDir)) {
@@ -3007,17 +3013,20 @@ router.post('/api/wpa-certs', requireAdmin, requireRol('superadministrador'), as
     const cleanCa = sanitizePem(ca);
     const cleanCert = sanitizePem(cert);
     const cleanKey = sanitizePem(key);
+    const cleanPem = sanitizePem(pem);
 
     // Guardar archivos
     fs.writeFileSync(path.join(certsDir, 'ca.pem'), cleanCa, 'utf8');
     fs.writeFileSync(path.join(certsDir, 'server.crt'), cleanCert, 'utf8');
     fs.writeFileSync(path.join(certsDir, 'server.key'), cleanKey, 'utf8');
+    fs.writeFileSync(path.join(certsDir, 'server.pem'), cleanPem, 'utf8');
 
     // Cambiar permisos
     try {
       fs.chmodSync(path.join(certsDir, 'server.key'), 0o640);
       fs.chmodSync(path.join(certsDir, 'server.crt'), 0o644);
       fs.chmodSync(path.join(certsDir, 'ca.pem'), 0o644);
+      fs.chmodSync(path.join(certsDir, 'server.pem'), 0o644);
     } catch (chmodErr) {
       console.warn('[WPA-Certs] No se pudo ajustar los permisos de los certificados:', chmodErr.message);
     }

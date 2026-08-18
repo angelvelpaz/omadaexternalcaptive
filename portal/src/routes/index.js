@@ -974,9 +974,9 @@ router.post('/auth/ldap',
           }
           const sc = ssidConfig ? (ssidConfig.config || {}) : {};
           // Prioridad: SSID config > controller_config global > env vars
+          // NOTA: ldapBindCredentials NO se lee de ssid_config porque puede estar enmascarado
           if (sc.ldapServerUrl) ldapUrl = sc.ldapServerUrl;
           if (sc.ldapBindDN) ldapBindDN = sc.ldapBindDN;
-          if (sc.ldapBindCredentials) ldapBindPassword = sc.ldapBindCredentials;
           if (sc.ldapSearchBase) ldapSearchBase = sc.ldapSearchBase;
           if (sc.ldapAllowedGroup) ldapAllowedGroup = sc.ldapAllowedGroup;
         } catch (dbErr) {
@@ -1583,12 +1583,12 @@ router.post('/auth/self-release',
         }
 
         // Override con config LDAP del SSID default si existe
+        // NOTA: ldapBindCredentials NO se lee de ssid_config porque puede estar enmascarado
         try {
           const ssidConfig = await db.getSsidConfig('default');
           const sc = ssidConfig ? (ssidConfig.config || {}) : {};
           if (sc.ldapServerUrl) ldapUrl = sc.ldapServerUrl;
           if (sc.ldapBindDN) ldapBindDN = sc.ldapBindDN;
-          if (sc.ldapBindCredentials) ldapBindPassword = sc.ldapBindCredentials;
           if (sc.ldapSearchBase) ldapSearchBase = sc.ldapSearchBase;
           if (sc.ldapAllowedGroup) ldapAllowedGroup = sc.ldapAllowedGroup;
         } catch (dbErr) {

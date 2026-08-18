@@ -2664,14 +2664,43 @@ router.get('/api/ldap/users/:username/vlan', requireAdmin,
 );
 
 // GET - Listar dispositivos WPA Enterprise de un usuario
+// Incluye dispositivos registrados (wpa_enterprise_devices) + sesiones activas (radacct)
 router.get('/api/ldap/users/:username/devices', requireAdmin,
   param('username').isString().trim().notEmpty(),
   async (req, res, next) => {
     try {
       const { username } = req.params;
-      const devices = await db.getWpaDevices(username);
+      const registeredDevices = await db.getWpaDevices(username);
       const max = await db.getWpaUserMaxDevices(username);
-      res.json({ devices, max_dispositivos: max });
+
+      // Obtener sesiones activas de radacct para este usuario
+      const activeSessions = await db.getActiveSessions();
+      const userActiveSessions = activeSessions
+        .filter(s => String(s.username).toLowerCase() === username.toLowerCase())
+        .map(s => ({
+          mac_address: s.mac_address,
+          ip_address: s.ip_address,
+          start_time: s.start_time,
+          source: 'session'
+        }));
+
+      // Combinar: dispositivos registrados + sesiones activas (evitar duplicados por MAC)
+      const registeredMacs = new Set(registeredDevices.map(d => d.mac_address));
+      const combined = [...registeredDevices];
+      userActiveSessions.forEach(s => {
+        if (!registeredMacs.has(s.mac_address)) {
+          combined.push({
+            id: null,
+            username,
+            mac_address: s.mac_address,
+            ip_address: s.ip_address,
+            created_at: s.start_time,
+            source: 'session'
+          });
+        }
+      });
+
+      res.json({ devices: combined, max_dispositivos: max, deviceCount: combined.length });
     } catch (err) { next(err); }
   }
 );

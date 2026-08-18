@@ -7260,7 +7260,7 @@ async function loadLdapUsers() {
         ]);
         u.userVlan = vlanRes.vlan_id || null;
         u.devices = devicesRes.devices || [];
-        u.deviceCount = u.devices.length;
+        u.deviceCount = devicesRes.deviceCount != null ? devicesRes.deviceCount : u.devices.length;
         u.maxDispositivos = devicesRes.max_dispositivos != null ? devicesRes.max_dispositivos : (prevMax || 0);
       } catch (e) {
         // Preservar valores previos en caso de error
@@ -7542,15 +7542,25 @@ async function toggleWpaDeviceList(username) {
     const devices = res.devices || [];
     
     if (devices.length === 0) {
-      container.innerHTML = '<span class="text-xs text-gray-400 italic">Sin dispositivos registrados</span>';
+      container.innerHTML = '<span class="text-xs text-gray-400 italic">Sin dispositivos conectados ni registrados</span>';
     } else {
-      container.innerHTML = devices.map(d => `
+      container.innerHTML = devices.map(d => {
+        const isSession = d.source === 'session';
+        const badge = isSession
+          ? '<span class="text-[9px] font-bold bg-green-50 text-green-700 border border-green-200 px-1 rounded">ACTIVO</span>'
+          : '<span class="text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded">REG</span>';
+        const ipInfo = d.ip_address ? `<span class="text-[10px] text-gray-400 ml-1">${esc(d.ip_address)}</span>` : '';
+        return `
         <div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200">
-          <span class="font-mono text-xs text-gray-700">${esc(d.mac_address)}</span>
-          <button onclick="deleteWpaDevice('${esc(username)}', '${esc(d.mac_address)}')"
-            class="text-red-400 hover:text-red-600 text-xs font-bold cursor-pointer" title="Eliminar">✕</button>
-        </div>
-      `).join('');
+          <div class="flex items-center gap-1.5">
+            ${badge}
+            <span class="font-mono text-xs text-gray-700">${esc(d.mac_address)}</span>
+            ${ipInfo}
+          </div>
+          ${isSession ? '' : `<button onclick="deleteWpaDevice('${esc(username)}', '${esc(d.mac_address)}')"
+            class="text-red-400 hover:text-red-600 text-xs font-bold cursor-pointer" title="Eliminar">✕</button>`}
+        </div>`;
+      }).join('');
     }
     container.classList.remove('hidden');
   } catch (err) {

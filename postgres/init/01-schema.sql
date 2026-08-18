@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS usuarios_portal (
     acepta_terminos        BOOLEAN NOT NULL DEFAULT TRUE,
     fecha_acepta_terminos  TIMESTAMPTZ DEFAULT NOW(),
     max_dispositivos       INTEGER DEFAULT 1,
+    max_dispositivos_wpa   INTEGER DEFAULT 0,
     tipo_usuario           VARCHAR(20) DEFAULT 'externo',
     terminos_aceptados     TEXT
 );
@@ -158,3 +159,14 @@ CREATE TABLE IF NOT EXISTS ldap_group_vlans (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ldap_group_vlans_group_dn ON ldap_group_vlans(group_dn);
+
+-- ─── Tabla de dispositivos WPA Enterprise por usuario ─────────────────────────
+CREATE TABLE IF NOT EXISTS wpa_enterprise_devices (
+    id          SERIAL PRIMARY KEY,
+    username    VARCHAR(64) NOT NULL,
+    mac_address VARCHAR(17) NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(username, mac_address)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wpa_ent_devices_username ON wpa_enterprise_devices(username);

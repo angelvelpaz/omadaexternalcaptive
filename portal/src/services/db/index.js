@@ -12,6 +12,7 @@ const stats = require('./stats');
 const hotelRestaurant = require('./hotelRestaurant');
 const ldapDb = require('./ldapDb');
 const macBypass = require('./macBypass');
+const wpaUsers = require('./wpaUsers');
 
 module.exports = {
   ...pool,
@@ -26,4 +27,5 @@ module.exports = {
   ...hotelRestaurant,
   ...ldapDb,
   ...macBypass,
+  ...wpaUsers,
 };

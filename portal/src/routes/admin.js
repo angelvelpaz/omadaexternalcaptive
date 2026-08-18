@@ -2577,6 +2577,212 @@ router.delete('/api/ldap/group-vlans/:id', requireAdmin, async (req, res, next) 
   } catch (err) { next(err); }
 });
 
+// ─── WPA Enterprise: VLAN Individual, Dispositivos y Límites ─────────────────
+
+// PUT - Asignar VLAN individual a usuario WPA Enterprise
+router.put('/api/ldap/users/:username/vlan', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  body('vlan_id').isInt({ min: 1, max: 4094 }),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Datos inválidos. VLAN debe ser 1-4094.' });
+      }
+      const { username } = req.params;
+      const { vlan_id } = req.body;
+
+      await db.setUserVlan(username, vlan_id);
+
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'ASIGNAR_VLAN_WPA',
+        detalles: `Asignó VLAN ${vlan_id} al usuario WPA: ${username}`
+      });
+
+      res.json({ success: true, vlan_id });
+    } catch (err) { next(err); }
+  }
+);
+
+// DELETE - Quitar VLAN individual (revertir a grupo AD)
+router.delete('/api/ldap/users/:username/vlan', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const { username } = req.params;
+
+      await db.clearUserVlan(username);
+
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'LIMPIAR_VLAN_WPA',
+        detalles: `Eliminó VLAN individual del usuario WPA: ${username}`
+      });
+
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET - Obtener VLAN individual de usuario WPA Enterprise
+router.get('/api/ldap/users/:username/vlan', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const { username } = req.params;
+      const vlanId = await db.getUserVlan(username);
+      res.json({ vlan_id: vlanId });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET - Listar dispositivos WPA Enterprise de un usuario
+router.get('/api/ldap/users/:username/devices', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const { username } = req.params;
+      const devices = await db.getWpaDevices(username);
+      const max = await db.getWpaUserMaxDevices(username);
+      res.json({ devices, max_dispositivos: max });
+    } catch (err) { next(err); }
+  }
+);
+
+// POST - Registrar dispositivo WPA Enterprise (+ CoA eviction si excede límite)
+router.post('/api/ldap/users/:username/devices', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  body('mac_address').isString().trim().matches(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'MAC address inválida.' });
+      }
+      const { username } = req.params;
+      const mac = req.body.mac_address.toUpperCase().replace(/:/g, '-');
+
+      // Registrar el dispositivo
+      const device = await db.registerWpaDevice(username, mac);
+
+      // Verificar límite y desconectar el más antiguo si excede
+      const max = await db.getWpaUserMaxDevices(username);
+      if (max > 0) {
+        const count = await db.getWpaDeviceCount(username);
+        if (count > max) {
+          const oldest = await db.getOldestWpaDevice(username);
+          if (oldest && oldest.mac_address !== mac) {
+            console.log(`[WPA-LIMIT] Límite excedido para ${username} (${count}/${max}). Desconectando MAC más antigua: ${oldest.mac_address}`);
+            try {
+              await db.disconnectRadiusClient(oldest.mac_address);
+            } catch (coaErr) {
+              console.error(`[WPA-LIMIT] Error CoA para ${oldest.mac_address}:`, coaErr.message);
+            }
+            await db.deleteWpaDevice(username, oldest.mac_address);
+          }
+        }
+      }
+
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'REGISTRAR_DISPOSITIVO_WPA',
+        detalles: `Registró dispositivo ${mac} para usuario WPA: ${username}`
+      });
+
+      res.json({ success: true, device });
+    } catch (err) { next(err); }
+  }
+);
+
+// DELETE - Eliminar dispositivo WPA Enterprise + CoA disconnect
+router.delete('/api/ldap/users/:username/devices/:mac', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  param('mac').isString().trim(),
+  async (req, res, next) => {
+    try {
+      const { username, mac } = req.params;
+      const normalizedMac = mac.toUpperCase().replace(/:/g, '-');
+
+      // Eliminar de la base de datos
+      await db.deleteWpaDevice(username, normalizedMac);
+
+      // Intentar desconectar vía CoA si hay sesión activa
+      try {
+        await db.disconnectRadiusClient(normalizedMac);
+        console.log(`[WPA-DELETE] CoA disconnect enviado para MAC ${normalizedMac}`);
+      } catch (coaErr) {
+        console.error(`[WPA-DELETE] Error CoA para ${normalizedMac}:`, coaErr.message);
+      }
+
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'ELIMINAR_DISPOSITIVO_WPA',
+        detalles: `Eliminó dispositivo ${normalizedMac} del usuario WPA: ${username}`
+      });
+
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  }
+);
+
+// PUT - Establecer límite de dispositivos WPA Enterprise
+router.put('/api/ldap/users/:username/max-devices', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  body('max').isInt({ min: 0, max: 100 }),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Valor de límite inválido (0-100).' });
+      }
+      const { username } = req.params;
+      const { max } = req.body;
+
+      await db.setWpaUserMaxDevices(username, max);
+
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'SET_WPA_MAX_DEVICES',
+        detalles: `Límite de dispositivos WPA para ${username}: ${max === 0 ? 'sin límite' : max}`
+      });
+
+      res.json({ success: true, max_dispositivos: max });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET - Obtener límite de dispositivos WPA Enterprise
+router.get('/api/ldap/users/:username/max-devices', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const { username } = req.params;
+      const max = await db.getWpaUserMaxDevices(username);
+      res.json({ max_dispositivos: max });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET - Listar todos los dispositivos WPA Enterprise (global)
+router.get('/api/wpa-devices', requireAdmin,
+  query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+  query('offset').optional().isInt({ min: 0 }).toInt(),
+  async (req, res, next) => {
+    try {
+      const limit = req.query.limit || 50;
+      const offset = req.query.offset || 0;
+      const result = await db.getAllWpaDevices(offset, limit);
+      res.json(result);
+    } catch (err) { next(err); }
+  }
+);
+
 // GET - Resolver nombre de propietario desde servidores externos (SECAP o LDAP)
 router.get('/api/mac-bypass/resolve-owner', requireAdmin, async (req, res, next) => {
   try {

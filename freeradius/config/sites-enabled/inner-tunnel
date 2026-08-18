@@ -64,16 +64,18 @@ server inner-tunnel {
 
     # ── Sección post-auth ──
     post-auth {
-        # Asignar dinámicamente VLAN para usuarios LDAP según grupo AD
-        if (control:Auth-Type == LDAP) {
-            foreach &control:LDAP-Group {
-                if ("%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}") {
-                    update reply {
-                        Tunnel-Type := VLAN
-                        Tunnel-Medium-Type := IEEE-802
-                        Tunnel-Private-Group-ID := "%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}"
+        # Asignar VLAN: prioridad a VLAN individual (radreply) sobre VLAN por grupo LDAP.
+        if (!&reply:Tunnel-Private-Group-ID) {
+            if (control:Auth-Type == LDAP) {
+                foreach &control:LDAP-Group {
+                    if ("%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}") {
+                        update reply {
+                            Tunnel-Type := VLAN
+                            Tunnel-Medium-Type := IEEE-802
+                            Tunnel-Private-Group-ID := "%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}"
+                        }
+                        break
                     }
-                    break
                 }
             }
         }

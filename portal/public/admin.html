@@ -717,14 +717,15 @@
             <table class="w-full text-left border-collapse text-sm">
               <thead>
                 <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                  <th class="p-4">Usuario (sAMAccountName)</th>
+                  <th class="p-4">Usuario</th>
                   <th class="p-4">Nombre Completo</th>
-                  <th class="p-4">Correo Electrónico</th>
-                  <th class="p-4">Grupo de AD</th>
-                  <th class="p-4">VLAN / SSID</th>
-                  <th class="p-4">Estado de Conexión</th>
-                  <th class="p-4">Acceso Local</th>
-                  <th class="p-4">Detalles / Acciones</th>
+                  <th class="p-4">Grupo AD</th>
+                  <th class="p-4">VLAN Individual</th>
+                  <th class="p-4">Límite</th>
+                  <th class="p-4">Dispositivos</th>
+                  <th class="p-4">Estado</th>
+                  <th class="p-4">Acceso</th>
+                  <th class="p-4">Detalles</th>
                 </tr>
               </thead>
               <tbody id="ldap-users-tbody" class="divide-y divide-gray-100">
@@ -7165,10 +7166,16 @@ function renderWpaSessionsTable(list) {
       <td class="p-4 text-gray-500">${startTime}</td>
       <td class="p-4 text-gray-500 font-medium">${activeTimeStr}</td>
       <td class="p-4 text-gray-500 font-mono text-xs">▲ ${formatBytes(upBytes)} / ▼ ${formatBytes(downBytes)}</td>
-      <td class="p-4 text-right">
+      <td class="p-4 text-right space-x-1">
+        <button onclick="deleteWpaSessionDevice('${esc(s.username)}', '${esc(s.mac_address)}')"
+          class="text-xs font-semibold border border-red-200 hover:bg-red-50 text-red-600 px-2 py-1.5 rounded transition-colors shadow-sm cursor-pointer"
+          title="Eliminar registro y expulsar">
+          🗑 Eliminar
+        </button>
         <button onclick="kickWpaSession('${esc(s.mac_address)}')"
-          class="text-xs font-semibold border border-red-300 hover:bg-red-50 text-red-700 px-2.5 py-1.5 rounded transition-colors shadow-sm cursor-pointer">
-          Expulsar (Kick)
+          class="text-xs font-semibold border border-orange-300 hover:bg-orange-50 text-orange-700 px-2.5 py-1.5 rounded transition-colors shadow-sm cursor-pointer"
+          title="Solo expulsar (el registro permanece)">
+          ⚡ Expulsar
         </button>
       </td>
     `;
@@ -7193,6 +7200,17 @@ async function kickWpaSession(mac) {
   }
 }
 
+async function deleteWpaSessionDevice(username, mac) {
+  if (!confirm(`¿Eliminar y expulsar el dispositivo ${mac} de ${username}?\nSe eliminará el registro y se desconectará inmediatamente.`)) return;
+  try {
+    await api('DELETE', `/ldap/users/${encodeURIComponent(username)}/devices/${encodeURIComponent(mac)}`);
+    alert('Dispositivo eliminado y desconectado.');
+    loadWpaSessions();
+  } catch (err) {
+    alert('Error al eliminar dispositivo: ' + err.message);
+  }
+}
+
 // ── Usuarios LDAP / Active Directory ──
 // Variables globales para la paginación y búsqueda en LDAP
 window._ldapUsersList = [];
@@ -7202,25 +7220,45 @@ window._ldapSearchQuery = '';
 async function loadLdapUsers() {
   const tbody = document.getElementById('ldap-users-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Sincronizando con Active Directory...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Sincronizando con Active Directory...</td></tr>';
   
   try {
     const list = await api('GET', '/ldap/group-members');
     if (list.error) {
-      tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-amber-600 font-semibold">⚠️ ${esc(list.error)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-amber-600 font-semibold">⚠️ ${esc(list.error)}</td></tr>`;
       document.getElementById('ldap-users-count').textContent = '0 usuarios autorizados';
       const paginationDiv = document.getElementById('ldap-pagination-controls');
       if (paginationDiv) paginationDiv.style.display = 'none';
       return;
     }
     window._ldapUsersList = Array.isArray(list) ? list : [];
+    
+    // Enriquecer cada usuario con VLAN individual, límite y dispositivos
+    for (const u of window._ldapUsersList) {
+      try {
+        const [vlanRes, devicesRes] = await Promise.all([
+          api('GET', `/ldap/users/${encodeURIComponent(u.username)}/vlan`).catch(() => ({ vlan_id: null })),
+          api('GET', `/ldap/users/${encodeURIComponent(u.username)}/devices`).catch(() => ({ devices: [], max_dispositivos: 0 }))
+        ]);
+        u.userVlan = vlanRes.vlan_id || null;
+        u.devices = devicesRes.devices || [];
+        u.deviceCount = u.devices.length;
+        u.maxDispositivos = devicesRes.max_dispositivos || 0;
+      } catch (e) {
+        u.userVlan = null;
+        u.devices = [];
+        u.deviceCount = 0;
+        u.maxDispositivos = 0;
+      }
+    }
+    
     window._ldapCurrentPage = 1;
     const searchInput = document.getElementById('ldap-search-input');
     window._ldapSearchQuery = searchInput ? searchInput.value.trim() : '';
     
     renderLdapUsersTable();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-medium">Error de conexión LDAP: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error de conexión LDAP: ${esc(err.message)}</td></tr>`;
     const paginationDiv = document.getElementById('ldap-pagination-controls');
     if (paginationDiv) paginationDiv.style.display = 'none';
   }
@@ -7287,7 +7325,7 @@ function renderLdapUsersTable() {
   }
   
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400">No se encontraron usuarios en el grupo de Active Directory.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No se encontraron usuarios en el grupo de Active Directory.</td></tr>';
     document.getElementById('ldap-users-count').textContent = '0 usuarios encontrados';
     return;
   }
@@ -7329,20 +7367,63 @@ function renderLdapUsersTable() {
     const groupDisplay = u.grupoCn
       ? `<span class="px-2 py-1 text-[11px] font-semibold bg-blue-50 text-blue-700 rounded border border-blue-200" title="${esc(u.grupoDn)}">${esc(u.grupoCn)}</span>`
       : '<span class="text-gray-400">—</span>';
-      
-    let vlanSsidDisplay = '<span class="text-gray-400">—</span>';
-    if (u.vlanId) {
-      vlanSsidDisplay = `<span class="px-2 py-0.5 text-xs font-bold font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 rounded">VLAN ${u.vlanId}</span>`;
-    } else if (u.ssidName) {
-      vlanSsidDisplay = `<span class="px-2 py-0.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded">SSID: ${esc(u.ssidName)}</span>`;
+
+    // VLAN: mostrar VLAN global del grupo AD por defecto, con opción de override individual
+    const effectiveVlan = u.userVlan || u.vlanId || '';
+    const isOverride = u.userVlan != null;
+    let vlanHtml;
+    if (isOverride) {
+      // Override individual — estilo indigo, botón ✕ para revertir a grupo
+      vlanHtml = `
+        <div class="flex items-center gap-1">
+          <input type="number" min="1" max="4094" value="${u.userVlan}" title="Override individual ( grupo: ${u.vlanId || 'sin VLAN'} )"
+            onchange="setWpaUserVlan('${esc(u.username)}', this.value)"
+            class="w-16 text-xs border border-indigo-300 rounded px-1.5 py-1 bg-indigo-50 font-bold text-indigo-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <button onclick="clearWpaUserVlan('${esc(u.username)}')" title="Revertir a VLAN del grupo (${u.vlanId || 'ninguna'})" class="text-gray-400 hover:text-red-500 text-xs cursor-pointer">✕</button>
+        </div>`;
+    } else if (effectiveVlan) {
+      // VLAN heredada del grupo — estilo gris, badge "Grupo"
+      vlanHtml = `
+        <div class="flex items-center gap-1">
+          <input type="number" min="1" max="4094" value="${effectiveVlan}" title="VLAN heredada del grupo AD"
+            onchange="setWpaUserVlan('${esc(u.username)}', this.value)"
+            class="w-16 text-xs border border-gray-200 rounded px-1.5 py-1 bg-gray-50 text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <span class="text-[9px] text-gray-400 font-semibold" title="Heredado del grupo AD">GRP</span>
+        </div>`;
+    } else {
+      // Sin VLAN configurada
+      vlanHtml = `
+        <input type="number" min="1" max="4094" value="" placeholder="—"
+          onchange="setWpaUserVlan('${esc(u.username)}', this.value)"
+          class="w-16 text-xs border border-gray-200 rounded px-1.5 py-1 bg-gray-50 text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500">`;
     }
 
+    // Límite de dispositivos - editable
+    const maxDev = u.maxDispositivos || 0;
+    const maxHtml = `
+      <input type="number" min="0" max="100" value="${maxDev}" title="0 = sin límite"
+        onchange="setWpaUserMaxDevices('${esc(u.username)}', this.value)"
+        class="w-14 text-xs border border-gray-300 rounded px-1.5 py-1 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500">
+    `;
+
+    // Dispositivos - contador expandible
+    const devCount = u.deviceCount || 0;
+    const devicesHtml = `
+      <div class="flex items-center gap-1">
+        <span class="px-2 py-0.5 text-xs font-bold rounded ${devCount > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-50 text-gray-400 border border-gray-200'}">${devCount}${maxDev > 0 ? '/' + maxDev : ''}</span>
+        <button onclick="toggleWpaDeviceList('${esc(u.username)}')" class="text-blue-600 hover:text-blue-800 text-[10px] font-bold cursor-pointer" title="Ver dispositivos">📋</button>
+        <button onclick="promptAddWpaDevice('${esc(u.username)}')" class="text-green-600 hover:text-green-800 text-[10px] font-bold cursor-pointer" title="Agregar dispositivo">＋</button>
+      </div>
+      <div id="wpa-dev-list-${esc(u.username)}" class="hidden mt-2 space-y-1"></div>
+    `;
+
     tr.innerHTML = `
-      <td class="p-4 font-mono font-semibold text-gray-700">${esc(u.username)}</td>
-      <td class="p-4 text-gray-800 font-medium">${esc(u.nombres)} ${esc(u.apellidos)}</td>
-      <td class="p-4 text-gray-500 font-mono text-xs">${esc(u.email || '—')}</td>
+      <td class="p-4 font-mono font-semibold text-gray-700 text-xs">${esc(u.username)}</td>
+      <td class="p-4 text-gray-800 font-medium text-xs">${esc(u.nombres)} ${esc(u.apellidos)}</td>
       <td class="p-4">${groupDisplay}</td>
-      <td class="p-4">${vlanSsidDisplay}</td>
+      <td class="p-4">${vlanHtml}</td>
+      <td class="p-4">${maxHtml}</td>
+      <td class="p-4">${devicesHtml}</td>
       <td class="p-4">${statusBadge}</td>
       <td class="p-4">${toggleHtml}</td>
       <td class="p-4">${detailsHtml}</td>
@@ -7375,6 +7456,122 @@ async function kickLdapUserDevice(mac) {
     await loadLdapUsers();
   } catch (err) {
     alert('Error al conectar con la API: ' + err.message);
+  }
+}
+
+// ── WPA Enterprise: VLAN Individual ──────────────────────────────────────────
+
+async function setWpaUserVlan(username, vlanStr) {
+  const vlanId = parseInt(vlanStr, 10);
+  if (!vlanId || vlanId < 1 || vlanId > 4094) {
+    alert('VLAN ID debe ser entre 1 y 4094.');
+    await loadLdapUsers();
+    return;
+  }
+  try {
+    await api('PUT', `/ldap/users/${encodeURIComponent(username)}/vlan`, { vlan_id: vlanId });
+    await loadLdapUsers();
+  } catch (err) {
+    alert('Error al asignar VLAN: ' + err.message);
+    await loadLdapUsers();
+  }
+}
+
+async function clearWpaUserVlan(username) {
+  if (!confirm(`¿Revertir la VLAN individual de ${username} a la asignación por grupo AD?`)) {
+    await loadLdapUsers();
+    return;
+  }
+  try {
+    await api('DELETE', `/ldap/users/${encodeURIComponent(username)}/vlan`);
+    await loadLdapUsers();
+  } catch (err) {
+    alert('Error al quitar VLAN: ' + err.message);
+    await loadLdapUsers();
+  }
+}
+
+// ── WPA Enterprise: Límite de Dispositivos ───────────────────────────────────
+
+async function setWpaUserMaxDevices(username, maxStr) {
+  const max = parseInt(maxStr, 10);
+  if (isNaN(max) || max < 0 || max > 100) {
+    alert('Límite debe ser entre 0 (sin límite) y 100.');
+    await loadLdapUsers();
+    return;
+  }
+  try {
+    await api('PUT', `/ldap/users/${encodeURIComponent(username)}/max-devices`, { max });
+    await loadLdapUsers();
+  } catch (err) {
+    alert('Error al establecer límite: ' + err.message);
+    await loadLdapUsers();
+  }
+}
+
+// ── WPA Enterprise: Gestión de Dispositivos ──────────────────────────────────
+
+async function toggleWpaDeviceList(username) {
+  const container = document.getElementById(`wpa-dev-list-${username}`);
+  if (!container) return;
+  
+  if (!container.classList.contains('hidden')) {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  try {
+    const res = await api('GET', `/ldap/users/${encodeURIComponent(username)}/devices`);
+    const devices = res.devices || [];
+    
+    if (devices.length === 0) {
+      container.innerHTML = '<span class="text-xs text-gray-400 italic">Sin dispositivos registrados</span>';
+    } else {
+      container.innerHTML = devices.map(d => `
+        <div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200">
+          <span class="font-mono text-xs text-gray-700">${esc(d.mac_address)}</span>
+          <button onclick="deleteWpaDevice('${esc(username)}', '${esc(d.mac_address)}')"
+            class="text-red-400 hover:text-red-600 text-xs font-bold cursor-pointer" title="Eliminar">✕</button>
+        </div>
+      `).join('');
+    }
+    container.classList.remove('hidden');
+  } catch (err) {
+    container.innerHTML = `<span class="text-xs text-red-500">Error: ${esc(err.message)}</span>`;
+    container.classList.remove('hidden');
+  }
+}
+
+function promptAddWpaDevice(username) {
+  const mac = prompt(`Ingrese la MAC del dispositivo para ${username}:`);
+  if (!mac) return;
+  
+  // Validar formato MAC
+  const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+  if (!macRegex.test(mac)) {
+    alert('Formato de MAC inválido. Use AA:BB:CC:DD:EE:FF o AA-BB-CC-DD-EE-FF');
+    return;
+  }
+  
+  addWpaDevice(username, mac);
+}
+
+async function addWpaDevice(username, mac) {
+  try {
+    await api('POST', `/ldap/users/${encodeURIComponent(username)}/devices`, { mac_address: mac });
+    await loadLdapUsers();
+  } catch (err) {
+    alert('Error al registrar dispositivo: ' + err.message);
+  }
+}
+
+async function deleteWpaDevice(username, mac) {
+  if (!confirm(`¿Eliminar el dispositivo ${mac} de ${username}? Se desconectará si está activo.`)) return;
+  try {
+    await api('DELETE', `/ldap/users/${encodeURIComponent(username)}/devices/${encodeURIComponent(mac)}`);
+    await loadLdapUsers();
+  } catch (err) {
+    alert('Error al eliminar dispositivo: ' + err.message);
   }
 }
 

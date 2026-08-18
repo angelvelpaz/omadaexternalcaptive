@@ -3580,14 +3580,12 @@ function openEditDeviceModal(cedula, mac) {
 }
 
 async function deleteDeviceFromList(cedula, mac) {
-  if (!confirm(`¿Está seguro de que desea eliminar el dispositivo con MAC ${mac}?`)) {
-    return;
-  }
   try {
     await api('DELETE', '/devices', { cedula, mac_address: mac });
+    showToast('Dispositivo eliminado.', 'success');
     loadDevices(devicesOffset);
   } catch (err) {
-    alert('Error al eliminar dispositivo: ' + err.message);
+    showToast('Error: ' + err.message, 'error');
   }
 }
 

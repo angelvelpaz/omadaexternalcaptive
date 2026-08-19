@@ -291,6 +291,14 @@ router.post('/api/devices', requireAdmin,
         return res.status(400).json({ error: `El usuario ya ha alcanzado su límite de dispositivos (${user.max_dispositivos || 1}).` });
       }
 
+      // Verificar que la MAC no esté registrada en WPA Enterprise
+      const conflict = await db.isMacRegisteredInOtherType(mac_address, 'captive');
+      if (conflict) {
+        return res.status(409).json({
+          error: `La MAC ${mac_address} ya está registrada como dispositivo de WPA Enterprise por el usuario ${conflict.username}.`
+        });
+      }
+
       await db.registerUserDevice(cedula, mac_address);
       await db.logAdminAudit({
         username: req.adminUser,
@@ -2834,6 +2842,14 @@ router.post('/api/ldap/users/:username/devices', requireAdmin,
       }
       const { username } = req.params;
       const mac = req.body.mac_address.toUpperCase().replace(/:/g, '-');
+
+      // Verificar que la MAC no esté registrada en otro tipo de autenticación
+      const conflict = await db.isMacRegisteredInOtherType(mac, 'wpa');
+      if (conflict) {
+        return res.status(409).json({
+          error: `La MAC ${mac} ya está registrada como dispositivo de ${conflict.type === 'captive' ? 'portal cautivo' : 'WPA Enterprise'} por el usuario ${conflict.username}.`
+        });
+      }
 
       // Registrar el dispositivo
       const device = await db.registerWpaDevice(username, mac);

@@ -2560,6 +2560,47 @@ async function deleteRestaurantPin(id) {
 
 // ─── WPA Enterprise: Dispositivos y VLAN Individual ──────────────────────────
 
+/**
+ * Verifica si una MAC ya está registrada en otro tipo de autenticación.
+ * @param {string} macAddress - MAC a verificar
+ * @param {string} currentType - 'wpa' o 'captive'
+ * @returns {object|null} {registered: true, type: 'wpa'|'captive', username: string} o null
+ */
+async function isMacRegisteredInOtherType(macAddress, currentType) {
+  const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
+  const colonMac = macAddress.trim().toUpperCase().replace(/-/g, ':');
+
+  if (currentType === 'wpa') {
+    // Verificar si la MAC está en dispositivos_usuario (portal cautivo)
+    const result = await pool.query(
+      `SELECT d.cedula, u.nombres, u.apellidos
+       FROM dispositivos_usuario d
+       JOIN usuarios_portal u ON d.cedula = u.cedula
+       WHERE (REPLACE(UPPER(d.mac_address), '-', '') = REPLACE(UPPER($1), '-', '')
+           OR REPLACE(UPPER(d.mac_address), ':', '') = REPLACE(UPPER($2), ':', ''))
+       LIMIT 1`,
+      [cleanMac, colonMac]
+    );
+    if (result.rows.length > 0) {
+      const u = result.rows[0];
+      return { registered: true, type: 'captive', username: u.cedula, fullName: `${u.nombres} ${u.apellidos}`.trim() };
+    }
+  } else if (currentType === 'captive') {
+    // Verificar si la MAC está en wpa_enterprise_devices (WPA Enterprise)
+    const result = await pool.query(
+      `SELECT username FROM wpa_enterprise_devices
+       WHERE (REPLACE(UPPER(mac_address), '-', '') = REPLACE(UPPER($1), '-', '')
+           OR REPLACE(UPPER(mac_address), ':', '') = REPLACE(UPPER($2), ':', ''))
+       LIMIT 1`,
+      [cleanMac, colonMac]
+    );
+    if (result.rows.length > 0) {
+      return { registered: true, type: 'wpa', username: result.rows[0].username };
+    }
+  }
+  return null;
+}
+
 async function registerWpaDevice(username, macAddress) {
   const result = await pool.query(
     `INSERT INTO wpa_enterprise_devices (username, mac_address)
@@ -2713,5 +2754,5 @@ module.exports = {
   // wpa enterprise devices & vlan
   registerWpaDevice, deleteWpaDevice, getWpaDevices, getWpaDeviceCount,
   getOldestWpaDevice, getAllWpaDevices, getWpaUserMaxDevices, setWpaUserMaxDevices,
-  setUserVlan, clearUserVlan, getUserVlan,
+  setUserVlan, clearUserVlan, getUserVlan, isMacRegisteredInOtherType,
 };

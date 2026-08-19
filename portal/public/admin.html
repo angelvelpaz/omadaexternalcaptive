@@ -5150,64 +5150,31 @@ async function loadReports() {
         }).join('') : '<tr><td colspan="9" class="py-8 text-center text-gray-400">No se encontraron conexiones.</td></tr>';
       }
 
-    } else if (type === 'access') {
-      thead.innerHTML = `
-        <tr>
-          <th class="px-6 py-3">Cédula</th>
-          <th class="px-6 py-3">Nombre Completo</th>
-          <th class="px-6 py-3">Dispositivo</th>
-          <th class="px-6 py-3">Dirección MAC</th>
-          <th class="px-6 py-3">Dirección IP</th>
-          <th class="px-6 py-3">Evento</th>
-          <th class="px-6 py-3">Fecha y Hora</th>
-        </tr>
-      `;
+    } else if (type === 'access' || type === 'failed_auth') {
+      const isFailed = type === 'failed_auth';
+      thead.innerHTML = '<tr>' +
+        '<th class="px-6 py-3">Cédula</th>' +
+        '<th class="px-6 py-3">Nombre Completo</th>' +
+        '<th class="px-6 py-3">Vendor</th>' +
+        '<th class="px-6 py-3">Dirección MAC</th>' +
+        '<th class="px-6 py-3">Dirección IP</th>' +
+        '<th class="px-6 py-3">Resultado</th>' +
+        '<th class="px-6 py-3">Fecha y Hora</th>' +
+        '</tr>';
 
-      tbody.innerHTML = res.data.length ? res.data.map(a => `
-        <tr class="hover:bg-gray-50">
-          <td class="px-6 py-4 font-mono font-medium text-gray-900">${esc(a.cedula)}</td>
-          <td class="px-6 py-4">${a.nombres ? esc(a.nombres) + ' ' + esc(a.apellidos) : '—'}</td>
-          <td class="px-6 py-4 capitalize">${esc(a.vendor || '—')}</td>
-          <td class="px-6 py-4 font-mono text-xs">${esc(a.mac_address || '—')}</td>
-          <td class="px-6 py-4 font-mono text-xs">${esc(a.ip_address || '—')}</td>
-          <td class="px-6 py-4">
-            <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${
-              a.resultado === 'success'    ? 'bg-green-100 text-green-700' :
-              a.resultado === 'registered' ? 'bg-blue-100 text-blue-700'  :
-                                             'bg-red-100 text-red-700'
-            }">${esc(a.resultado)}</span>
-          </td>
-          <td class="px-6 py-4 text-xs text-gray-400">${fmtDate(a.created_at)}</td>
-        </tr>
-          `).join('') : '<tr><td colspan="7" class="py-8 text-center text-gray-400">No se encontraron registros de accesos.</td></tr>';
-      }
-
-    } else if (type === 'failed_auth') {
-      thead.innerHTML = `
-        <tr>
-          <th class="px-6 py-3">Cédula</th>
-          <th class="px-6 py-3">Nombre Completo</th>
-          <th class="px-6 py-3">Vendor</th>
-          <th class="px-6 py-3">Dirección MAC</th>
-          <th class="px-6 py-3">Dirección IP</th>
-          <th class="px-6 py-3">Resultado</th>
-          <th class="px-6 py-3">Fecha y Hora</th>
-        </tr>
-      `;
-
-      tbody.innerHTML = res.data.length ? res.data.map(a => `
-        <tr class="hover:bg-gray-50">
-          <td class="px-6 py-4 font-mono font-medium text-gray-900">${esc(a.cedula)}</td>
-          <td class="px-6 py-4">${a.nombres ? esc(a.nombres) + ' ' + esc(a.apellidos) : '—'}</td>
-          <td class="px-6 py-4 capitalize">${esc(a.vendor || '—')}</td>
-          <td class="px-6 py-4 font-mono text-xs">${esc(a.mac_address || '—')}</td>
-          <td class="px-6 py-4 font-mono text-xs">${esc(a.ip_address || '—')}</td>
-          <td class="px-6 py-4">
-            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">${esc(a.resultado)}</span>
-          </td>
-          <td class="px-6 py-4 text-xs text-gray-400">${fmtDate(a.created_at)}</td>
-        </tr>
-      `).join('') : '<tr><td colspan="7" class="py-8 text-center text-gray-400">No se encontraron intentos fallidos.</td></tr>';
+      tbody.innerHTML = res.data.length ? res.data.map(a => {
+        const nombre = a.nombres ? esc(a.nombres) + ' ' + esc(a.apellidos) : '—';
+        const badgeColor = isFailed ? 'bg-red-100 text-red-700' : (a.resultado === 'success' ? 'bg-green-100 text-green-700' : a.resultado === 'registered' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700');
+        return '<tr class="hover:bg-gray-50">' +
+          '<td class="px-6 py-4 font-mono font-medium text-gray-900">' + esc(a.cedula) + '</td>' +
+          '<td class="px-6 py-4">' + nombre + '</td>' +
+          '<td class="px-6 py-4 capitalize">' + esc(a.vendor || '—') + '</td>' +
+          '<td class="px-6 py-4 font-mono text-xs">' + esc(a.mac_address || '—') + '</td>' +
+          '<td class="px-6 py-4 font-mono text-xs">' + esc(a.ip_address || '—') + '</td>' +
+          '<td class="px-6 py-4"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + badgeColor + '">' + esc(a.resultado) + '</span></td>' +
+          '<td class="px-6 py-4 text-xs text-gray-400">' + fmtDate(a.created_at) + '</td>' +
+          '</tr>';
+      }).join('') : '<tr><td colspan="7" class="py-8 text-center text-gray-400">' + (isFailed ? 'No se encontraron intentos fallidos.' : 'No se encontraron registros de accesos.') + '</td></tr>';
     }
 
     updateReportPaginationButtons();

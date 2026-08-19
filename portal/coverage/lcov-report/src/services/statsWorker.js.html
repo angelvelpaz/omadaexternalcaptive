@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">4.63% </span>
+                <span class="strong">4.51% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>7/151</span>
+                <span class='fraction'>7/155</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">4.79% </span>
+                <span class="strong">4.66% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>7/146</span>
+                <span class='fraction'>7/150</span>
             </div>
         
             
@@ -470,7 +470,19 @@
 <a name='L405'></a><a href='#L405'>405</a>
 <a name='L406'></a><a href='#L406'>406</a>
 <a name='L407'></a><a href='#L407'>407</a>
-<a name='L408'></a><a href='#L408'>408</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a>
+<a name='L415'></a><a href='#L415'>415</a>
+<a name='L416'></a><a href='#L416'>416</a>
+<a name='L417'></a><a href='#L417'>417</a>
+<a name='L418'></a><a href='#L418'>418</a>
+<a name='L419'></a><a href='#L419'>419</a>
+<a name='L420'></a><a href='#L420'>420</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
@@ -789,17 +801,29 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1196,17 +1220,29 @@ async function <span class="fstat-no" title="function not covered" >checkActiveS
       connectionTimeoutMillis: 4000,
     });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    await extClient.connect();</span>
+    let extRes;
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      await extClient.connect();</span>
 &nbsp;
-    const escapedTable = <span class="cstat-no" title="statement not covered" >extConfig.tableName.replace(/"/g, '""');</span>
-    const escapedColCed = <span class="cstat-no" title="statement not covered" >extConfig.colCedula.replace(/"/g, '""');</span>
-    const escapedColStatus = <span class="cstat-no" title="statement not covered" >extConfig.colStatus.replace(/"/g, '""');</span>
+      const escapedTable = <span class="cstat-no" title="statement not covered" >extConfig.tableName.replace(/"/g, '""');</span>
+      const escapedColCed = <span class="cstat-no" title="statement not covered" >extConfig.colCedula.replace(/"/g, '""');</span>
+      const escapedColStatus = <span class="cstat-no" title="statement not covered" >extConfig.colStatus.replace(/"/g, '""');</span>
 &nbsp;
-    const placeholders = <span class="cstat-no" title="statement not covered" >activeCedulas.map(<span class="fstat-no" title="function not covered" >(_</span>, idx) =&gt; <span class="cstat-no" title="statement not covered" >`$${idx + 1}`)</span>.join(', ');</span>
-    const query = <span class="cstat-no" title="statement not covered" >`SELECT "${escapedColCed}" AS cedula, "${escapedColStatus}" AS status FROM "${escapedTable}" WHERE "${escapedColCed}" IN (${placeholders})`;</span>
+      const placeholders = <span class="cstat-no" title="statement not covered" >activeCedulas.map(<span class="fstat-no" title="function not covered" >(_</span>, idx) =&gt; <span class="cstat-no" title="statement not covered" >`$${idx + 1}`)</span>.join(', ');</span>
+      const query = <span class="cstat-no" title="statement not covered" >`SELECT "${escapedColCed}" AS cedula, "${escapedColStatus}" AS status FROM "${escapedTable}" WHERE "${escapedColCed}" IN (${placeholders})`;</span>
 &nbsp;
-    const extRes = <span class="cstat-no" title="statement not covered" >await extClient.query(query, activeCedulas);</span>
-<span class="cstat-no" title="statement not covered" >    await extClient.end();</span>
+<span class="cstat-no" title="statement not covered" >      extRes = await extClient.query(query, activeCedulas);</span>
+    } catch (dbErr) {
+<span class="cstat-no" title="statement not covered" >      console.error('[STATS-SYNC] Error al consultar estado de usuarios en BD externa:', dbErr.message);</span>
+      // Retornar temprano ya que no pudimos obtener la info de la BD externa
+<span class="cstat-no" title="statement not covered" >      return;</span>
+    } finally {
+<span class="cstat-no" title="statement not covered" >      try {</span>
+<span class="cstat-no" title="statement not covered" >        await extClient.end();</span>
+      } catch (e) {
+        // Ignorar
+      }
+    }
 &nbsp;
     const statusMap = <span class="cstat-no" title="statement not covered" >{};</span>
 <span class="cstat-no" title="statement not covered" >    extRes.rows.forEach(<span class="fstat-no" title="function not covered" >ro</span>w =&gt; {</span>
@@ -1291,7 +1327,7 @@ module.exports = { startStatsWorker, stopStatsWorker, syncStats, checkActiveSess
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-08-12T15:41:28.584Z
+                at 2026-08-17T19:46:19.055Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

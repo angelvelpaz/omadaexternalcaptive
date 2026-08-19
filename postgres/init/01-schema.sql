@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS dispositivos_usuario (
     id          SERIAL PRIMARY KEY,
     cedula      VARCHAR(150) NOT NULL REFERENCES usuarios_portal(cedula) ON DELETE CASCADE,
     mac_address VARCHAR(17) NOT NULL,
+    auth_type   VARCHAR(20) DEFAULT 'autoregistro',
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(cedula, mac_address)
 );

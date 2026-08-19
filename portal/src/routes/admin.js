@@ -2324,6 +2324,47 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
       localActiveMap.set(String(u.cedula).toLowerCase(), u.activo === true);
     });
 
+    // Batch: obtener VLAN individual, dispositivos y límite para todos los usuarios
+    const userVlanMap = new Map();
+    const userDevicesMap = new Map();
+    const userMaxMap = new Map();
+    if (usernames.length > 0) {
+      try {
+        const vlanResult = await db.getPool().query(
+          `SELECT username, value AS vlan_id FROM radreply
+           WHERE attribute = 'Tunnel-Private-Group-ID'
+             AND username = ANY($1)`,
+          [usernames]
+        );
+        vlanResult.rows.forEach(r => {
+          userVlanMap.set(String(r.username).toLowerCase(), parseInt(r.vlan_id, 10));
+        });
+
+        const devicesResult = await db.getPool().query(
+          `SELECT username, COUNT(*)::int AS device_count
+           FROM wpa_enterprise_devices
+           WHERE username = ANY($1)
+           GROUP BY username`,
+          [usernames]
+        );
+        devicesResult.rows.forEach(r => {
+          userDevicesMap.set(String(r.username).toLowerCase(), r.device_count);
+        });
+
+        const maxResult = await db.getPool().query(
+          `SELECT cedula, max_dispositivos_wpa
+           FROM usuarios_portal
+           WHERE cedula = ANY($1)`,
+          [usernames]
+        );
+        maxResult.rows.forEach(r => {
+          userMaxMap.set(String(r.cedula).toLowerCase(), r.max_dispositivos_wpa);
+        });
+      } catch (dbErr) {
+        console.error('[LDAP-Members] Error en queries batch:', dbErr.message);
+      }
+    }
+
     const result = members.map(m => {
       const lowerUser = String(m.username).toLowerCase();
       const session = activeSessionsMap.get(lowerUser);
@@ -2331,7 +2372,10 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
         ...m,
         activo: localActiveMap.has(lowerUser) ? localActiveMap.get(lowerUser) : true,
         isConnected: !!session,
-        session: session || null
+        session: session || null,
+        userVlan: userVlanMap.get(lowerUser) || null,
+        deviceCount: userDevicesMap.get(lowerUser) || 0,
+        maxDispositivos: userMaxMap.get(lowerUser) || 0
       };
     });
 
@@ -2470,6 +2514,34 @@ router.get('/api/ldap/portal-members', requireAdmin, async (req, res, next) => {
       localActiveMap.set(String(u.cedula).toLowerCase(), u.activo === true);
     });
 
+    // Batch: obtener VLAN individual, dispositivos y límite
+    const userVlanMap = new Map();
+    const userDevicesMap = new Map();
+    const userMaxMap = new Map();
+    if (usernames.length > 0) {
+      try {
+        const vlanResult = await db.getPool().query(
+          `SELECT username, value AS vlan_id FROM radreply WHERE attribute = 'Tunnel-Private-Group-ID' AND username = ANY($1)`,
+          [usernames]
+        );
+        vlanResult.rows.forEach(r => userVlanMap.set(String(r.username).toLowerCase(), parseInt(r.vlan_id, 10)));
+
+        const devicesResult = await db.getPool().query(
+          `SELECT username, COUNT(*)::int AS device_count FROM wpa_enterprise_devices WHERE username = ANY($1) GROUP BY username`,
+          [usernames]
+        );
+        devicesResult.rows.forEach(r => userDevicesMap.set(String(r.username).toLowerCase(), r.device_count));
+
+        const maxResult = await db.getPool().query(
+          `SELECT cedula, max_dispositivos_wpa FROM usuarios_portal WHERE cedula = ANY($1)`,
+          [usernames]
+        );
+        maxResult.rows.forEach(r => userMaxMap.set(String(r.cedula).toLowerCase(), r.max_dispositivos_wpa));
+      } catch (dbErr) {
+        console.error('[Portal-Members] Error en queries batch:', dbErr.message);
+      }
+    }
+
     const result = members.map(m => {
       const lowerUser = String(m.username).toLowerCase();
       const session = activeSessionsMap.get(lowerUser);
@@ -2477,7 +2549,10 @@ router.get('/api/ldap/portal-members', requireAdmin, async (req, res, next) => {
         ...m,
         activo: localActiveMap.has(lowerUser) ? localActiveMap.get(lowerUser) : true,
         isConnected: !!session,
-        session: session || null
+        session: session || null,
+        userVlan: userVlanMap.get(lowerUser) || null,
+        deviceCount: userDevicesMap.get(lowerUser) || 0,
+        maxDispositivos: userMaxMap.get(lowerUser) || 0
       };
     });
 

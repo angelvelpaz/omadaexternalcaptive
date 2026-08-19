@@ -42,6 +42,18 @@ if [ -f "$CERT_SOURCE/ca.pem" ] && [ -f "$CERT_SOURCE/server.crt" ] && [ -f "$CE
   chmod 640 "$RADDB/certs/ca.pem" "$RADDB/certs/server.crt" "$RADDB/certs/server.key" "$RADDB/certs/server.pem"
 else
   echo "[FREERADIUS] Advertencia: no se encontraron certificados completos en $CERT_SOURCE."
+  echo "[FREERADIUS] Generando certificados autofirmados temporales para que FreeRADIUS pueda iniciar..."
+  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout "$RADDB/certs/server.key" \
+    -out "$RADDB/certs/server.crt" \
+    -subj "/CN=portal-cautivo/O=PortalCautivo/C=EC" 2>/dev/null
+  # Generar CA autofirmada (el server.crt ES la CA en este caso)
+  cp "$RADDB/certs/server.crt" "$RADDB/certs/ca.pem"
+  # Generar server.pem (Android)
+  cat "$RADDB/certs/server.crt" "$RADDB/certs/server.key" > "$RADDB/certs/server.pem"
+  chown freerad:freerad "$RADDB/certs/ca.pem" "$RADDB/certs/server.crt" "$RADDB/certs/server.key" "$RADDB/certs/server.pem"
+  chmod 640 "$RADDB/certs/ca.pem" "$RADDB/certs/server.crt" "$RADDB/certs/server.key" "$RADDB/certs/server.pem"
+  echo "[FREERADIUS] Certificados autofirmados generados. Suba los certificados reales desde el panel admin."
 fi
 
 # Esperar a que la base de datos PostgreSQL esté en línea

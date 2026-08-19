@@ -1133,6 +1133,7 @@
               <option value="users">Usuarios Registrados</option>
               <option value="connections" selected>Conexiones (RADIUS)</option>
               <option value="access">Bitácora de Accesos (Auditoría)</option>
+              <option value="failed_auth">Autenticaciones Fallidas</option>
             </select>
           </div>
 
@@ -1171,6 +1172,15 @@
             <input type="date" id="report-end" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
           </div>
 
+          <!-- Presets de fechas -->
+          <div class="flex gap-1 items-end flex-wrap">
+            <button type="button" onclick="setDateRange('today')" class="text-[10px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-2 py-1 transition-colors">Hoy</button>
+            <button type="button" onclick="setDateRange('7d')" class="text-[10px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-2 py-1 transition-colors">7 días</button>
+            <button type="button" onclick="setDateRange('30d')" class="text-[10px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-2 py-1 transition-colors">30 días</button>
+            <button type="button" onclick="setDateRange('month')" class="text-[10px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-2 py-1 transition-colors">Este mes</button>
+            <button type="button" onclick="setDateRange('year')" class="text-[10px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-2 py-1 transition-colors">Este año</button>
+          </div>
+
           <!-- Acciones -->
           <div class="flex gap-2">
             <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -1204,7 +1214,13 @@
 
         <div class="p-4 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
           <span id="reports-count">— registros encontrados</span>
-          <div class="flex gap-2">
+          <div class="flex items-center gap-2">
+            <select id="report-page-size" onchange="reportsPageSize=parseInt(this.value); reportsOffset=0; loadReports()" class="text-xs border border-gray-300 rounded px-2 py-1 bg-white">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+            </select>
             <button id="btn-report-prev" class="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Ant</button>
             <button id="btn-report-next" class="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Sig →</button>
           </div>
@@ -4974,6 +4990,9 @@ async function testController(vendor) {
 // ── Reportes ──────────────────────────────────────────────────────────────────
 let reportsOffset = 0;
 let reportsTotalCount = 0;
+let reportsSort = '';
+let reportsSortDir = 'DESC';
+let reportsPageSize = 10;
 
 async function loadReports() {
   const type = document.getElementById('report-type').value;
@@ -4994,8 +5013,10 @@ async function loadReports() {
     type,
     mode,
     search,
-    limit: PAGE_SIZE,
-    offset: reportsOffset
+    limit: reportsPageSize,
+    offset: reportsOffset,
+    orderBy: reportsSort,
+    orderDir: reportsSortDir
   });
 
   if (ssid) params.set('ssid', ssid);
@@ -5011,14 +5032,14 @@ async function loadReports() {
     if (type === 'users') {
       thead.innerHTML = `
         <tr>
-          <th class="px-6 py-3">Cédula</th>
-          <th class="px-6 py-3">Nombre Completo</th>
+          <th class="px-6 py-3 cursor-pointer hover:text-blue-600 select-none" onclick="sortReports('cedula')">Cédula ${reportsSort==='cedula' ? (reportsSortDir==='ASC' ? '▲' : '▼') : '⇅'}</th>
+          <th class="px-6 py-3 cursor-pointer hover:text-blue-600 select-none" onclick="sortReports('nombres')">Nombre Completo ${reportsSort==='nombres' ? (reportsSortDir==='ASC' ? '▲' : '▼') : '⇅'}</th>
           <th class="px-6 py-3">Email</th>
-          <th class="px-6 py-3">Dirección MAC</th>
-          <th class="px-6 py-3">Estado</th>
+          <th class="px-6 py-3 cursor-pointer hover:text-blue-600 select-none" onclick="sortReports('mac_address')">Dirección MAC ${reportsSort==='mac_address' ? (reportsSortDir==='ASC' ? '▲' : '▼') : '⇅'}</th>
+          <th class="px-6 py-3 cursor-pointer hover:text-blue-600 select-none" onclick="sortReports('activo')">Estado ${reportsSort==='activo' ? (reportsSortDir==='ASC' ? '▲' : '▼') : '⇅'}</th>
           <th class="px-6 py-3">Términos Aceptados</th>
-          <th class="px-6 py-3">Fecha Aceptación</th>
-          <th class="px-6 py-3">Fecha Registro</th>
+          <th class="px-6 py-3 cursor-pointer hover:text-blue-600 select-none" onclick="sortReports('fecha_acepta_terminos')">Fecha Aceptación ${reportsSort==='fecha_acepta_terminos' ? (reportsSortDir==='ASC' ? '▲' : '▼') : '⇅'}</th>
+          <th class="px-6 py-3 cursor-pointer hover:text-blue-600 select-none" onclick="sortReports('fecha_registro')">Fecha Registro ${reportsSort==='fecha_registro' ? (reportsSortDir==='ASC' ? '▲' : '▼') : '⇅'}</th>
         </tr>
       `;
 
@@ -5158,7 +5179,35 @@ async function loadReports() {
           </td>
           <td class="px-6 py-4 text-xs text-gray-400">${fmtDate(a.created_at)}</td>
         </tr>
-      `).join('') : '<tr><td colspan="7" class="py-8 text-center text-gray-400">No se encontraron registros de accesos.</td></tr>';
+          `).join('') : '<tr><td colspan="7" class="py-8 text-center text-gray-400">No se encontraron registros de accesos.</td></tr>';
+      }
+
+    } else if (type === 'failed_auth') {
+      thead.innerHTML = `
+        <tr>
+          <th class="px-6 py-3">Cédula</th>
+          <th class="px-6 py-3">Nombre Completo</th>
+          <th class="px-6 py-3">Vendor</th>
+          <th class="px-6 py-3">Dirección MAC</th>
+          <th class="px-6 py-3">Dirección IP</th>
+          <th class="px-6 py-3">Resultado</th>
+          <th class="px-6 py-3">Fecha y Hora</th>
+        </tr>
+      `;
+
+      tbody.innerHTML = res.data.length ? res.data.map(a => `
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4 font-mono font-medium text-gray-900">${esc(a.cedula)}</td>
+          <td class="px-6 py-4">${a.nombres ? esc(a.nombres) + ' ' + esc(a.apellidos) : '—'}</td>
+          <td class="px-6 py-4 capitalize">${esc(a.vendor || '—')}</td>
+          <td class="px-6 py-4 font-mono text-xs">${esc(a.mac_address || '—')}</td>
+          <td class="px-6 py-4 font-mono text-xs">${esc(a.ip_address || '—')}</td>
+          <td class="px-6 py-4">
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">${esc(a.resultado)}</span>
+          </td>
+          <td class="px-6 py-4 text-xs text-gray-400">${fmtDate(a.created_at)}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="7" class="py-8 text-center text-gray-400">No se encontraron intentos fallidos.</td></tr>';
     }
 
     updateReportPaginationButtons();
@@ -5225,7 +5274,7 @@ function updateReportPaginationButtons() {
   const nextBtn = document.getElementById('btn-report-next');
 
   prevBtn.disabled = reportsOffset === 0;
-  nextBtn.disabled = reportsOffset + PAGE_SIZE >= reportsTotalCount;
+  nextBtn.disabled = reportsOffset + reportsPageSize >= reportsTotalCount;
 }
 
 // Event Listeners para Reportes
@@ -5254,15 +5303,15 @@ if (document.getElementById('report-ssid')) {
 }
 
 document.getElementById('btn-report-prev').addEventListener('click', () => {
-  if (reportsOffset >= PAGE_SIZE) {
-    reportsOffset -= PAGE_SIZE;
+  if (reportsOffset >= reportsPageSize) {
+    reportsOffset -= reportsPageSize;
     loadReports();
   }
 });
 
 document.getElementById('btn-report-next').addEventListener('click', () => {
-  if (reportsOffset + PAGE_SIZE < reportsTotalCount) {
-    reportsOffset += PAGE_SIZE;
+  if (reportsOffset + reportsPageSize < reportsTotalCount) {
+    reportsOffset += reportsPageSize;
     loadReports();
   }
 });
@@ -5278,18 +5327,65 @@ document.getElementById('btn-report-clear').addEventListener('click', () => {
   document.getElementById('report-start').value = '';
   document.getElementById('report-end').value = '';
   reportsOffset = 0;
+  reportsSort = '';
+  reportsSortDir = 'ASC';
   loadReports();
 });
+
+function sortReports(col) {
+  if (reportsSort === col) {
+    reportsSortDir = reportsSortDir === 'ASC' ? 'DESC' : 'ASC';
+  } else {
+    reportsSort = col;
+    reportsSortDir = 'ASC';
+  }
+  reportsOffset = 0;
+  loadReports();
+}
+
+function setDateRange(range) {
+  const now = new Date();
+  let start, end;
+  switch (range) {
+    case 'today':
+      start = end = now.toISOString().slice(0, 10);
+      break;
+    case '7d':
+      start = new Date(now - 7 * 86400000).toISOString().slice(0, 10);
+      end = now.toISOString().slice(0, 10);
+      break;
+    case '30d':
+      start = new Date(now - 30 * 86400000).toISOString().slice(0, 10);
+      end = now.toISOString().slice(0, 10);
+      break;
+    case 'month':
+      start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      end = now.toISOString().slice(0, 10);
+      break;
+    case 'year':
+      start = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+      end = now.toISOString().slice(0, 10);
+      break;
+  }
+  document.getElementById('report-start').value = start;
+  document.getElementById('report-end').value = end;
+  reportsOffset = 0;
+  loadReports();
+}
 
 document.getElementById('btn-report-export').addEventListener('click', async () => {
   const type = document.getElementById('report-type').value;
   const search = document.getElementById('report-search').value.trim();
   const start = document.getElementById('report-start').value;
   const end = document.getElementById('report-end').value;
+  const mode = document.getElementById('report-mode') ? document.getElementById('report-mode').value : 'consolidated';
+  const ssid = document.getElementById('report-ssid') ? document.getElementById('report-ssid').value : '';
 
   const params = new URLSearchParams({
     type,
     search,
+    mode,
+    ssid,
     limit: 5000,
     offset: 0
   });
@@ -5365,6 +5461,18 @@ document.getElementById('btn-report-export').addEventListener('click', async () 
         a.resultado,
         fmtDate(a.created_at)
       ]);
+    } else if (type === 'failed_auth') {
+      headers = ['Cédula', 'Nombres', 'Apellidos', 'Vendor', 'Dirección MAC', 'Dirección IP', 'Resultado', 'Fecha y Hora'];
+      rows = res.data.map(a => [
+        a.cedula,
+        a.nombres || '',
+        a.apellidos || '',
+        a.vendor || '',
+        a.mac_address || '',
+        a.ip_address || '',
+        a.resultado,
+        fmtDate(a.created_at)
+      ]);
     }
 
     const escapeCsvCell = val => {
@@ -5432,10 +5540,14 @@ document.getElementById('btn-report-pdf').addEventListener('click', async () => 
   const search = document.getElementById('report-search').value.trim();
   const start = document.getElementById('report-start').value;
   const end = document.getElementById('report-end').value;
+  const mode = document.getElementById('report-mode') ? document.getElementById('report-mode').value : 'consolidated';
+  const ssid = document.getElementById('report-ssid') ? document.getElementById('report-ssid').value : '';
 
   const params = new URLSearchParams({
     type,
     search,
+    mode,
+    ssid,
     limit: 1000,
     offset: 0
   });
@@ -5499,7 +5611,7 @@ document.getElementById('btn-report-pdf').addEventListener('click', async () => 
     doc.setFontSize(10);
     doc.setTextColor(100);
 
-    let subtitle = `Tipo: ${type === 'users' ? 'Usuarios Registrados' : type === 'connections' ? 'Conexiones (RADIUS)' : 'Bitácora de Accesos'}`;
+    let subtitle = `Tipo: ${type === 'users' ? 'Usuarios Registrados' : type === 'connections' ? 'Conexiones (RADIUS)' : type === 'failed_auth' ? 'Autenticaciones Fallidas' : 'Bitácora de Accesos'}`;
     if (search) subtitle += ` | Búsqueda: "${search}"`;
     if (start) subtitle += ` | Desde: ${start}`;
     if (end) subtitle += ` | Hasta: ${end}`;
@@ -5556,6 +5668,17 @@ document.getElementById('btn-report-pdf').addEventListener('click', async () => 
       }
     } else if (type === 'access') {
       headers = [['Cédula', 'Nombres y Apellidos', 'Dispositivo', 'Dirección MAC', 'Dirección IP', 'Evento', 'Fecha y Hora']];
+      rows = res.data.map(a => [
+        a.cedula,
+        a.nombres ? `${a.nombres} ${a.apellidos}` : '—',
+        a.vendor || '—',
+        a.mac_address || '—',
+        a.ip_address || '—',
+        a.resultado,
+        fmtDate(a.created_at)
+      ]);
+    } else if (type === 'failed_auth') {
+      headers = [['Cédula', 'Nombres y Apellidos', 'Vendor', 'Dirección MAC', 'Dirección IP', 'Resultado', 'Fecha y Hora']];
       rows = res.data.map(a => [
         a.cedula,
         a.nombres ? `${a.nombres} ${a.apellidos}` : '—',

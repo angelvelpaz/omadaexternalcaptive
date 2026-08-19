@@ -1370,6 +1370,41 @@ async function getAccessLogReport({ search = '', startDate, endDate, limit = 50,
   return { data: res.rows, total: parseInt(totalRes.rows[0].count) };
 }
 
+async function getFailedAuthReport({ search = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
+  let query = `
+    SELECT a.id, a.cedula, u.nombres, u.apellidos, a.vendor, a.mac_address, a.ip_address, a.resultado, a.created_at
+    FROM access_log a
+    LEFT JOIN usuarios_portal u ON a.cedula = u.cedula
+    WHERE a.resultado != 'success' AND a.resultado != 'registered'
+  `;
+  const params = [];
+  let paramIdx = 1;
+
+  if (search) {
+    query += ` AND (a.cedula ILIKE $${paramIdx} OR u.nombres ILIKE $${paramIdx} OR u.apellidos ILIKE $${paramIdx} OR a.mac_address ILIKE $${paramIdx} OR CAST(a.ip_address AS TEXT) ILIKE $${paramIdx})`;
+    params.push(`%${search}%`);
+    paramIdx++;
+  }
+
+  if (startDate) {
+    query += ` AND a.created_at >= $${paramIdx}`;
+    params.push(startDate);
+    paramIdx++;
+  }
+
+  if (endDate) {
+    query += ` AND a.created_at <= $${paramIdx}`;
+    params.push(endDate);
+    paramIdx++;
+  }
+
+  const countRes = await pool.query(`SELECT COUNT(*) FROM (${query}) AS total`, params);
+  query += ` ORDER BY a.created_at DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+  params.push(limit, offset);
+  const res = await pool.query(query, params);
+  return { data: res.rows, total: parseInt(countRes.rows[0].count) };
+}
+
 // ─── Dispositivos por Usuario ────────────────────────────────────────────────
 async function getUserDevices(cedula) {
   const res = await pool.query(
@@ -2659,7 +2694,7 @@ module.exports = {
   listGroups, addGroupAttribute, deleteGroupAttribute, deleteGroup,
   getStats,
   getControllerConfig, saveControllerConfig,
-  getUsersReport, getConnectionsReport, getConsolidatedConnectionsReport, getDistinctSsids, getAccessLogReport,
+  getUsersReport, getConnectionsReport, getConsolidatedConnectionsReport, getDistinctSsids, getAccessLogReport, getFailedAuthReport,
   // dispositivos
   getUserDevices, registerUserDevice, deleteUserDevice, setUserMaxDevices,
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,

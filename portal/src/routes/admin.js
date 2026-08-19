@@ -201,7 +201,7 @@ router.get('/api/stats', requireAdmin, async (req, res, next) => {
 // ─── Reportes ─────────────────────────────────────────────────────────────────
 
 router.get('/api/reports', requireAdmin,
-  query('type').isIn(['users', 'connections', 'access']),
+  query('type').isIn(['users', 'connections', 'access', 'failed_auth']),
   query('search').optional().isString().trim().escape(),
   query('ssid').optional().isString().trim().escape(),
   query('startDate').optional().isISO8601().toDate(),
@@ -228,6 +228,8 @@ router.get('/api/reports', requireAdmin,
         }
       } else if (type === 'access') {
         result = await db.getAccessLogReport({ search, startDate, endDate, limit, offset });
+      } else if (type === 'failed_auth') {
+        result = await db.getFailedAuthReport({ search, startDate, endDate, limit, offset });
       }
 
       res.json(result);

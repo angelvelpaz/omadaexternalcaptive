@@ -2353,6 +2353,22 @@ router.get('/api/ldap/group-members', requireAdmin, async (req, res, next) => {
           userDevicesMap.set(String(r.username).toLowerCase(), r.device_count);
         });
 
+        // Contar sesiones activas de WPA Enterprise (radacct) por usuario
+        const sessionsResult = await db.getPool().query(
+          `SELECT username, COUNT(*)::int AS active_count
+           FROM radacct
+           WHERE acctstoptime IS NULL
+             AND acctauthentic = 'RADIUS'
+             AND username = ANY($1)
+           GROUP BY username`,
+          [usernames]
+        );
+        sessionsResult.rows.forEach(r => {
+          const key = String(r.username).toLowerCase();
+          const registered = userDevicesMap.get(key) || 0;
+          userDevicesMap.set(key, registered + r.active_count);
+        });
+
         const maxResult = await db.getPool().query(
           `SELECT cedula, max_dispositivos_wpa
            FROM usuarios_portal

@@ -398,9 +398,90 @@ function authenticateTest({ url, bindDN, bindPassword, searchBase, allowedGroup,
   }));
 }
 
+/**
+ * Remueve un usuario de un grupo LDAP/AD usando LDAP Modify.
+ */
+function removeFromGroup({ url, bindDN, bindPassword, searchBase, groupDN, username }) {
+  return ldapTestBreaker.execute(() => new Promise((resolve, reject) => {
+    let settled = false;
+    let client;
+
+    function finish(fn, value) {
+      if (settled) return;
+      settled = true;
+      try { client.destroy(); } catch (_) {}
+      fn(value);
+    }
+
+    try {
+      client = ldap.createClient({
+        url: url,
+        tlsOptions: tlsOptions(),
+        connectTimeout: 5000,
+        timeout: 5000
+      });
+    } catch (err) {
+      return reject(new Error('No se pudo crear el cliente LDAP: ' + err.message));
+    }
+
+    client.on('error', (err) => {
+      console.error('[LDAP-RemoveGroup] Error:', err.message);
+      finish(reject, new Error('Error de conexión LDAP: ' + err.message));
+    });
+
+    client.bind(bindDN, bindPassword, (err) => {
+      if (err) {
+        return finish(reject, new Error('Fallo de bind LDAP: ' + err.message));
+      }
+
+      // Buscar el DN completo del usuario
+      const safeUsername = escapeLdapFilter(username);
+      const filter = `(|(sAMAccountName=${safeUsername})(userPrincipalName=${safeUsername}))`;
+      client.search(searchBase, { filter, scope: 'sub', attributes: ['dn'] }, (err, res) => {
+        if (err) {
+          return finish(reject, new Error('Error en búsqueda LDAP: ' + err.message));
+        }
+
+        let userDN = null;
+        res.on('searchEntry', (entry) => {
+          if (!userDN) {
+            userDN = entry.dn ? entry.dn.toString() : (entry.pojo.objectName || '');
+          }
+        });
+
+        res.on('error', (err) => {
+          finish(reject, new Error('Error en stream LDAP: ' + err.message));
+        });
+
+        res.on('end', () => {
+          if (!userDN) {
+            return finish(resolve, { success: false, error: 'Usuario no encontrado en AD.' });
+          }
+
+          // Modificar el grupo: eliminar el atributo member con el DN del usuario
+          const change = new ldap.Change({
+            operation: 'delete',
+            modification: {
+              member: userDN
+            }
+          });
+
+          client.modify(groupDN, change, (err) => {
+            if (err) {
+              return finish(reject, new Error('Error al modificar el grupo AD: ' + err.message));
+            }
+            finish(resolve, { success: true, userDN });
+          });
+        });
+      });
+    });
+  }));
+}
+
 module.exports = {
   authenticate,
   authenticateTest,
   searchUser,
-  getGroupMembers
+  getGroupMembers,
+  removeFromGroup
 };

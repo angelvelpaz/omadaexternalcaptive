@@ -726,6 +726,7 @@
                   <th class="p-4">Estado</th>
                   <th class="p-4">Acceso</th>
                   <th class="p-4">Detalles</th>
+                  <th class="p-4">Acciones</th>
                 </tr>
               </thead>
               <tbody id="ldap-users-tbody" class="divide-y divide-gray-100">
@@ -7426,7 +7427,7 @@ function renderLdapUsersTable() {
   }
   
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No se encontraron usuarios en el grupo de Active Directory.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="p-8 text-center text-gray-400">No se encontraron usuarios en el grupo de Active Directory.</td></tr>';
     document.getElementById('ldap-users-count').textContent = '0 usuarios encontrados';
     return;
   }
@@ -7528,6 +7529,11 @@ function renderLdapUsersTable() {
       <td class="p-4">${statusBadge}</td>
       <td class="p-4">${toggleHtml}</td>
       <td class="p-4">${detailsHtml}</td>
+      <td class="p-4">
+        <button onclick="removeFromADGroup('${esc(u.username)}')" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold px-2 py-1 rounded transition-colors cursor-pointer" title="Remover del grupo AD - el usuario no podrá conectarse a WPA Enterprise">
+          Quitar del Grupo
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -7552,6 +7558,21 @@ async function kickLdapUserDevice(mac) {
       showToast('Dispositivo expulsado.', 'success');
     } else {
       showToast('Error al expulsar: ' + (res.error || 'desconocido'), 'error');
+    }
+    await loadLdapUsers();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function removeFromADGroup(username) {
+  if (!confirm('¿Remover a "' + username + '" del grupo de Active Directory?\n\nEl usuario ya no podrá conectarse a la red WPA Enterprise. Esta acción modifica Active Directory directamente.')) return;
+  try {
+    const res = await api('DELETE', '/ldap/users/' + encodeURIComponent(username) + '/remove-from-group');
+    if (res.success) {
+      showToast('Usuario removido del grupo AD.', 'success');
+    } else {
+      showToast('Error: ' + (res.error || 'desconocido'), 'error');
     }
     await loadLdapUsers();
   } catch (err) {

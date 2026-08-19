@@ -2923,6 +2923,66 @@ router.get('/api/ldap/users/:username/max-devices', requireAdmin,
   }
 );
 
+// DELETE - Remover usuario del grupo AD de WPA Enterprise
+router.delete('/api/ldap/users/:username/remove-from-group', requireAdmin,
+  param('username').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Nombre de usuario inválido.' });
+
+      const { username } = req.params;
+      const normalized = username.trim().toLowerCase();
+
+      // Resolver config LDAP
+      let ldapServerUrl = process.env.LDAP_SERVER_URL;
+      let ldapBindDN = process.env.LDAP_BIND_DN;
+      let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
+      let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
+      let ldapAllowedGroup = process.env.LDAP_ALLOWED_GROUP;
+
+      try {
+        const ldapConfig = await db.getControllerConfig('ldap');
+        if (ldapConfig) {
+          if (ldapConfig.ldapServerUrl) ldapServerUrl = ldapConfig.ldapServerUrl;
+          if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
+          if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
+          if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
+          if (ldapConfig.ldapAllowedGroup !== undefined) ldapAllowedGroup = ldapConfig.ldapAllowedGroup;
+        }
+      } catch (dbErr) {
+        console.warn('[LDAP-RemoveGroup] No se pudo leer config LDAP:', dbErr.message);
+      }
+
+      if (!ldapServerUrl || !ldapBindDN || !ldapSearchBase || !ldapAllowedGroup) {
+        return res.status(400).json({ error: 'La configuración LDAP no está completa.' });
+      }
+
+      const result = await ldapSvc.removeFromGroup({
+        url: ldapServerUrl,
+        bindDN: ldapBindDN,
+        bindPassword: ldapBindPassword,
+        searchBase: ldapSearchBase,
+        groupDN: ldapAllowedGroup.trim(),
+        username: normalized
+      });
+
+      if (!result.success) {
+        return res.status(404).json({ error: result.error });
+      }
+
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'REMOVER_USUARIO_GRUPO_AD',
+        detalles: `Removió usuario ${normalized} del grupo AD: ${ldapAllowedGroup.trim()}`
+      });
+
+      res.json({ success: true, message: `Usuario ${normalized} removido del grupo de Active Directory.` });
+    } catch (err) { next(err); }
+  }
+);
+
 // GET - Listar todos los dispositivos WPA Enterprise (global)
 router.get('/api/wpa-devices', requireAdmin,
   query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),

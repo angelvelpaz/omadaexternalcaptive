@@ -93,8 +93,9 @@ ldap {
 	options {
 		chase_referrals = no
 		rebind = yes
-		res_idle_timeout = 10
-		res_wait_timeout = 30
+		res_idle_timeout = 30
+		res_wait_timeout = 60
+		connect_timeout = 10
 	}
 
 	tls {

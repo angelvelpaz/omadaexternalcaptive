@@ -49,7 +49,14 @@ async function resolveNasIp(vendor) {
     const url = (cfg && cfg.unifiControllerUrl) || process.env.UNIFI_CONTROLLER_URL;
     return extractControllerIp(url);
   }
-  return null;
+  // Vendor desconocido: intentar con ambos controladores configurados
+  try {
+    const omadaCfg = await db.getControllerConfig('omada');
+    if (omadaCfg && omadaCfg.omadaControllerUrl) return extractControllerIp(omadaCfg.omadaControllerUrl);
+    const unifiCfg = await db.getControllerConfig('unifi');
+    if (unifiCfg && unifiCfg.unifiControllerUrl) return extractControllerIp(unifiCfg.unifiControllerUrl);
+  } catch (_) {}
+  return extractControllerIp(process.env.OMADA_CONTROLLER_URL || process.env.UNIFI_CONTROLLER_URL);
 }
 
 function normalizeMacAddress(mac) {
@@ -604,7 +611,7 @@ router.post('/auth/register',
             macAddress: mac,
             ipAddress: clientIp,
             vendor: vendor,
-            nasIp: extractControllerIp(process.env.OMADA_CONTROLLER_URL || process.env.UNIFI_CONTROLLER_URL)
+            nasIp: await resolveNasIp(vendor || detectedVendor)
           });
           
           await db.logAccess({
@@ -789,7 +796,7 @@ router.post('/auth/login',
             macAddress: mac || '',
             ipAddress: clientIp,
             vendor: detectedVendor,
-            nasIp: extractControllerIp(process.env.OMADA_CONTROLLER_URL || process.env.UNIFI_CONTROLLER_URL)
+            nasIp: await resolveNasIp(vendor || detectedVendor)
           });
           
           await db.logAccess({
@@ -940,7 +947,7 @@ router.post('/auth/free-access',
             macAddress: normalizedMac,
             ipAddress: clientIp,
             vendor: detectedVendor,
-            nasIp: extractControllerIp(process.env.OMADA_CONTROLLER_URL || process.env.UNIFI_CONTROLLER_URL)
+            nasIp: await resolveNasIp(vendor || detectedVendor)
           });
           
           await db.logAccess({
@@ -1168,7 +1175,7 @@ router.post('/auth/ldap',
             macAddress: normalizedMac,
             ipAddress: clientIp,
             vendor: detectedVendor,
-            nasIp: extractControllerIp(process.env.OMADA_CONTROLLER_URL || process.env.UNIFI_CONTROLLER_URL)
+            nasIp: await resolveNasIp(vendor || detectedVendor)
           });
           
           await db.logAccess({
@@ -1316,7 +1323,7 @@ router.post('/auth/hotel',
             macAddress: normalizedMac,
             ipAddress: clientIp,
             vendor: detectedVendor,
-            nasIp: extractControllerIp(process.env.OMADA_CONTROLLER_URL || process.env.UNIFI_CONTROLLER_URL)
+            nasIp: await resolveNasIp(vendor || detectedVendor)
           });
           await db.logAccess({
             cedula: normalizedUsername,
@@ -1459,7 +1466,7 @@ router.post('/auth/restaurant',
             macAddress: normalizedMac,
             ipAddress: clientIp,
             vendor: detectedVendor,
-            nasIp: extractControllerIp(process.env.OMADA_CONTROLLER_URL || process.env.UNIFI_CONTROLLER_URL)
+            nasIp: await resolveNasIp(vendor || detectedVendor)
           });
           await db.logAccess({
             cedula: normalizedUsername,
@@ -1723,7 +1730,7 @@ router.post('/auth/self-release',
             macAddress: normalizedMac,
             ipAddress: clientIp,
             vendor: detectedVendor,
-            nasIp: extractControllerIp(process.env.OMADA_CONTROLLER_URL || process.env.UNIFI_CONTROLLER_URL)
+            nasIp: await resolveNasIp(vendor || detectedVendor)
           });
           
           await db.logAccess({

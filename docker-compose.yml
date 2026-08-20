@@ -26,6 +26,7 @@ services:
       context: ./freeradius
       dockerfile: Dockerfile
     container_name: captive_freeradius
+    hostname: captive-freeradius
     restart: unless-stopped
     environment:
       POSTGRES_HOST: postgres

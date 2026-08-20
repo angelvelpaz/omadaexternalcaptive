@@ -53,6 +53,7 @@ ldap {
 	# Mapeo de contraseñas de LDAP
 	update {
 		control:Password-With-Header	+= 'userPassword'
+		control:LDAP-Group		+= 'memberOf'
 	}
 
 	# Configuración del pool de conexiones

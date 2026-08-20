@@ -545,7 +545,7 @@ router.post('/auth/register',
       // Registrar dispositivo del usuario si viene la MAC
       const mac = params.mac || params.clientMac;
       if (mac) {
-        await db.registerUserDevice(ced, mac);
+        await db.registerUserDevice(ced, mac, null, 'autoregistro');
       }
 
       let redirectUrl = params.redirectUrl || '/success';
@@ -746,10 +746,10 @@ router.post('/auth/login',
           }
           
           // Registrar el nuevo dispositivo
-          await db.registerUserDevice(ced, normalizedMac);
+          await db.registerUserDevice(ced, normalizedMac, null, 'autoregistro');
         } else {
           // Si ya está registrado, refrescar reglas de RADIUS (incluyendo límite de tiempo de sesión)
-          await db.registerUserDevice(ced, normalizedMac);
+          await db.registerUserDevice(ced, normalizedMac, null, 'autoregistro');
         }
       }
 
@@ -909,7 +909,7 @@ router.post('/auth/free-access',
       }
 
       // 2. Asociar el dispositivo al usuario genérico y actualizar reglas en RADIUS (incluyendo límite de tiempo)
-      await db.registerUserDevice('9999999999', normalizedMac, adSessionMinutes);
+      await db.registerUserDevice('9999999999', normalizedMac, adSessionMinutes, 'publicidad');
 
       // Autenticar vía RADIUS (para garantizar consistencia con FreeRADIUS)
       const radiusOk = await radius.authenticate('9999999999', user.radius_password);
@@ -1135,7 +1135,7 @@ router.post('/auth/ldap',
           });
         }
 
-        await db.registerUserDevice(normalizedUsername, normalizedMac);
+        await db.registerUserDevice(normalizedUsername, normalizedMac, null, 'ldap');
       }
 
       // Autenticar vía RADIUS
@@ -1288,7 +1288,7 @@ router.post('/auth/hotel',
             devices: userDevices.map(d => ({ id: d.id, mac_address: d.mac_address, created_at: d.created_at }))
           });
         }
-        await db.registerUserDevice(normalizedUsername, normalizedMac);
+        await db.registerUserDevice(normalizedUsername, normalizedMac, null, 'hotel');
       }
 
       // 6. Autenticar en RADIUS
@@ -1407,7 +1407,7 @@ router.post('/auth/restaurant',
           });
           return res.status(400).json({ error: `Límite de dispositivos alcanzado para este PIN.` });
         }
-        await db.registerUserDevice(normalizedUsername, normalizedMac);
+        await db.registerUserDevice(normalizedUsername, normalizedMac, null, 'restaurant');
         // Incrementar el uso del PIN solo para nuevos dispositivos de forma atómica.
         const updatedPin = await db.incrementPinUsage(pinObj.pin);
         if (!updatedPin) {
@@ -1695,7 +1695,7 @@ router.post('/auth/self-release',
       }
 
       // 5. Registrar el nuevo dispositivo (esto también aplica su perfil de velocidad)
-      await db.registerUserDevice(user.cedula, newMac);
+      await db.registerUserDevice(user.cedula, newMac, null, 'ldap');
       console.log(`[SELF-RELEASE] Nuevo dispositivo ${newMac} registrado para usuario ${user.cedula}`);
 
       // 6. Autorizar el nuevo dispositivo

@@ -1414,7 +1414,7 @@ async function getUserDevices(cedula) {
   return res.rows;
 }
 
-async function registerUserDevice(cedula, macAddress, customTimeLimit = null) {
+async function registerUserDevice(cedula, macAddress, customTimeLimit = null, authType = 'autoregistro') {
   if (!macAddress) return;
   const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
   
@@ -1425,10 +1425,10 @@ async function registerUserDevice(cedula, macAddress, customTimeLimit = null) {
   );
 
   await pool.query(
-    `INSERT INTO dispositivos_usuario (cedula, mac_address)
-     VALUES ($1, $2)
-     ON CONFLICT (cedula, mac_address) DO NOTHING`,
-    [cedula, cleanMac]
+    `INSERT INTO dispositivos_usuario (cedula, mac_address, auth_type)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (cedula, mac_address) DO UPDATE SET auth_type = $3`,
+    [cedula, cleanMac, authType]
   );
 
   // Aplicar límite de velocidad en radreply según perfil del usuario (LDAP alfanumérico vs Cédula vs Publicidad)

@@ -68,15 +68,15 @@ server inner-tunnel {
         # Primero intentar individuo, luego grupo AD
         if (!&reply:Tunnel-Private-Group-ID) {
             # 1. Intentar VLAN individual desde radreply
-            if ("%{sql:SELECT value FROM radreply WHERE username = '%{User-Name}' AND attribute = 'Tunnel-Private-Group-ID' LIMIT 1}") {
+            if ("%{sql:SELECT value FROM radreply WHERE LOWER(username) = LOWER('%{User-Name}') AND attribute = 'Tunnel-Private-Group-ID' LIMIT 1}") {
                 update reply {
                     Tunnel-Type := VLAN
                     Tunnel-Medium-Type := IEEE-802
-                    Tunnel-Private-Group-ID := "%{sql:SELECT value FROM radreply WHERE username = '%{User-Name}' AND attribute = 'Tunnel-Private-Group-ID' LIMIT 1}"
+                    Tunnel-Private-Group-ID := "%{sql:SELECT value FROM radreply WHERE LOWER(username) = LOWER('%{User-Name}') AND attribute = 'Tunnel-Private-Group-ID' LIMIT 1}"
                 }
             }
             # 2. Si no hay VLAN individual, buscar VLAN por grupo LDAP
-            elsif (control:Auth-Type == LDAP) {
+            elsif (&control:LDAP-Group) {
                 foreach &control:LDAP-Group {
                     if ("%{sql:SELECT vlan_id FROM ldap_group_vlans WHERE LOWER(group_dn) = LOWER('%{Foreach-Variable-0}') LIMIT 1}") {
                         update reply {

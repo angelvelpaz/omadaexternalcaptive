@@ -7159,10 +7159,11 @@ function renderActiveSessionsTable(list) {
     
     const startTime = fmtDate(s.start_time);
     
-    // Format session time
-    const sec = parseInt(s.session_time || 0);
-    const hrs = Math.floor(sec / 3600);
-    const mins = Math.floor((sec % 3600) / 60);
+    // Format session time dynamically using start_time (elapsed since connection)
+    const startMs = s.start_time ? new Date(s.start_time).getTime() : Date.now();
+    const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+    const hrs = Math.floor(elapsedSecs / 3600);
+    const mins = Math.floor((elapsedSecs % 3600) / 60);
     const activeTimeStr = `${hrs}h ${mins}m`;
 
     // Format bytes
@@ -7259,10 +7260,11 @@ function renderWpaSessionsTable(list) {
     
     const startTime = fmtDate(s.start_time);
     
-    // Format session time
-    const sec = parseInt(s.session_time || 0);
-    const hrs = Math.floor(sec / 3600);
-    const mins = Math.floor((sec % 3600) / 60);
+    // Format session time dynamically using start_time (elapsed since connection)
+    const startMs = s.start_time ? new Date(s.start_time).getTime() : Date.now();
+    const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+    const hrs = Math.floor(elapsedSecs / 3600);
+    const mins = Math.floor((elapsedSecs % 3600) / 60);
     const activeTimeStr = `${hrs}h ${mins}m`;
 
     // Format bytes

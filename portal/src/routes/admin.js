@@ -1745,11 +1745,18 @@ router.delete('/api/ssids/:ssidName', requireAdmin, async (req, res, next) => {
 
 // ─── RUTAS PARA LISTA BLANCA DE DISPOSITIVOS (MAC BYPASS) ─────────────────────
 
-// GET - Listar todos los bypass
 router.get('/api/mac-bypass', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {
     const list = await db.listMacBypass();
     res.json(list);
+  } catch (err) { next(err); }
+});
+
+// GET - Listar todas las conexiones activas de mac-bypass
+router.get('/api/mac-bypass/active', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+  try {
+    const sessions = await db.getActiveMacBypassSessions();
+    res.json(sessions);
   } catch (err) { next(err); }
 });
 

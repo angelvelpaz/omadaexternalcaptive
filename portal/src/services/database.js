@@ -1524,6 +1524,34 @@ async function getActiveSessions() {
   return result.rows;
 }
 
+async function getActiveMacBypassSessions() {
+  const query = `
+    SELECT 
+      r.radacctid,
+      r.acctsessionid,
+      r.callingstationid AS mac_address,
+      r.framedipaddress AS ip_address,
+      r.nasipaddress::text AS nas_ip,
+      r.acctstarttime AS start_time,
+      r.acctsessiontime AS session_time,
+      r.acctinputoctets AS upload,
+      r.acctoutputoctets AS download,
+      b.propietario,
+      b.alias,
+      b.ppsk,
+      b.vlan_id
+    FROM radacct r
+    JOIN mac_bypass b ON (
+      REPLACE(REPLACE(UPPER(r.callingstationid), ':', ''), '-', '') = REPLACE(REPLACE(UPPER(b.mac_address), ':', ''), '-', '')
+      OR REPLACE(REPLACE(UPPER(r.username), ':', ''), '-', '') = REPLACE(REPLACE(UPPER(b.mac_address), ':', ''), '-', '')
+    )
+    WHERE r.acctstoptime IS NULL
+    ORDER BY r.acctstarttime DESC
+  `;
+  const result = await pool.query(query);
+  return result.rows;
+}
+
 async function disconnectRadiusClient(macAddress) {
   if (!macAddress) return;
   const cleanMac = macAddress.trim().toUpperCase().replace(/:/g, '-');
@@ -2747,7 +2775,7 @@ module.exports = {
   // ssid configurations
   getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
   // mac bypass admin
-  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, bulkUpdateMacBypassVlan, updateMacBypassStatus, deleteMacBypass,
+  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, bulkUpdateMacBypassVlan, updateMacBypassStatus, deleteMacBypass, getActiveMacBypassSessions,
   // hoteles y restaurantes
   getHotelGuest, createHotelGuest, listHotelGuests, deleteHotelGuest,
   getRestaurantPin, createRestaurantPin, incrementPinUsage, listRestaurantPins, deleteRestaurantPin,

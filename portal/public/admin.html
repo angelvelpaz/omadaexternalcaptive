@@ -532,70 +532,126 @@
 
     <!-- ── TAB MAC BYPASS (EXCLUSIONES) ── -->
     <div id="tab-mac-bypass" class="tab-content hidden">
-      <!-- Búsqueda y controles -->
-      <div class="flex flex-col sm:flex-row gap-3 mb-4">
-        <input type="text" id="mac-bypass-search" placeholder="Buscar por MAC, propietario o alias..."
-          class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800"
-          oninput="filterMacBypass()">
-        <select id="mac-bypass-vlan-filter" onchange="filterMacBypass()"
-          class="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-700 bg-white cursor-pointer min-w-[160px]">
-          <option value="">Todas las VLANs</option>
-          <option value="native">VLAN Nativa</option>
-        </select>
-        <button onclick="openCreateMacBypassModal()"
-          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 shrink-0">
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-          </svg>
-          Registrar PPSK / MAB
-        </button>
+      <!-- Sub-navegación para PPSK / MAC Bypass -->
+      <div class="border-b border-gray-200 mb-6">
+        <nav class="flex space-x-6" aria-label="Tabs de Bypass">
+          <button id="subtab-btn-bypass-list" onclick="switchBypassSubTab('list')" 
+            class="border-blue-600 text-blue-600 whitespace-nowrap pb-4 px-1 border-b-2 font-semibold text-sm transition-colors cursor-pointer">
+            Exclusiones Registradas
+          </button>
+          <button id="subtab-btn-bypass-active" onclick="switchBypassSubTab('active')" 
+            class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5">
+            Conexiones Activas
+            <span id="bypass-active-badge" class="bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-0.5 rounded-full">0</span>
+          </button>
+        </nav>
       </div>
 
-      <!-- Barra de acciones en lote para MAC Bypass -->
-      <div id="mac-bypass-bulk-bar" class="hidden bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 flex items-center justify-between transition-all">
-        <div class="flex items-center gap-2 text-blue-800 text-sm font-semibold">
-          <span id="mac-bypass-selected-count">0 seleccionados</span>
+      <!-- VISTA 1: Exclusiones Registradas (Tabla actual) -->
+      <div id="bypass-view-list" class="space-y-4">
+        <!-- Búsqueda y controles -->
+        <div class="flex flex-col sm:flex-row gap-3 mb-4">
+          <input type="text" id="mac-bypass-search" placeholder="Buscar por MAC, propietario o alias..."
+            class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800"
+            oninput="filterMacBypass()">
+          <select id="mac-bypass-vlan-filter" onchange="filterMacBypass()"
+            class="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-700 bg-white cursor-pointer min-w-[160px]">
+            <option value="">Todas las VLANs</option>
+            <option value="native">VLAN Nativa</option>
+          </select>
+          <button onclick="openCreateMacBypassModal()"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 shrink-0">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Registrar PPSK / MAB
+          </button>
         </div>
-        <div class="flex items-center gap-2">
-          <button onclick="bulkEditPpskBypass()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
-            🔑 Definir PPSK en Lote
-          </button>
-          <button onclick="bulkEditVlanBypass()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
-            🏷️ Definir VLAN en Lote
-          </button>
-          <button onclick="clearBypassSelection()" class="px-3.5 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-50 transition-colors">
-            Cancelar
-          </button>
+
+        <!-- Barra de acciones en lote para MAC Bypass -->
+        <div id="mac-bypass-bulk-bar" class="hidden bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 flex items-center justify-between transition-all">
+          <div class="flex items-center gap-2 text-blue-800 text-sm font-semibold">
+            <span id="mac-bypass-selected-count">0 seleccionados</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="bulkEditPpskBypass()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+              🔑 Definir PPSK en Lote
+            </button>
+            <button onclick="bulkEditVlanBypass()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+              🏷️ Definir VLAN en Lote
+            </button>
+            <button onclick="clearBypassSelection()" class="px-3.5 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-50 transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabla de dispositivos en bypass -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                  <th class="p-4 w-10">
+                    <input type="checkbox" id="bypass-select-all" onclick="toggleAllBypasses(this)"
+                      class="rounded text-blue-600 focus:ring-blue-500 cursor-pointer">
+                  </th>
+                  <th class="p-4">Dirección MAC</th>
+                  <th class="p-4">Propietario / Responsable</th>
+                  <th class="p-4">Alias / Etiqueta</th>
+                  <th class="p-4">PPSK (Omada)</th>
+                  <th class="p-4">VLAN ID</th>
+                  <th class="p-4">Fecha Registro</th>
+                  <th class="p-4">Estado</th>
+                  <th class="p-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="mac-bypass-tbody" class="divide-y divide-gray-100">
+                <!-- Cargado dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
+            <span id="mac-bypass-count">0 dispositivos</span>
+          </div>
         </div>
       </div>
 
-      <!-- Tabla de dispositivos en bypass -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                <th class="p-4 w-10">
-                  <input type="checkbox" id="bypass-select-all" onclick="toggleAllBypasses(this)"
-                    class="rounded text-blue-600 focus:ring-blue-500 cursor-pointer">
-                </th>
-                <th class="p-4">Dirección MAC</th>
-                <th class="p-4">Propietario / Responsable</th>
-                <th class="p-4">Alias / Etiqueta</th>
-                <th class="p-4">PPSK (Omada)</th>
-                <th class="p-4">VLAN ID</th>
-                <th class="p-4">Fecha Registro</th>
-                <th class="p-4">Estado</th>
-                <th class="p-4 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="mac-bypass-tbody" class="divide-y divide-gray-100">
-              <!-- Cargado dinámicamente -->
-            </tbody>
-          </table>
+      <!-- VISTA 2: Conexiones Activas (Nueva tabla) -->
+      <div id="bypass-view-active" class="hidden space-y-4">
+        <div class="flex flex-col sm:flex-row gap-3 mb-4 justify-between items-center bg-gray-50 border border-gray-100 rounded-xl p-4">
+          <div class="text-xs font-medium text-gray-500">
+            Dispositivos registrados en bypass con sesión RADIUS activa en tiempo real.
+          </div>
+          <button onclick="loadActiveBypasses()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm">
+            🔄 Actualizar
+          </button>
         </div>
-        <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
-          <span id="mac-bypass-count">0 dispositivos</span>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                  <th class="p-4">Dirección MAC</th>
+                  <th class="p-4">Dirección IP</th>
+                  <th class="p-4">Propietario / Responsable</th>
+                  <th class="p-4">Alias / Etiqueta</th>
+                  <th class="p-4">PPSK</th>
+                  <th class="p-4">VLAN ID</th>
+                  <th class="p-4">Tiempo Conectado</th>
+                  <th class="p-4">Tráfico (Subida / Bajada)</th>
+                  <th class="p-4 text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="bypass-active-tbody" class="divide-y divide-gray-100">
+                <!-- Cargado dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
+            <span id="bypass-active-count">0 conexiones activas</span>
+          </div>
         </div>
       </div>
     </div>
@@ -3069,6 +3125,9 @@ async function applyBulkUserActive(active) {
 let macBypassList = [];
 let editingBypassId = null;
 
+window._currentBypassSubTab = 'list';
+window._activeBypassesList = [];
+
 async function loadMacBypass() {
   const tbody = document.getElementById('mac-bypass-tbody');
   tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando exclusiones...</td></tr>';
@@ -3080,11 +3139,123 @@ async function loadMacBypass() {
   if (bulkBar) bulkBar.classList.add('hidden');
 
   try {
-    macBypassList = await api('GET', '/mac-bypass');
+    // Cargar exclusiones y conexiones activas en paralelo
+    const [list, activeSessions] = await Promise.all([
+      api('GET', '/mac-bypass'),
+      api('GET', '/mac-bypass/active')
+    ]);
+    
+    macBypassList = list;
     populateMacBypassVlanFilter(macBypassList);
     filterMacBypass();
+    
+    // Actualizar badge
+    const badge = document.getElementById('bypass-active-badge');
+    if (badge) badge.textContent = activeSessions.length;
+    
+    window._activeBypassesList = activeSessions;
+    if (window._currentBypassSubTab === 'active') {
+      renderActiveBypassesTable(activeSessions);
+    }
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar la lista: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function switchBypassSubTab(tab) {
+  window._currentBypassSubTab = tab;
+  const btnList = document.getElementById('subtab-btn-bypass-list');
+  const btnActive = document.getElementById('subtab-btn-bypass-active');
+  const viewList = document.getElementById('bypass-view-list');
+  const viewActive = document.getElementById('bypass-view-active');
+  
+  if (tab === 'list') {
+    btnList.className = "border-blue-600 text-blue-600 whitespace-nowrap pb-4 px-1 border-b-2 font-semibold text-sm transition-colors cursor-pointer";
+    btnActive.className = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5";
+    viewList.classList.remove('hidden');
+    viewActive.classList.add('hidden');
+    loadMacBypass();
+  } else {
+    btnActive.className = "border-blue-600 text-blue-600 whitespace-nowrap pb-4 px-1 border-b-2 font-semibold text-sm transition-colors cursor-pointer flex items-center gap-1.5";
+    btnList.className = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer";
+    viewList.classList.add('hidden');
+    viewActive.classList.remove('hidden');
+    loadActiveBypasses();
+  }
+}
+
+async function loadActiveBypasses() {
+  const tbody = document.getElementById('bypass-active-tbody');
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando conexiones activas...</td></tr>';
+  }
+  try {
+    const activeSessions = await api('GET', '/mac-bypass/active');
+    window._activeBypassesList = activeSessions;
+    const badge = document.getElementById('bypass-active-badge');
+    if (badge) badge.textContent = activeSessions.length;
+    renderActiveBypassesTable(activeSessions);
+  } catch (err) {
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar la lista: ${esc(err.message)}</td></tr>`;
+    }
+  }
+}
+
+function renderActiveBypassesTable(list) {
+  const tbody = document.getElementById('bypass-active-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay dispositivos en bypass conectados en este momento.</td></tr>';
+    document.getElementById('bypass-active-count').textContent = '0 conexiones activas';
+    return;
+  }
+  
+  list.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-50/50 transition-colors';
+    
+    const vlanBadge = s.vlan_id 
+      ? `<span class="px-2 py-0.5 text-xs font-bold rounded bg-indigo-50 text-indigo-700 border border-indigo-200">VLAN ${s.vlan_id}</span>`
+      : '<span class="text-gray-400">Nativa</span>';
+      
+    const traffic = `↑ ${formatBytes(s.upload)} / ↓ ${formatBytes(s.download)}`;
+    const ppskDisplay = s.ppsk 
+      ? `<code class="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-xs font-mono">${esc(s.ppsk)}</code>`
+      : '<span class="text-gray-400">—</span>';
+      
+    tr.innerHTML = `
+      <td class="p-4 font-mono font-semibold text-gray-700 text-xs">${esc(s.mac_address)}</td>
+      <td class="p-4 font-mono text-gray-600 text-xs">${esc(s.ip_address || '—')}</td>
+      <td class="p-4 text-gray-800 font-medium text-xs">${esc(s.propietario)}</td>
+      <td class="p-4 text-gray-600 text-xs">${esc(s.alias || '—')}</td>
+      <td class="p-4">${ppskDisplay}</td>
+      <td class="p-4">${vlanBadge}</td>
+      <td class="p-4 text-gray-500 text-xs">${formatDuration(s.session_time)}</td>
+      <td class="p-4 text-gray-600 text-xs font-mono">${traffic}</td>
+      <td class="p-4 text-right">
+        <button onclick="kickActiveBypassDevice('${esc(s.mac_address)}')"
+          class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-sm">
+          Expulsar
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  document.getElementById('bypass-active-count').textContent = `${list.length} conexión${list.length === 1 ? '' : 'es'} activa${list.length === 1 ? '' : 's'}`;
+}
+
+async function kickActiveBypassDevice(mac) {
+  if (!confirm(`¿Está seguro de expulsar el dispositivo con MAC ${mac}?`)) return;
+  try {
+    await api('POST', '/active-sessions/kick', { mac });
+    showToast('Dispositivo expulsado.', 'success');
+    loadActiveBypasses();
+  } catch (err) {
+    showToast('Error al expulsar dispositivo: ' + err.message, 'error');
   }
 }
 

@@ -120,6 +120,7 @@ ldap {
 
 	update {
 		control:Password-With-Header	+= 'userPassword'
+		control:LDAP-Group		+= 'memberOf'
 	}
 
 	# start=0 y min=0 para permitir que FreeRADIUS inicie incluso si el servidor LDAP está offline

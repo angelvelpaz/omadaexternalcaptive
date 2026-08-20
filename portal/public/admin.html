@@ -7537,7 +7537,7 @@ function renderLdapUsersTable() {
 
 async function toggleLdapUserStatus(username, active) {
   try {
-    await api('PUT', `/ldap/users/${encodeURIComponent(username)}/status`, { active });
+    await api('PUT', `/ldap/users/${encodeURIComponent(username)}/status`, { active, tipo_usuario: 'wpa_enterprise' });
     await loadLdapUsers();
   } catch (err) {
     alert('Error al modificar el estado del usuario: ' + err.message);
@@ -7843,7 +7843,7 @@ function renderLdapPortalUsersTable() {
 
 async function toggleLdapPortalUserStatus(username, active) {
   try {
-    await api('PUT', `/ldap/users/${encodeURIComponent(username)}/status`, { active });
+    await api('PUT', `/ldap/users/${encodeURIComponent(username)}/status`, { active, tipo_usuario: 'ldap_portal' });
     await loadLdapPortalUsers();
   } catch (err) {
     alert('Error al modificar el estado del usuario: ' + err.message);

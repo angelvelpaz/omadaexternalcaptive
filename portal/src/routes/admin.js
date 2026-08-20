@@ -2588,6 +2588,41 @@ router.get('/api/ldap/portal-members', requireAdmin, async (req, res, next) => {
   }
 });
 
+async function ensureLdapUserExists(username, defaultType = 'wpa_enterprise') {
+  const normalized = username.trim().toLowerCase();
+  let user = await db.getUserByCedula(normalized);
+  if (!user) {
+    let userDetails = { nombres: username, apellidos: '', email: `${username}@ldap.local` };
+    try {
+      const ldapConfig = await db.getControllerConfig('ldap');
+      if (ldapConfig) {
+        const adUser = await ldapSvc.searchUser({
+          url: ldapConfig.ldapServerUrl,
+          bindDN: ldapConfig.ldapBindDN,
+          bindPassword: ldapConfig.ldapBindCredentials,
+          searchBase: ldapConfig.ldapSearchBase,
+          username: normalized
+        });
+        if (adUser) {
+          userDetails = adUser;
+        }
+      }
+    } catch (ldapErr) {
+      console.warn('[LDAP-Ensure] No se pudo resolver datos en AD:', ldapErr.message);
+    }
+
+    user = await db.createUser({
+      cedula: normalized,
+      nombres: userDetails.nombres,
+      apellidos: userDetails.apellidos,
+      email: userDetails.email,
+      terminosAceptados: 'Creado automáticamente por Admin',
+      tipo_usuario: defaultType
+    });
+  }
+  return user;
+}
+
 // PUT - Activar/Desactivar localmente un usuario de LDAP/AD
 router.put('/api/ldap/users/:username/status', requireAdmin,
   body('active').isBoolean(),
@@ -2597,42 +2632,11 @@ router.put('/api/ldap/users/:username/status', requireAdmin,
       if (!errors.isEmpty()) return res.status(400).json({ error: 'El parámetro active debe ser un booleano.' });
 
       const { username } = req.params;
-      const { active } = req.body;
+      const { active, tipo_usuario } = req.body;
       const normalized = username.trim().toLowerCase();
 
-      // 1. Verificar si el usuario ya existe en la BD local
-      let user = await db.getUserByCedula(normalized);
-      if (!user) {
-        // Buscar info en LDAP para poblar datos reales si es posible
-        let userDetails = { nombres: username, apellidos: '', email: `${username}@ldap.local` };
-        try {
-          const ldapConfig = await db.getControllerConfig('ldap');
-          if (ldapConfig) {
-            const adUser = await ldapSvc.searchUser({
-              url: ldapConfig.ldapServerUrl,
-              bindDN: ldapConfig.ldapBindDN,
-              bindPassword: ldapConfig.ldapBindCredentials,
-              searchBase: ldapConfig.ldapSearchBase,
-              username: normalized
-            });
-            if (adUser) {
-              userDetails = adUser;
-            }
-          }
-        } catch (ldapErr) {
-          console.warn('[LDAP-Status] No se pudo resolver datos en AD:', ldapErr.message);
-        }
-
-        user = await db.createUser({
-          cedula: normalized,
-          nombres: userDetails.nombres,
-          apellidos: userDetails.apellidos,
-          email: userDetails.email,
-          terminosAceptados: 'Bloqueado Localmente por Admin',
-          tipo_usuario: 'ldap_portal'
-        });
-        await db.setUserMaxDevices(normalized, 1);
-      }
+      // Asegurar existencia local del usuario de AD
+      await ensureLdapUserExists(normalized, tipo_usuario || 'wpa_enterprise');
 
       // 2. Modificar estado
       await db.bulkUpdateUserActive([normalized], active);
@@ -2740,14 +2744,16 @@ router.put('/api/ldap/users/:username/vlan', requireAdmin,
       }
       const { username } = req.params;
       const { vlan_id } = req.body;
+      const normalized = username.trim().toLowerCase();
 
-      await db.setUserVlan(username, vlan_id);
+      await ensureLdapUserExists(normalized, 'wpa_enterprise');
+      await db.setUserVlan(normalized, vlan_id);
 
       await db.logAdminAudit({
         username: req.adminUser,
         ipAddress: getClientIp(req),
         accion: 'ASIGNAR_VLAN_WPA',
-        detalles: `Asignó VLAN ${vlan_id} al usuario WPA: ${username}`
+        detalles: `Asignó VLAN ${vlan_id} al usuario WPA: ${normalized}`
       });
 
       res.json({ success: true, vlan_id });
@@ -2761,14 +2767,16 @@ router.delete('/api/ldap/users/:username/vlan', requireAdmin,
   async (req, res, next) => {
     try {
       const { username } = req.params;
+      const normalized = username.trim().toLowerCase();
 
-      await db.clearUserVlan(username);
+      await ensureLdapUserExists(normalized, 'wpa_enterprise');
+      await db.clearUserVlan(normalized);
 
       await db.logAdminAudit({
         username: req.adminUser,
         ipAddress: getClientIp(req),
         accion: 'LIMPIAR_VLAN_WPA',
-        detalles: `Eliminó VLAN individual del usuario WPA: ${username}`
+        detalles: `Eliminó VLAN individual del usuario WPA: ${normalized}`
       });
 
       res.json({ success: true });
@@ -2842,6 +2850,9 @@ router.post('/api/ldap/users/:username/devices', requireAdmin,
       }
       const { username } = req.params;
       const mac = req.body.mac_address.toUpperCase().replace(/:/g, '-');
+      const normalized = username.trim().toLowerCase();
+
+      await ensureLdapUserExists(normalized, 'wpa_enterprise');
 
       // Verificar que la MAC no esté registrada en otro tipo de autenticación
       const conflict = await db.isMacRegisteredInOtherType(mac, 'wpa');
@@ -2852,22 +2863,22 @@ router.post('/api/ldap/users/:username/devices', requireAdmin,
       }
 
       // Registrar el dispositivo
-      const device = await db.registerWpaDevice(username, mac);
+      const device = await db.registerWpaDevice(normalized, mac);
 
       // Verificar límite y desconectar el más antiguo si excede
-      const max = await db.getWpaUserMaxDevices(username);
+      const max = await db.getWpaUserMaxDevices(normalized);
       if (max > 0) {
-        const count = await db.getWpaDeviceCount(username);
+        const count = await db.getWpaDeviceCount(normalized);
         if (count > max) {
-          const oldest = await db.getOldestWpaDevice(username);
+          const oldest = await db.getOldestWpaDevice(normalized);
           if (oldest && oldest.mac_address !== mac) {
-            console.log(`[WPA-LIMIT] Límite excedido para ${username} (${count}/${max}). Desconectando MAC más antigua: ${oldest.mac_address}`);
+            console.log(`[WPA-LIMIT] Límite excedido para ${normalized} (${count}/${max}). Desconectando MAC más antigua: ${oldest.mac_address}`);
             try {
               await db.disconnectRadiusClient(oldest.mac_address);
             } catch (coaErr) {
               console.error(`[WPA-LIMIT] Error CoA para ${oldest.mac_address}:`, coaErr.message);
             }
-            await db.deleteWpaDevice(username, oldest.mac_address);
+            await db.deleteWpaDevice(normalized, oldest.mac_address);
           }
         }
       }
@@ -2876,7 +2887,7 @@ router.post('/api/ldap/users/:username/devices', requireAdmin,
         username: req.adminUser,
         ipAddress: getClientIp(req),
         accion: 'REGISTRAR_DISPOSITIVO_WPA',
-        detalles: `Registró dispositivo ${mac} para usuario WPA: ${username}`
+        detalles: `Registró dispositivo ${mac} para usuario WPA: ${normalized}`
       });
 
       res.json({ success: true, device });
@@ -2891,10 +2902,13 @@ router.delete('/api/ldap/users/:username/devices/:mac', requireAdmin,
   async (req, res, next) => {
     try {
       const { username, mac } = req.params;
+      const normalized = username.trim().toLowerCase();
       const normalizedMac = mac.toUpperCase().replace(/:/g, '-');
 
+      await ensureLdapUserExists(normalized, 'wpa_enterprise');
+
       // Eliminar de la base de datos
-      await db.deleteWpaDevice(username, normalizedMac);
+      await db.deleteWpaDevice(normalized, normalizedMac);
 
       // Intentar desconectar vía CoA si hay sesión activa
       try {
@@ -2908,7 +2922,7 @@ router.delete('/api/ldap/users/:username/devices/:mac', requireAdmin,
         username: req.adminUser,
         ipAddress: getClientIp(req),
         accion: 'ELIMINAR_DISPOSITIVO_WPA',
-        detalles: `Eliminó dispositivo ${normalizedMac} del usuario WPA: ${username}`
+        detalles: `Eliminó dispositivo ${normalizedMac} del usuario WPA: ${normalized}`
       });
 
       res.json({ success: true });
@@ -2928,14 +2942,16 @@ router.put('/api/ldap/users/:username/max-devices', requireAdmin,
       }
       const { username } = req.params;
       const { max } = req.body;
+      const normalized = username.trim().toLowerCase();
 
-      await db.setWpaUserMaxDevices(username, max);
+      await ensureLdapUserExists(normalized, 'wpa_enterprise');
+      await db.setWpaUserMaxDevices(normalized, max);
 
       await db.logAdminAudit({
         username: req.adminUser,
         ipAddress: getClientIp(req),
         accion: 'SET_WPA_MAX_DEVICES',
-        detalles: `Límite de dispositivos WPA para ${username}: ${max === 0 ? 'sin límite' : max}`
+        detalles: `Límite de dispositivos WPA para ${normalized}: ${max === 0 ? 'sin límite' : max}`
       });
 
       res.json({ success: true, max_dispositivos: max });

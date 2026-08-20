@@ -7,6 +7,7 @@
 sql {
     driver     = "rlm_sql_postgresql"
     dialect    = "postgresql"
+    auto_escape = yes
 
     # Conexión a PostgreSQL (nombre del servicio Docker)
     server     = "${POSTGRES_HOST}"

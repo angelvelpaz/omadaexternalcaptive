@@ -2929,6 +2929,57 @@ router.put('/api/ldap/users/:username/max-devices', requireAdmin,
       const { username } = req.params;
       const { max } = req.body;
 
+      // Verificar si el usuario existe en usuarios_portal local
+      let user = await db.getUserByCedula(username);
+      if (!user) {
+        let nombres = username;
+        let apellidos = '';
+        let email = '';
+
+        // Intentar obtener detalles del usuario desde Active Directory
+        try {
+          let ldapServerUrl = process.env.LDAP_SERVER_URL;
+          let ldapBindDN = process.env.LDAP_BIND_DN;
+          let ldapBindPassword = process.env.LDAP_BIND_PASSWORD;
+          let ldapSearchBase = process.env.LDAP_SEARCH_BASE;
+
+          const ldapConfig = await db.getControllerConfig('ldap');
+          if (ldapConfig) {
+            if (ldapConfig.ldapServerUrl) ldapServerUrl = ldapConfig.ldapServerUrl;
+            if (ldapConfig.ldapBindDN) ldapBindDN = ldapConfig.ldapBindDN;
+            if (ldapConfig.ldapBindCredentials) ldapBindPassword = ldapConfig.ldapBindCredentials;
+            if (ldapConfig.ldapSearchBase) ldapSearchBase = ldapConfig.ldapSearchBase;
+          }
+
+          if (ldapServerUrl && ldapBindDN && ldapSearchBase) {
+            const ldapSvc = require('../services/ldap');
+            const ldapUser = await ldapSvc.searchUser({
+              url: ldapServerUrl,
+              bindDN: ldapBindDN,
+              bindPassword: ldapBindPassword,
+              searchBase: ldapSearchBase,
+              username
+            });
+            if (ldapUser) {
+              nombres = ldapUser.givenName || ldapUser.cn || username;
+              apellidos = ldapUser.sn || '';
+              email = ldapUser.mail || '';
+            }
+          }
+        } catch (ldapErr) {
+          console.warn(`[WPA-Limit] No se pudo obtener información de LDAP para ${username}:`, ldapErr.message);
+        }
+
+        // Crear el registro de usuario local
+        await db.createUser({
+          cedula: username,
+          nombres: nombres,
+          apellidos: apellidos,
+          email: email,
+          tipo_usuario: 'institucional'
+        });
+      }
+
       await db.setWpaUserMaxDevices(username, max);
 
       await db.logAdminAudit({

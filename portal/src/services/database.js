@@ -2387,6 +2387,84 @@ async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula
   return result.rows[0];
 }
 
+async function bulkImportMacBypass(devices) {
+  const client = await pool.connect();
+  const results = {
+    success: [],
+    skipped: [],
+    errors: []
+  };
+
+  try {
+    await client.query('BEGIN');
+
+    for (const d of devices) {
+      const mac = d.mac_address;
+      const owner = d.propietario;
+      const alias = d.alias || '';
+      const ppsk = d.ppsk || null;
+      const vlanId = d.vlan_id || null;
+      const cedula = d.cedula || null;
+      const lineNum = d._lineNum;
+
+      if (!mac || !owner) {
+        results.errors.push({ line: lineNum, error: 'MAC address and Propietario are mandatory fields.' });
+        continue;
+      }
+
+      const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
+      if (!/^([0-9A-F]{2}-){5}[0-9A-F]{2}$/.test(cleanMac)) {
+        results.errors.push({ line: lineNum, error: `Invalid MAC format: ${mac}` });
+        continue;
+      }
+
+      // Verificar si ya existe en bypass
+      const checkRes = await client.query('SELECT id FROM mac_bypass WHERE mac_address = $1', [cleanMac]);
+      if (checkRes.rows.length > 0) {
+        results.skipped.push({ line: lineNum, mac: cleanMac, reason: 'Already registered in bypass.' });
+        continue;
+      }
+
+      const cleanPpsk = ppsk ? String(ppsk).trim() : null;
+      const cleanVlan = vlanId ? parseInt(vlanId) : null;
+      const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
+      const cleanCedula = cedula ? String(cedula).trim() : null;
+
+      // Eliminar de autoregistros para evitar conflictos
+      await client.query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
+
+      // Insertar en bypass
+      await client.query(
+        'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, vlan_id, cedula, activo) VALUES ($1, $2, $3, $4, $5, $6, true)',
+        [cleanMac, owner.trim(), alias.trim(), cleanPpsk, dbVlan, cleanCedula]
+      );
+
+      // Configurar límites de ancho de banda por defecto
+      await client.query(`DELETE FROM radreply WHERE username = $1`, [cleanMac]);
+      await client.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Down', ':=', '15728640')`, [cleanMac]);
+      await client.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'WISPr-Bandwidth-Max-Up', ':=', '5242880')`, [cleanMac]);
+      await client.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Mikrotik-Rate-Limit', ':=', '15M/5M')`, [cleanMac]);
+
+      // Si tiene VLAN, asociar sus atributos
+      if (dbVlan !== null) {
+        await client.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Type', ':=', 'VLAN')`, [cleanMac]);
+        await client.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Medium-Type', ':=', 'IEEE-802')`, [cleanMac]);
+        await client.query(`INSERT INTO radreply (username, attribute, op, value) VALUES ($1, 'Tunnel-Private-Group-ID', ':=', $2)`, [cleanMac, String(dbVlan)]);
+      }
+
+      results.success.push({ line: lineNum, mac: cleanMac });
+    }
+
+    await client.query('COMMIT');
+    return results;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function bulkUpdateMacBypassPpsk(ids, ppsk) {
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   const client = await pool.connect();
@@ -2775,7 +2853,7 @@ module.exports = {
   // ssid configurations
   getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
   // mac bypass admin
-  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, bulkUpdateMacBypassVlan, updateMacBypassStatus, deleteMacBypass, getActiveMacBypassSessions,
+  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, bulkUpdateMacBypassVlan, updateMacBypassStatus, deleteMacBypass, getActiveMacBypassSessions, bulkImportMacBypass,
   // hoteles y restaurantes
   getHotelGuest, createHotelGuest, listHotelGuests, deleteHotelGuest,
   getRestaurantPin, createRestaurantPin, incrementPinUsage, listRestaurantPins, deleteRestaurantPin,

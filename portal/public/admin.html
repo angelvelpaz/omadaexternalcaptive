@@ -559,6 +559,10 @@
             <option value="">Todas las VLANs</option>
             <option value="native">VLAN Nativa</option>
           </select>
+          <button onclick="openCsvImportModal()"
+            class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 shrink-0">
+            📊 Importar CSV
+          </button>
           <button onclick="openCreateMacBypassModal()"
             class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 shrink-0">
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2076,6 +2080,71 @@
   </main>
 </div>
 
+<!-- ── MODAL IMPORTAR CSV PPSK MAB ── -->
+<div id="modal-import-csv" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-green-700 to-emerald-800 text-white">
+      <h3 class="font-bold text-lg leading-tight flex items-center gap-2">
+        <span>📊 Importar Dispositivos desde CSV</span>
+      </h3>
+      <button onclick="closeCsvImportModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div class="text-xs text-gray-500 space-y-1">
+        <p class="font-semibold text-gray-700">Instrucciones de formato:</p>
+        <p>1. El archivo debe ser de texto delimitado por comas (.csv) y contener una fila de cabecera.</p>
+        <p>2. Columnas obligatorias: <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">mac_address</code>, <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">propietario</code>.</p>
+        <p>3. Columnas opcionales: <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">alias</code>, <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">ppsk</code>, <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">vlan_id</code>, <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">cedula</code>.</p>
+        <p class="text-green-700 font-medium pt-1">💡 Límite de importación: Hasta 500 dispositivos por lote.</p>
+      </div>
+
+      <!-- File input -->
+      <div class="border-2 border-dashed border-gray-200 hover:border-green-500 rounded-xl p-6 text-center cursor-pointer transition-colors relative" id="csv-dropzone">
+        <input type="file" id="csv-file-input" accept=".csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="handleCsvFileSelected(this)">
+        <div class="space-y-1.5" id="csv-input-prompt">
+          <span class="text-3xl">📁</span>
+          <p class="text-sm font-semibold text-gray-700">Haz clic o arrastra tu archivo aquí</p>
+          <p class="text-xs text-gray-400">Solo archivos con extensión .csv</p>
+        </div>
+        <div class="hidden space-y-1.5 text-green-700" id="csv-file-selected-info">
+          <span class="text-3xl">✓</span>
+          <p class="text-sm font-semibold" id="csv-filename-display"></p>
+          <button onclick="clearSelectedCsv(event)" class="text-xs text-red-500 hover:underline">Quitar archivo</button>
+        </div>
+      </div>
+
+      <!-- Spinner / Progress status -->
+      <div id="csv-import-loader" class="hidden text-center py-4">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-green-600 border-t-transparent mb-2"></div>
+        <p class="text-sm font-medium text-gray-700">Procesando archivo e importando en base de datos...</p>
+      </div>
+
+      <!-- Results view -->
+      <div id="csv-import-results" class="hidden space-y-3 bg-gray-50 border border-gray-100 rounded-xl p-4 max-h-60 overflow-y-auto">
+        <h4 class="font-bold text-xs text-gray-700 uppercase">Resumen de la Importación</h4>
+        <div class="flex gap-4 text-xs font-semibold">
+          <span class="text-green-700">Exitosos: <span id="csv-res-success">0</span></span>
+          <span class="text-amber-700">Omitidos: <span id="csv-res-skipped">0</span></span>
+          <span class="text-red-700">Errores: <span id="csv-res-errors">0</span></span>
+        </div>
+        <ul id="csv-res-list" class="text-[10.5px] font-mono divide-y divide-gray-100 text-gray-600 mt-2 space-y-1">
+          <!-- Detalle de filas omitidas/erróneas -->
+        </ul>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button onclick="closeCsvImportModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+          Cancelar
+        </button>
+        <button id="btn-submit-csv-import" onclick="submitCsvImport()" disabled class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          Iniciar Importación
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL AGREGAR MAC BYPASS ── -->
 <div id="modal-create-mac-bypass" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
@@ -3256,6 +3325,126 @@ async function kickActiveBypassDevice(mac) {
     loadActiveBypasses();
   } catch (err) {
     showToast('Error al expulsar dispositivo: ' + err.message, 'error');
+  }
+}
+
+let selectedCsvFileText = null;
+
+function openCsvImportModal() {
+  selectedCsvFileText = null;
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-input-prompt').classList.remove('hidden');
+  document.getElementById('csv-file-selected-info').classList.add('hidden');
+  document.getElementById('csv-import-loader').classList.add('hidden');
+  document.getElementById('csv-import-results').classList.add('hidden');
+  document.getElementById('btn-submit-csv-import').disabled = true;
+  
+  const dropzone = document.getElementById('csv-dropzone');
+  if (dropzone) dropzone.classList.remove('hidden');
+  
+  const modal = document.getElementById('modal-import-csv');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeCsvImportModal() {
+  const modal = document.getElementById('modal-import-csv');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  loadMacBypass();
+}
+
+function handleCsvFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    showToast('El archivo seleccionado debe tener extensión .csv', 'error');
+    clearSelectedCsv();
+    return;
+  }
+
+  document.getElementById('csv-filename-display').textContent = `${file.name} (${formatBytes(file.size)})`;
+  document.getElementById('csv-input-prompt').classList.add('hidden');
+  document.getElementById('csv-file-selected-info').classList.remove('hidden');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    selectedCsvFileText = e.target.result;
+    document.getElementById('btn-submit-csv-import').disabled = false;
+  };
+  reader.onerror = function() {
+    showToast('Error al leer el archivo local.', 'error');
+    clearSelectedCsv();
+  };
+  reader.readAsText(file);
+}
+
+function clearSelectedCsv(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  selectedCsvFileText = null;
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-input-prompt').classList.remove('hidden');
+  document.getElementById('csv-file-selected-info').classList.add('hidden');
+  document.getElementById('btn-submit-csv-import').disabled = true;
+}
+
+async function submitCsvImport() {
+  if (!selectedCsvFileText) return;
+
+  const btnSubmit = document.getElementById('btn-submit-csv-import');
+  const loader = document.getElementById('csv-import-loader');
+  const resultsDiv = document.getElementById('csv-import-results');
+  const dropzone = document.getElementById('csv-dropzone');
+
+  btnSubmit.disabled = true;
+  dropzone.classList.add('hidden');
+  loader.classList.remove('hidden');
+  resultsDiv.classList.add('hidden');
+
+  try {
+    const res = await api('POST', '/mac-bypass/bulk-import', { csvText: selectedCsvFileText });
+    
+    loader.classList.add('hidden');
+    resultsDiv.classList.remove('hidden');
+
+    document.getElementById('csv-res-success').textContent = res.success.length;
+    document.getElementById('csv-res-skipped').textContent = res.skipped.length;
+    document.getElementById('csv-res-errors').textContent = res.errors.length;
+
+    const listUl = document.getElementById('csv-res-list');
+    listUl.innerHTML = '';
+
+    if (res.errors.length === 0 && res.skipped.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'py-1 text-green-700 font-semibold';
+      li.textContent = '¡Todos los dispositivos se importaron de forma exitosa!';
+      listUl.appendChild(li);
+    } else {
+      res.errors.forEach(e => {
+        const li = document.createElement('li');
+        li.className = 'py-1 text-red-600';
+        li.textContent = `[Fila ${e.line}] Error: ${e.error}`;
+        listUl.appendChild(li);
+      });
+
+      res.skipped.forEach(s => {
+        const li = document.createElement('li');
+        li.className = 'py-1 text-amber-600';
+        li.textContent = `[Fila ${s.line}] Omitido (MAC: ${s.mac}): ${s.reason}`;
+        listUl.appendChild(li);
+      });
+    }
+
+    showToast('Importación masiva completada.', 'success');
+  } catch (err) {
+    loader.classList.add('hidden');
+    dropzone.classList.remove('hidden');
+    btnSubmit.disabled = false;
+    showToast('Error al importar lote: ' + err.message, 'error');
   }
 }
 

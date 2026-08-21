@@ -1760,6 +1760,75 @@ router.get('/api/mac-bypass/active', requireAdmin, requireRol('superadministrado
   } catch (err) { next(err); }
 });
 
+// POST - Importar dispositivos en bypass en lote desde CSV
+router.post('/api/mac-bypass/bulk-import', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+  try {
+    const { csvText } = req.body;
+    if (!csvText) {
+      return res.status(400).json({ error: 'No se envió texto CSV.' });
+    }
+
+    const lines = csvText.split(/\r?\n/);
+    if (lines.length <= 1) {
+      return res.status(400).json({ error: 'El archivo CSV está vacío o le falta la cabecera.' });
+    }
+
+    // Límite de lote para evitar timeouts
+    if (lines.length > 501) {
+      return res.status(400).json({ error: 'El archivo excede el límite máximo de 500 dispositivos por importación.' });
+    }
+
+    // Procesar cabecera y filas
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+    const devices = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const values = [];
+      let current = '';
+      let inQuotes = false;
+      for (let j = 0; j < line.length; j++) {
+        const char = line[j];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current.trim());
+
+      const row = {};
+      headers.forEach((h, index) => {
+        let val = values[index] !== undefined ? values[index] : '';
+        if (val.startsWith('"') && val.endsWith('"')) {
+          val = val.substring(1, val.length - 1);
+        }
+        row[h] = val;
+      });
+
+      row._lineNum = i + 1;
+      devices.push(row);
+    }
+
+    const result = await db.bulkImportMacBypass(devices);
+
+    // Auditoría de importación masiva
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'IMPORTACION_MASIVA_BYPASS',
+      detalles: `Importó CSV: ${result.success.length} agregados, ${result.skipped.length} omitidos, ${result.errors.length} errores.`
+    });
+
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // POST - Registrar nueva MAC en bypass
 router.post('/api/mac-bypass', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
   try {

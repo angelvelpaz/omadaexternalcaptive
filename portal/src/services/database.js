@@ -2393,6 +2393,80 @@ async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula
   return result.rows[0];
 }
 
+async function queryExternalDbUser(cedula) {
+  const extConfig = await getControllerConfig('external_db_config');
+  if (!extConfig || !extConfig.enabled || !extConfig.host || !extConfig.tableName || !extConfig.colCedula) {
+    return null;
+  }
+
+  const ALLOWED_TABLES = (process.env.EXT_DB_ALLOWED_TABLES || '').split(',').map(s => s.trim()).filter(Boolean);
+  const ALLOWED_COLS = (process.env.EXT_DB_ALLOWED_COLS || 'cedula,nombres,apellidos,email,documento,id,estado,status,activo,active').split(',').map(s => s.trim());
+
+  if (ALLOWED_TABLES.length > 0 && !ALLOWED_TABLES.includes('*') && !ALLOWED_TABLES.includes(extConfig.tableName.trim())) {
+    console.error(`[EXT-DB-Query] Tabla no autorizada: ${extConfig.tableName}`);
+    return null;
+  }
+
+  const rawCols = [extConfig.colCedula, extConfig.colNombres, extConfig.colApellidos, extConfig.colEmail, extConfig.colStatus].filter(Boolean);
+  if (!ALLOWED_COLS.includes('*')) {
+    for (const c of rawCols) {
+      if (!ALLOWED_COLS.includes(c.trim())) {
+        console.error(`[EXT-DB-Query] Columna no autorizada: ${c}`);
+        return null;
+      }
+    }
+  }
+
+  const { Client } = require('pg');
+  const extClient = new Client({
+    host: extConfig.host,
+    port: parseInt(extConfig.port) || 5432,
+    database: extConfig.database,
+    user: extConfig.user,
+    password: extConfig.password,
+    ssl: extConfig.ssl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 4000,
+  });
+
+  try {
+    await extClient.connect();
+    
+    const escapedTable = extConfig.tableName.replace(/"/g, '""');
+    const escapedCol = extConfig.colCedula.replace(/"/g, '""');
+    const escapedStatusCol = extConfig.colStatus ? extConfig.colStatus.replace(/"/g, '""') : '';
+    
+    const colsToFetch = [];
+    if (extConfig.colNombres) colsToFetch.push(`"${extConfig.colNombres.replace(/"/g, '""')}" AS nombres`);
+    if (extConfig.colApellidos) colsToFetch.push(`"${extConfig.colApellidos.replace(/"/g, '""')}" AS apellidos`);
+    if (extConfig.colEmail) colsToFetch.push(`"${extConfig.colEmail.replace(/"/g, '""')}" AS email`);
+    
+    const selectFields = colsToFetch.length > 0 ? colsToFetch.join(', ') : '1';
+    const statusCondition = escapedStatusCol
+      ? ` AND LOWER(CAST("${escapedStatusCol}" AS TEXT)) IN ('true', 't', '1', 'activo', 'active', 'a', 'si')`
+      : '';
+    const query = `SELECT ${selectFields} FROM "${escapedTable}" WHERE "${escapedCol}" = $1${statusCondition} LIMIT 1`;
+    
+    const result = await extClient.query(query, [cedula]);
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        success: true,
+        nombres: row.nombres || '',
+        apellidos: row.apellidos || '',
+        email: row.email || ''
+      };
+    }
+    return null;
+  } catch (err) {
+    console.error('[EXT-DB-Query] Error al consultar BD externa:', err.message);
+    throw err;
+  } finally {
+    try {
+      await extClient.end();
+    } catch (e) {}
+  }
+}
+
 async function bulkImportMacBypass(devices) {
   const client = await pool.connect();
   const results = {
@@ -2444,8 +2518,46 @@ async function bulkImportMacBypass(devices) {
       if (cleanCedula !== null) {
         const checkUser = await client.query('SELECT cedula FROM usuarios_portal WHERE cedula = $1', [cleanCedula]);
         if (checkUser.rows.length === 0) {
-          results.errors.push({ line: lineNum, error: `La cédula '${cleanCedula}' no existe en el sistema del portal cautivo.` });
-          continue;
+          // No existe localmente. Intentar resolver por Base de Datos Externa
+          try {
+            const extUser = await queryExternalDbUser(cleanCedula);
+            if (extUser && extUser.success) {
+              const nombres = extUser.nombres || 'Usuario';
+              const apellidos = extUser.apellidos || 'Externo';
+              const email = extUser.email || '';
+              const radiusPassword = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+              const radius_username = cleanCedula;
+              const tipo_usuario = 'autoregistro';
+
+              // Registrar en la base local (usuarios_portal)
+              await client.query(
+                `INSERT INTO usuarios_portal (cedula, nombres, apellidos, email, radius_password, radius_username, acepta_terminos, fecha_acepta_terminos, tipo_usuario)
+                 VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW(), $7)`,
+                [cleanCedula, nombres, apellidos, email, radiusPassword, radius_username, tipo_usuario]
+              );
+
+              // Registrar credencial en radcheck
+              await client.query(
+                `INSERT INTO radcheck (username, attribute, op, value)
+                 VALUES ($1, 'Cleartext-Password', ':=', $2)`,
+                [radius_username, radiusPassword]
+              );
+
+              // Asignar al grupo por defecto
+              await client.query(
+                `INSERT INTO radusergroup (username, groupname, priority)
+                 VALUES ($1, 'captive-portal-users-externo', 1)
+                 ON CONFLICT DO NOTHING`,
+                [radius_username]
+              );
+            } else {
+              results.errors.push({ line: lineNum, error: `La cédula '${cleanCedula}' no existe en el sistema ni en la base de datos externa.` });
+              continue;
+            }
+          } catch (extErr) {
+            results.errors.push({ line: lineNum, error: `Error al validar cédula '${cleanCedula}' en la BD externa: ${extErr.message}` });
+            continue;
+          }
         }
       }
 

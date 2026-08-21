@@ -392,7 +392,12 @@ router.delete('/api/devices', requireAdmin,
   }
 );
 
-// ─── Usuarios ─────────────────────────────────────────────────────────────────
+router.get('/api/users/active', requireAdmin, async (req, res, next) => {
+  try {
+    const list = await db.getActiveUserSessions();
+    res.json(list);
+  } catch (err) { next(err); }
+});
 
 router.get('/api/users', requireAdmin,
   query('search').optional().isString().trim(),

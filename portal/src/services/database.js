@@ -2895,6 +2895,34 @@ async function getUserVlan(username) {
   return result.rows[0] ? parseInt(result.rows[0].vlan_id, 10) : null;
 }
 
+async function getActiveUserSessions() {
+  const query = `
+    SELECT 
+      r.radacctid,
+      r.acctsessionid,
+      r.username,
+      r.callingstationid AS mac_address,
+      r.framedipaddress AS ip_address,
+      r.nasipaddress::text AS nas_ip,
+      r.calledstationid AS ssid,
+      r.acctstarttime AS start_time,
+      r.acctsessiontime AS session_time,
+      r.acctinputoctets AS upload,
+      r.acctoutputoctets AS download,
+      u.nombres,
+      u.apellidos,
+      u.cedula,
+      u.tipo_usuario
+    FROM radacct r
+    JOIN usuarios_portal u ON u.radius_username = r.username
+    WHERE r.acctstoptime IS NULL
+      AND u.tipo_usuario IN ('autoregistro', 'externo', 'institucional')
+    ORDER BY r.acctstarttime DESC;
+  `;
+  const result = await pool.query(query);
+  return result.rows;
+}
+
 module.exports = {
   connect,
   getPool,
@@ -2906,7 +2934,7 @@ module.exports = {
   closeExpiredSessions,
   userExists, getUserByCedula, createUser, setUserRadiusUsername, logAccess, updateTermsAcceptance,
   // admin
-  listUsers, getUserDetail, setUserActive, bulkUpdateUserActive, deleteUser, bulkDeleteUsers, setUserGroups, updateUserType, bulkUpdateUserType,
+  listUsers, getUserDetail, setUserActive, bulkUpdateUserActive, deleteUser, bulkDeleteUsers, setUserGroups, updateUserType, bulkUpdateUserType, getActiveUserSessions,
   listGroups, addGroupAttribute, deleteGroupAttribute, deleteGroup,
   getStats,
   getControllerConfig, saveControllerConfig,

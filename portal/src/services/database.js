@@ -947,109 +947,36 @@ function cleanVendorName(rawName) {
 }
 
 async function getStats() {
-  const [totals, today, byVendor, byResult, recentLogs, topUsers, allMacs, wpaCountRes] = await Promise.all([
-    pool.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE activo = TRUE)  AS active_users,
-        COUNT(*) FILTER (WHERE activo = FALSE) AS inactive_users,
-        COUNT(*)                               AS total_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'ldap_portal') AS institutional_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'autoregistro' OR tipo_usuario = 'externo' OR tipo_usuario = 'institucional') AS external_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'hotel')          AS hotel_users,
-        COUNT(*) FILTER (WHERE tipo_usuario = 'restaurant')     AS restaurant_users
-      FROM usuarios_portal
-    `),
-    pool.query(`
-      SELECT COUNT(*) AS today_logins
-      FROM access_log a
-      JOIN usuarios_portal u ON u.cedula = a.cedula
-      WHERE a.created_at >= CURRENT_DATE AND a.resultado IN ('success', 'registered')
-    `),
-    pool.query(`
-      SELECT a.vendor, COUNT(*) AS total
-      FROM access_log a
-      JOIN usuarios_portal u ON u.cedula = a.cedula
-      WHERE a.created_at >= NOW() - INTERVAL '7 days' AND a.resultado IN ('success', 'registered')
-      GROUP BY a.vendor ORDER BY total DESC
-    `),
-    pool.query(`
-      SELECT a.resultado, COUNT(*) AS total
-      FROM access_log a
-      JOIN usuarios_portal u ON u.cedula = a.cedula
-      WHERE a.created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY a.resultado
-    `),
-    pool.query(`
-      SELECT a.cedula, u.nombres, u.apellidos, a.vendor, a.resultado, a.created_at
-      FROM access_log a
-      JOIN usuarios_portal u ON u.cedula = a.cedula
-      ORDER BY a.created_at DESC LIMIT 10
-    `),
-    pool.query(`
-      WITH user_traffic AS (
-        SELECT
-          COALESCE(d.cedula, r.username) AS cedula,
-          SUM(r.acctinputoctets + r.acctoutputoctets) AS total_bytes
-        FROM radacct r
-        LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(d.mac_address), ':', '-') = REPLACE(UPPER(r.callingstationid), ':', '-')
-        WHERE (r.username IS NOT NULL AND r.username != '') OR d.cedula IS NOT NULL
-        GROUP BY COALESCE(d.cedula, r.username)
-      )
-      SELECT
-        u.cedula AS username,
-        COALESCE(NULLIF(TRIM(u.nombres || ' ' || u.apellidos), ''), u.cedula) AS nombre_completo,
-        t.total_bytes
-      FROM user_traffic t
-      JOIN usuarios_portal u ON u.cedula = t.cedula OR u.radius_username = t.cedula
-      ORDER BY t.total_bytes DESC
-      LIMIT 10
-    `),
-    pool.query(`
-      SELECT mac_address AS callingstationid
-      FROM dispositivos_usuario
-      ORDER BY created_at DESC
-      LIMIT 300
-    `),
-    pool.query(`
-      SELECT COUNT(DISTINCT username)::integer AS wpa_users FROM radacct WHERE acctauthentic = 'RADIUS'
-    `),
-  ]);
+  const result = await pool.query(`
+    SELECT 
+      COALESCE(u.tipo_usuario, 'mac_bypass') AS tipo,
+      COUNT(DISTINCT r.callingstationid)::integer AS total_activos
+    FROM radacct r
+    LEFT JOIN usuarios_portal u ON u.radius_username = r.username
+    WHERE r.acctstoptime IS NULL
+    GROUP BY COALESCE(u.tipo_usuario, 'mac_bypass')
+  `);
 
-  const stats = totals.rows[0];
-  const wpaUsersCount = parseInt(wpaCountRes.rows[0]?.wpa_users || 0);
+  const activeByType = {
+    autoregistro: 0,
+    ldap_portal: 0,
+    wpa_enterprise: 0,
+    hotel: 0,
+    restaurant: 0,
+    mac_bypass: 0
+  };
 
-  const brandCounts = {};
-  for (const row of allMacs.rows) {
-    if (!row.callingstationid) continue;
-    const rawVendor = getVendor(row.callingstationid);
-    const brand = cleanVendorName(rawVendor);
-    brandCounts[brand] = (brandCounts[brand] || 0) + 1;
-  }
+  result.rows.forEach(row => {
+    if (activeByType[row.tipo] !== undefined) {
+      activeByType[row.tipo] = row.total_activos;
+    }
+  });
 
-  const topBrands = Object.entries(brandCounts)
-    .map(([brand, count]) => ({ brand, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
+  const totalActivos = Object.values(activeByType).reduce((a, b) => a + b, 0);
 
   return {
-    active_users: parseInt(stats.active_users || 0),
-    inactive_users: parseInt(stats.inactive_users || 0),
-    total_users: parseInt(stats.total_users || 0) + wpaUsersCount,
-    todayLogins: parseInt(today.rows[0].today_logins),
-    byVendor: byVendor.rows,
-    byResult: byResult.rows,
-    recentLogs: recentLogs.rows,
-    topUsers: topUsers.rows.map(row => ({
-      username: row.username,
-      nombre_completo: row.nombre_completo,
-      total_bytes: parseFloat(row.total_bytes || 0)
-    })),
-    topBrands,
-    institutional_users: parseInt(stats.institutional_users || 0),
-    external_users: parseInt(stats.external_users || 0),
-    wpa_enterprise_users: wpaUsersCount,
-    hotel_users: parseInt(stats.hotel_users || 0),
-    restaurant_users: parseInt(stats.restaurant_users || 0)
+    totalActivos,
+    activeByType
   };
 }
 

@@ -3331,6 +3331,8 @@ async function kickActiveBypassDevice(mac) {
   } catch (err) {
     showToast('Error al expulsar dispositivo: ' + err.message, 'error');
   }
+}
+
 function downloadCsvTemplate() {
   const csvContent = "mac_address,propietario,alias,ppsk,vlan_id,cedula\n00:11:22:33:44:55,Juan Perez,Laptop Trabajo,ClavePPSK123,10,1600123456\nAA-BB-CC-DD-EE-FF,Impresora Principal,Impresora Piso 2,,20,\n";
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

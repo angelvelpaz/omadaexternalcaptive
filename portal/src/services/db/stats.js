@@ -34,7 +34,7 @@ function cleanVendorName(rawName) {
 }
 
 async function getStats() {
-  const [totals, today, byVendor, byResult, recentLogs, topUsers, allMacs] = await Promise.all([
+  const [totals, today, byVendor, byResult, recentLogs, allMacs] = await Promise.all([
     getPool().query(`
       SELECT
         COUNT(*) FILTER (WHERE activo = TRUE)  AS active_users,
@@ -74,29 +74,10 @@ async function getStats() {
       ORDER BY a.created_at DESC LIMIT 10
     `),
     getPool().query(`
-      WITH user_traffic AS (
-        SELECT
-          COALESCE(d.cedula, r.username) AS cedula,
-          SUM(r.acctinputoctets + r.acctoutputoctets) AS total_bytes
-        FROM radacct r
-        LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(d.mac_address), ':', '-') = REPLACE(UPPER(r.callingstationid), ':', '-')
-        WHERE (r.username IS NOT NULL AND r.username != '') OR d.cedula IS NOT NULL
-        GROUP BY COALESCE(d.cedula, r.username)
-      )
-      SELECT
-        u.cedula AS username,
-        COALESCE(NULLIF(TRIM(u.nombres || ' ' || u.apellidos), ''), u.cedula) AS nombre_completo,
-        t.total_bytes
-      FROM user_traffic t
-      JOIN usuarios_portal u ON u.cedula = t.cedula
-      ORDER BY t.total_bytes DESC
-      LIMIT 10
-    `),
-    getPool().query(`
       SELECT mac_address AS callingstationid
       FROM dispositivos_usuario
       ORDER BY created_at DESC
-      LIMIT 300
+      LIMIT 100
     `),
   ]);
 
@@ -119,11 +100,7 @@ async function getStats() {
     byVendor: byVendor.rows,
     byResult: byResult.rows,
     recentLogs: recentLogs.rows,
-    topUsers: topUsers.rows.map(row => ({
-      username: row.username,
-      nombre_completo: row.nombre_completo,
-      total_bytes: parseFloat(row.total_bytes || 0)
-    })),
+    topUsers: [],
     topBrands,
     institutional_users: parseInt(totals.rows[0].institutional_users || 0),
     external_users: parseInt(totals.rows[0].external_users || 0)

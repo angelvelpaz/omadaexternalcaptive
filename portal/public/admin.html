@@ -2090,12 +2090,17 @@
       <button onclick="closeCsvImportModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
     </div>
     <div class="p-6 space-y-4">
-      <div class="text-xs text-gray-500 space-y-1">
-        <p class="font-semibold text-gray-700">Instrucciones de formato:</p>
+      <div class="text-xs text-gray-500 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-100">
+        <p class="font-bold text-gray-700">Instrucciones de formato:</p>
         <p>1. El archivo debe ser de texto delimitado por comas (.csv) y contener una fila de cabecera.</p>
         <p>2. Columnas obligatorias: <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">mac_address</code>, <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">propietario</code>.</p>
         <p>3. Columnas opcionales: <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">alias</code>, <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">ppsk</code>, <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">vlan_id</code>, <code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded font-mono">cedula</code>.</p>
-        <p class="text-green-700 font-medium pt-1">💡 Límite de importación: Hasta 500 dispositivos por lote.</p>
+        <p class="text-green-700 font-semibold pt-1">💡 Límite de importación: Hasta 500 dispositivos por lote.</p>
+        <div class="pt-2">
+          <button onclick="downloadCsvTemplate()" class="text-blue-600 hover:text-blue-800 hover:underline font-semibold flex items-center gap-1 cursor-pointer">
+            📥 Descargar plantilla CSV de ejemplo
+          </button>
+        </div>
       </div>
 
       <!-- File input -->
@@ -3326,6 +3331,17 @@ async function kickActiveBypassDevice(mac) {
   } catch (err) {
     showToast('Error al expulsar dispositivo: ' + err.message, 'error');
   }
+function downloadCsvTemplate() {
+  const csvContent = "mac_address,propietario,alias,ppsk,vlan_id,cedula\n00:11:22:33:44:55,Juan Perez,Laptop Trabajo,ClavePPSK123,10,1600123456\nAA-BB-CC-DD-EE-FF,Impresora Principal,Impresora Piso 2,,20,\n";
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "plantilla_importacion_bypass.csv");
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 let selectedCsvFileText = null;

@@ -949,12 +949,23 @@ function cleanVendorName(rawName) {
 async function getStats() {
   const result = await pool.query(`
     SELECT 
-      COALESCE(u.tipo_usuario, 'mac_bypass') AS tipo,
+      CASE 
+        WHEN r.acctauthentic = 'RADIUS' THEN 'wpa_enterprise'
+        WHEN r.acctauthentic = 'Local' THEN 'mac_bypass'
+        WHEN u.tipo_usuario IN ('autoregistro', 'externo', 'institucional') THEN 'autoregistro'
+        ELSE COALESCE(u.tipo_usuario, 'mac_bypass')
+      END AS tipo,
       COUNT(DISTINCT r.callingstationid)::integer AS total_activos
     FROM radacct r
     LEFT JOIN usuarios_portal u ON u.radius_username = r.username
     WHERE r.acctstoptime IS NULL
-    GROUP BY COALESCE(u.tipo_usuario, 'mac_bypass')
+    GROUP BY 
+      CASE 
+        WHEN r.acctauthentic = 'RADIUS' THEN 'wpa_enterprise'
+        WHEN r.acctauthentic = 'Local' THEN 'mac_bypass'
+        WHEN u.tipo_usuario IN ('autoregistro', 'externo', 'institucional') THEN 'autoregistro'
+        ELSE COALESCE(u.tipo_usuario, 'mac_bypass')
+      END
   `);
 
   const activeByType = {

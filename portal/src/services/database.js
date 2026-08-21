@@ -2331,7 +2331,10 @@ async function createMacBypass(mac, propietario, alias, ppsk, vlanId, cedula = n
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
-  const cleanCedula = cedula ? String(cedula).trim() : null;
+  let cleanCedula = cedula ? String(cedula).trim() : null;
+  if (cleanCedula === '') {
+    cleanCedula = null;
+  }
   
   // Eliminar el dispositivo del autoregistro si se agrega a bypass MAB
   await pool.query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
@@ -2362,7 +2365,10 @@ async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
-  const cleanCedula = cedula ? String(cedula).trim() : null;
+  let cleanCedula = cedula ? String(cedula).trim() : null;
+  if (cleanCedula === '') {
+    cleanCedula = null;
+  }
 
   // Eliminar el dispositivo del autoregistro si se actualiza en bypass MAB
   await pool.query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
@@ -2428,7 +2434,20 @@ async function bulkImportMacBypass(devices) {
       const cleanPpsk = ppsk ? String(ppsk).trim() : null;
       const cleanVlan = vlanId ? parseInt(vlanId) : null;
       const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
-      const cleanCedula = cedula ? String(cedula).trim() : null;
+      
+      let cleanCedula = cedula ? String(cedula).trim() : null;
+      if (cleanCedula === '') {
+        cleanCedula = null;
+      }
+
+      // Validar si la cédula existe en usuarios_portal
+      if (cleanCedula !== null) {
+        const checkUser = await client.query('SELECT cedula FROM usuarios_portal WHERE cedula = $1', [cleanCedula]);
+        if (checkUser.rows.length === 0) {
+          results.errors.push({ line: lineNum, error: `La cédula '${cleanCedula}' no existe en el sistema del portal cautivo.` });
+          continue;
+        }
+      }
 
       // Eliminar de autoregistros para evitar conflictos
       await client.query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);

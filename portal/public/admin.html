@@ -270,79 +270,25 @@
 
     <!-- ── TAB DASHBOARD ── -->
     <div id="tab-dashboard" class="tab-content hidden">
-      <!-- Stats cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Usuarios activos</p>
-          <p id="stat-active" class="text-3xl font-bold text-green-600">—</p>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Total registrados</p>
-          <p id="stat-total" class="text-3xl font-bold text-blue-600">—</p>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Portal LDAP</p>
-          <p id="stat-institutional" class="text-3xl font-bold text-indigo-600">—</p>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Autoregistro</p>
-          <p id="stat-external" class="text-3xl font-bold text-emerald-600">—</p>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Ingresos hoy</p>
-          <p id="stat-today" class="text-3xl font-bold text-indigo-500">—</p>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Inactivos</p>
-          <p id="stat-inactive" class="text-3xl font-bold text-gray-400">—</p>
-        </div>
-      </div>
-
-      <div class="grid md:grid-cols-3 gap-4">
-        <!-- Accesos por vendor -->
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <h3 class="font-semibold text-gray-700 mb-3">Accesos por vendor (7 días)</h3>
-          <div id="stat-vendors" class="space-y-2 text-sm"></div>
-        </div>
-        <!-- Accesos por resultado -->
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <h3 class="font-semibold text-gray-700 mb-3">Accesos por resultado</h3>
-          <div id="stat-results" class="space-y-2 text-sm"></div>
-        </div>
-        <!-- Distribucion por tipo -->
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <h3 class="font-semibold text-gray-700 mb-3">Distribución por Tipo</h3>
-          <div id="stat-types" class="space-y-2 text-sm"></div>
-        </div>
-      </div>
-
-      <!-- Gráficos de Analíticas -->
-      <div class="grid grid-cols-1 gap-4 mt-4">
-        <!-- Top 10 Marcas -->
-        <div class="bg-white rounded-xl shadow-sm p-5">
-          <h3 class="font-semibold text-gray-700 mb-3">Top 10 Marcas de Dispositivos</h3>
-          <div class="relative w-full max-w-md mx-auto" style="height: 320px;">
-            <canvas id="top-brands-chart"></canvas>
+      <div class="max-w-3xl mx-auto space-y-6">
+        <!-- Tarjeta Principal: Total Activos -->
+        <div class="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-2xl shadow-xl p-8 text-white text-center relative overflow-hidden">
+          <div class="absolute -right-10 -bottom-10 opacity-10">
+            <span class="text-9xl">📶</span>
           </div>
+          <p class="text-sm font-medium text-blue-200 uppercase tracking-wider mb-2">Dispositivos Conectados Actualmente</p>
+          <p id="dashboard-total-active" class="text-6xl font-black tracking-tight">—</p>
+          <p class="text-xs text-blue-300 mt-2">Monitoreo en tiempo real de sesiones activas en la red</p>
         </div>
-      </div>
 
-      <!-- Últimos accesos -->
-      <div class="bg-white rounded-xl shadow-sm p-5 mt-4">
-        <h3 class="font-semibold text-gray-700 mb-3">Últimos accesos</h3>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs text-gray-500 border-b">
-                <th class="pb-2 pr-4">Cédula</th>
-                <th class="pb-2 pr-4">Nombre</th>
-                <th class="pb-2 pr-4">Vendor</th>
-                <th class="pb-2 pr-4">Resultado</th>
-                <th class="pb-2">Fecha</th>
-              </tr>
-            </thead>
-            <tbody id="recent-logs"></tbody>
-          </table>
+        <!-- Distribución por Tipo de Conexión -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h3 class="font-bold text-gray-800 text-lg mb-4 flex items-center gap-2">
+            <span>🔌</span> Distribución por Tipo de Conexión
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="dashboard-active-types-container">
+            <!-- Cargado dinámicamente -->
+          </div>
         </div>
       </div>
     </div>
@@ -2745,135 +2691,64 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-let topUsersChart = null;
-let topBrandsChart = null;
-
 async function loadDashboard() {
   try {
     const s = await api('GET', '/stats');
-    document.getElementById('stat-active').textContent        = s.active_users;
-    document.getElementById('stat-total').textContent         = s.total_users;
-    document.getElementById('stat-institutional').textContent = s.institutional_users;
-    document.getElementById('stat-external').textContent      = s.external_users;
-    document.getElementById('stat-inactive').textContent      = s.inactive_users;
-    document.getElementById('stat-today').textContent         = s.todayLogins;
+    
+    // Asignar el total de dispositivos activos
+    document.getElementById('dashboard-total-active').textContent = s.totalActivos;
 
     const typeLabels = {
       autoregistro: 'Autoregistro / Cédula',
-      ldap_portal: 'Portal LDAP (Usuario/Pass)',
+      ldap_portal: 'Portal LDAP',
       wpa_enterprise: 'WPA Enterprise',
-      hotel: 'Huésped (Hotel)',
+      mac_bypass: 'Exclusiones / MAB',
+      hotel: 'Huéspedes (Hotel)',
       restaurant: 'PIN (Restaurante)'
     };
-    const typesData = [
-      { key: 'autoregistro', val: s.external_users, color: 'text-green-600' },
-      { key: 'ldap_portal', val: s.institutional_users, color: 'text-indigo-600' },
-      { key: 'wpa_enterprise', val: s.wpa_enterprise_users || 0, color: 'text-blue-600' },
-      { key: 'hotel', val: s.hotel_users || 0, color: 'text-yellow-600' },
-      { key: 'restaurant', val: s.restaurant_users || 0, color: 'text-purple-600' }
-    ];
-    document.getElementById('stat-types').innerHTML = typesData.map(t => `
-      <div class="flex items-center justify-between py-0.5 border-b border-gray-50 last:border-0">
-        <span class="${t.color} font-medium">${typeLabels[t.key] || t.key}</span>
-        <span class="font-semibold text-gray-800">${t.val}</span>
-      </div>`).join('');
 
-    const vendorColors = { mikrotik: 'blue', unifi: 'purple', omada: 'green', unknown: 'gray' };
-    document.getElementById('stat-vendors').innerHTML = s.byVendor.length
-      ? s.byVendor.map(v => `
-          <div class="flex items-center justify-between">
-            <span class="text-gray-600 capitalize">${v.vendor || 'desconocido'}</span>
-            <span class="font-semibold text-gray-800">${v.total}</span>
-          </div>`).join('')
-      : '<p class="text-gray-400 text-xs">Sin datos</p>';
+    const typeColors = {
+      autoregistro: 'from-green-500/10 to-green-500/5 text-green-700 border-green-200/50',
+      ldap_portal: 'from-indigo-500/10 to-indigo-500/5 text-indigo-700 border-indigo-200/50',
+      wpa_enterprise: 'from-blue-500/10 to-blue-500/5 text-blue-700 border-blue-200/50',
+      mac_bypass: 'from-amber-500/10 to-amber-500/5 text-amber-700 border-amber-200/50',
+      hotel: 'from-yellow-500/10 to-yellow-500/5 text-yellow-700 border-yellow-200/50',
+      restaurant: 'from-purple-500/10 to-purple-500/5 text-purple-700 border-purple-200/50'
+    };
 
-    const resultColors = { success: 'text-green-600', failed: 'text-red-500', registered: 'text-blue-600' };
-    document.getElementById('stat-results').innerHTML = s.byResult.length
-      ? s.byResult.map(r => `
-          <div class="flex items-center justify-between">
-            <span class="${resultColors[r.resultado] || 'text-gray-600'} capitalize">${r.resultado}</span>
-            <span class="font-semibold text-gray-800">${r.total}</span>
-          </div>`).join('')
-      : '<p class="text-gray-400 text-xs">Sin datos</p>';
+    const typeIcons = {
+      autoregistro: '📝',
+      ldap_portal: '🔑',
+      wpa_enterprise: '🛡️',
+      mac_bypass: '⚙️',
+      hotel: '🏨',
+      restaurant: '🍽️'
+    };
 
-    document.getElementById('recent-logs').innerHTML = s.recentLogs.map(l => `
-      <tr class="hover:bg-gray-50">
-        <td class="px-0 py-2 pr-4 font-mono text-xs">${l.cedula}</td>
-        <td class="py-2 pr-4 text-gray-700">${l.nombres ? l.nombres + ' ' + l.apellidos : '—'}</td>
-        <td class="py-2 pr-4 text-gray-500 capitalize">${l.vendor || '—'}</td>
-        <td class="py-2 pr-4">
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium ${
-            l.resultado === 'success'    ? 'bg-green-100 text-green-700' :
-            l.resultado === 'registered' ? 'bg-blue-100 text-blue-700'  :
-                                           'bg-red-100 text-red-700'
-          }">${l.resultado}</span>
-        </td>
-        <td class="py-2 text-gray-400 text-xs">${fmtDate(l.created_at)}</td>
-      </tr>`).join('') || '<tr><td colspan="5" class="py-4 text-center text-gray-400">Sin accesos recientes</td></tr>';
+    const types = ['autoregistro', 'ldap_portal', 'wpa_enterprise', 'mac_bypass', 'hotel', 'restaurant'];
+    
+    document.getElementById('dashboard-active-types-container').innerHTML = types.map(t => {
+      const count = s.activeByType[t] || 0;
+      const theme = typeColors[t] || 'from-gray-500/10 to-gray-500/5 text-gray-700 border-gray-200/50';
+      const icon = typeIcons[t] || '📡';
+      const label = typeLabels[t] || t;
 
-    // Gráfico de consumo retirado para optimización de rendimiento del Dashboard
-
-    // Renderizar gráfico de Top 10 Marcas
-    const ctxBrands = document.getElementById('top-brands-chart').getContext('2d');
-    if (topBrandsChart) {
-      topBrandsChart.destroy();
-    }
-
-    const brandLabels = s.topBrands.map(b => b.brand);
-    const brandData = s.topBrands.map(b => b.count);
-
-    const premiumColors = [
-      'rgba(59, 130, 246, 0.8)',
-      'rgba(16, 185, 129, 0.8)',
-      'rgba(249, 115, 22, 0.8)',
-      'rgba(139, 92, 246, 0.8)',
-      'rgba(236, 72, 153, 0.8)',
-      'rgba(20, 110, 180, 0.8)',
-      'rgba(220, 38, 38, 0.8)',
-      'rgba(234, 179, 8, 0.8)',
-      'rgba(14, 165, 233, 0.8)',
-      'rgba(156, 163, 175, 0.8)'
-    ];
-
-    topBrandsChart = new Chart(ctxBrands, {
-      type: 'doughnut',
-      data: {
-        labels: brandLabels,
-        datasets: [{
-          data: brandData,
-          backgroundColor: premiumColors,
-          borderColor: '#ffffff',
-          borderWidth: 2,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'right',
-            labels: {
-              boxWidth: 12,
-              font: { size: 11 }
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const value = context.raw;
-                const percentage = ((value / total) * 100).toFixed(1);
-                return ` ${context.label}: ${value} (${percentage}%)`;
-              }
-            }
-          }
-        },
-        cutout: '60%'
-      }
-    });
+      return `
+        <div class="bg-gradient-to-br ${theme} border rounded-xl p-4 flex items-center justify-between transition-all hover:shadow-md">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">${icon}</span>
+            <div>
+              <p class="font-semibold text-sm text-gray-800">${label}</p>
+              <p class="text-xs text-gray-500">Sesiones activas</p>
+            </div>
+          </div>
+          <span class="text-2xl font-black tracking-tight">${count}</span>
+        </div>
+      `;
+    }).join('');
 
   } catch (err) {
-    console.error(err);
+    showToast('Error al cargar estadísticas del dashboard: ' + err.message, 'error');
   }
 }
 

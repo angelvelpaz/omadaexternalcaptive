@@ -399,6 +399,27 @@ router.get('/api/users/active', requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/api/ldap-portal/active', requireAdmin, async (req, res, next) => {
+  try {
+    const list = await db.getActiveLdapPortalSessions();
+    res.json(list);
+  } catch (err) { next(err); }
+});
+
+router.get('/api/hotel/active', requireAdmin, async (req, res, next) => {
+  try {
+    const list = await db.getActiveHotelSessions();
+    res.json(list);
+  } catch (err) { next(err); }
+});
+
+router.get('/api/restaurant/active', requireAdmin, async (req, res, next) => {
+  try {
+    const list = await db.getActiveRestaurantSessions();
+    res.json(list);
+  } catch (err) { next(err); }
+});
+
 router.get('/api/users', requireAdmin,
   query('search').optional().isString().trim(),
   query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),

@@ -842,11 +842,15 @@
     <div id="tab-ldap-portal-users" class="tab-content hidden">
       <!-- Sub-navegacion LDAP -->
       <div class="flex border-b border-gray-200 mb-6 gap-6">
-        <button onclick="switchLdapSubTab('live')" id="ldap-subtab-live-btn" class="border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors">
+        <button onclick="switchLdapSubTab('live')" id="ldap-subtab-live-btn" class="border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer">
           🌐 Miembros en Vivo (Active Directory)
         </button>
-        <button onclick="switchLdapSubTab('local')" id="ldap-subtab-local-btn" class="border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors">
+        <button onclick="switchLdapSubTab('local')" id="ldap-subtab-local-btn" class="border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer">
           💾 Usuarios Locales Registrados
+        </button>
+        <button onclick="switchLdapSubTab('active')" id="ldap-subtab-active-btn" class="border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5">
+          🌐 Conexiones Activas
+          <span id="ldap-active-badge" class="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
         </button>
       </div>
 
@@ -955,71 +959,251 @@
           </div>
         </div>
       </div>
+
+      <!-- SECCION ACTIVOS (CONEXIONES ACTIVAS LDAP) -->
+      <div id="ldap-section-active" class="hidden space-y-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 overflow-hidden">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800">Conexiones Activas LDAP</h2>
+              <p class="text-xs text-gray-500 mt-1">Lista en tiempo real de usuarios LDAP conectados en este momento a la red Wi-Fi.</p>
+            </div>
+            <button onclick="loadActiveLdapUsers()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+              🔄 Actualizar
+            </button>
+          </div>
+
+          <!-- Buscador de Conexiones Activas LDAP -->
+          <div class="mb-4 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <input type="text" id="ldap-active-search-input" placeholder="Buscar por usuario, nombre, MAC o IP..." 
+                oninput="onActiveLdapSearchInput(this.value)"
+                class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
+                🔍
+              </div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wide">
+                  <th class="px-4 py-3">Usuario</th>
+                  <th class="px-4 py-3">Nombre Completo</th>
+                  <th class="px-4 py-3">Dirección MAC</th>
+                  <th class="px-4 py-3">Dirección IP</th>
+                  <th class="px-4 py-3">SSID</th>
+                  <th class="px-4 py-3">Inicio</th>
+                  <th class="px-4 py-3">Duración</th>
+                  <th class="px-4 py-3">Tráfico (S/B)</th>
+                  <th class="px-4 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ldap-active-tbody" class="divide-y divide-gray-100">
+                <!-- Se carga dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 border-t text-sm text-gray-500">
+            <span id="ldap-active-count">0 conexiones activas</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── TAB HUÉSPEDES (HOTEL) ── -->
     <div id="tab-hotel-guests" class="tab-content hidden">
-      <div class="flex justify-between items-center mb-6">
-        <div>
-          <h2 class="text-xl font-bold text-gray-800">Módulo Hotel: Gestión de Huéspedes</h2>
-          <p class="text-sm text-gray-500">Registre huéspedes y configure su fecha de salida (Check-out) para controlar el acceso Wi-Fi automático.</p>
-        </div>
-        <button onclick="openAddGuestModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
-          ➕ Registrar Huésped
+      <!-- Sub-navegación Hotel -->
+      <div class="flex border-b border-gray-200 mb-6 gap-6">
+        <button onclick="switchHotelSubTab('local')" id="hotel-subtab-local-btn" class="border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer">
+          💾 Huéspedes Registrados
+        </button>
+        <button onclick="switchHotelSubTab('active')" id="hotel-subtab-active-btn" class="border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5">
+          🌐 Conexiones Activas (Hotel)
+          <span id="hotel-active-badge" class="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
         </button>
       </div>
 
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                <th class="p-4">Habitación</th>
-                <th class="p-4">Huésped</th>
-                <th class="p-4">Fecha Check-in</th>
-                <th class="p-4">Fecha Check-out (Expiración)</th>
-                <th class="p-4">Perfil de Velocidad</th>
-                <th class="p-4">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="hotel-guests-tbody" class="divide-y divide-gray-100">
-              <!-- Cargado dinámicamente -->
-            </tbody>
-          </table>
+      <!-- SECCION LOCAL (REGISTRADOS) -->
+      <div id="hotel-section-local" class="space-y-6">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-gray-800">Módulo Hotel: Gestión de Huéspedes</h2>
+            <p class="text-sm text-gray-500">Registre huéspedes y configure su fecha de salida (Check-out) para controlar el acceso Wi-Fi automático.</p>
+          </div>
+          <button onclick="openAddGuestModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+            ➕ Registrar Huésped
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                  <th class="p-4">Habitación</th>
+                  <th class="p-4">Huésped</th>
+                  <th class="p-4">Fecha Check-in</th>
+                  <th class="p-4">Fecha Check-out (Expiración)</th>
+                  <th class="p-4">Perfil de Velocidad</th>
+                  <th class="p-4">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="hotel-guests-tbody" class="divide-y divide-gray-100">
+                <!-- Cargado dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCION ACTIVOS (CONEXIONES ACTIVAS HOTEL) -->
+      <div id="hotel-section-active" class="hidden space-y-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 overflow-hidden">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800">Conexiones Activas - Hotel</h2>
+              <p class="text-xs text-gray-500 mt-1">Lista en tiempo real de huéspedes de hotel conectados en este momento a la red Wi-Fi.</p>
+            </div>
+            <button onclick="loadActiveHotelGuests()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+              🔄 Actualizar
+            </button>
+          </div>
+
+          <!-- Buscador de Conexiones Activas Hotel -->
+          <div class="mb-4 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <input type="text" id="hotel-active-search-input" placeholder="Buscar por huésped, habitación, MAC o IP..." 
+                oninput="onActiveHotelSearchInput(this.value)"
+                class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
+                🔍
+              </div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wide">
+                  <th class="px-4 py-3">Habitación</th>
+                  <th class="px-4 py-3">Huésped</th>
+                  <th class="px-4 py-3">Dirección MAC</th>
+                  <th class="px-4 py-3">Dirección IP</th>
+                  <th class="px-4 py-3">SSID</th>
+                  <th class="px-4 py-3">Inicio</th>
+                  <th class="px-4 py-3">Duración</th>
+                  <th class="px-4 py-3">Tráfico (S/B)</th>
+                  <th class="px-4 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="hotel-active-tbody" class="divide-y divide-gray-100">
+                <!-- Se carga dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 border-t text-sm text-gray-500">
+            <span id="hotel-active-count">0 conexiones activas</span>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- ── TAB PINs (RESTAURANTE) ── -->
     <div id="tab-restaurant-pins" class="tab-content hidden">
-      <div class="flex justify-between items-center mb-6">
-        <div>
-          <h2 class="text-xl font-bold text-gray-800">Módulo Restaurante: PINs de Ticket</h2>
-          <p class="text-sm text-gray-500">Genere códigos PIN de un solo uso o por tiempo limitado para el acceso Wi-Fi de comensales.</p>
-        </div>
-        <button onclick="openGeneratePinModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
-          🎫 Generar PIN
+      <!-- Sub-navegación Restaurante -->
+      <div class="flex border-b border-gray-200 mb-6 gap-6">
+        <button onclick="switchRestaurantSubTab('local')" id="restaurant-subtab-local-btn" class="border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer">
+          💾 PINs Generados
+        </button>
+        <button onclick="switchRestaurantSubTab('active')" id="restaurant-subtab-active-btn" class="border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5">
+          🌐 Conexiones Activas (Restaurante)
+          <span id="restaurant-active-badge" class="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
         </button>
       </div>
 
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
-                <th class="p-4">PIN</th>
-                <th class="p-4">Duración (min)</th>
-                <th class="p-4">Límite Disp.</th>
-                <th class="p-4">Dispositivos Usados</th>
-                <th class="p-4">Primer Uso (Expiración)</th>
-                <th class="p-4">Estado</th>
-                <th class="p-4">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="restaurant-pins-tbody" class="divide-y divide-gray-100">
-              <!-- Cargado dinámicamente -->
-            </tbody>
-          </table>
+      <!-- SECCION LOCAL (PINS GENERADOS) -->
+      <div id="restaurant-section-local" class="space-y-6">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-gray-800">Módulo Restaurante: PINs de Ticket</h2>
+            <p class="text-sm text-gray-500">Genere códigos PIN de un solo uso o por tiempo limitado para el acceso Wi-Fi de comensales.</p>
+          </div>
+          <button onclick="openGeneratePinModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+            🎫 Generar PIN
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
+                  <th class="p-4">PIN</th>
+                  <th class="p-4">Duración (min)</th>
+                  <th class="p-4">Límite Disp.</th>
+                  <th class="p-4">Dispositivos Usados</th>
+                  <th class="p-4">Primer Uso (Expiración)</th>
+                  <th class="p-4">Estado</th>
+                  <th class="p-4">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="restaurant-pins-tbody" class="divide-y divide-gray-100">
+                <!-- Cargado dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCION ACTIVOS (CONEXIONES ACTIVAS RESTAURANTE) -->
+      <div id="restaurant-section-active" class="hidden space-y-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 overflow-hidden">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800">Conexiones Activas - Restaurante</h2>
+              <p class="text-xs text-gray-500 mt-1">Lista en tiempo real de comensales de restaurante conectados en este momento a la red Wi-Fi.</p>
+            </div>
+            <button onclick="loadActiveRestaurantPins()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+              🔄 Actualizar
+            </button>
+          </div>
+
+          <!-- Buscador de Conexiones Activas Restaurante -->
+          <div class="mb-4 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <input type="text" id="restaurant-active-search-input" placeholder="Buscar por PIN, MAC o IP..." 
+                oninput="onActiveRestaurantSearchInput(this.value)"
+                class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
+                🔍
+              </div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b">
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wide">
+                  <th class="px-4 py-3">PIN (Usuario)</th>
+                  <th class="px-4 py-3">Dirección MAC</th>
+                  <th class="px-4 py-3">Dirección IP</th>
+                  <th class="px-4 py-3">SSID</th>
+                  <th class="px-4 py-3">Inicio</th>
+                  <th class="px-4 py-3">Duración</th>
+                  <th class="px-4 py-3">Tráfico (S/B)</th>
+                  <th class="px-4 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="restaurant-active-tbody" class="divide-y divide-gray-100">
+                <!-- Se carga dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 border-t text-sm text-gray-500">
+            <span id="restaurant-active-count">0 conexiones activas</span>
+          </div>
         </div>
       </div>
     </div>
@@ -8239,30 +8423,131 @@ async function kickLdapPortalUserDevice(mac) {
   }
 }
 
-window._ldapLocalUsersList = [];
-window._ldapLocalCurrentPage = 1;
-window._ldapLocalSearchQuery = '';
+window._ldapActiveUsersList = [];
+window._ldapActiveSearchQuery = '';
 
 function switchLdapSubTab(type) {
   const liveBtn = document.getElementById('ldap-subtab-live-btn');
   const localBtn = document.getElementById('ldap-subtab-local-btn');
+  const activeBtn = document.getElementById('ldap-subtab-active-btn');
   const liveSec = document.getElementById('ldap-section-live');
   const localSec = document.getElementById('ldap-section-local');
+  const activeSec = document.getElementById('ldap-section-active');
+
+  // Background update active badge count
+  api('GET', '/ldap-portal/active').then(list => {
+    const badge = document.getElementById('ldap-active-badge');
+    if (badge) badge.textContent = list.length;
+  }).catch(() => {});
 
   if (type === 'live') {
-    liveBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors';
-    localBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors';
-    liveSec.classList.remove('hidden');
-    localSec.classList.add('hidden');
+    if (liveBtn) liveBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer';
+    if (localBtn) localBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer';
+    if (activeBtn) activeBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5';
+    if (liveSec) liveSec.classList.remove('hidden');
+    if (localSec) localSec.classList.add('hidden');
+    if (activeSec) activeSec.classList.add('hidden');
     loadLdapPortalUsers();
-  } else {
-    localBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors';
-    liveBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors';
-    localSec.classList.remove('hidden');
-    liveSec.classList.add('hidden');
+  } else if (type === 'local') {
+    if (localBtn) localBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer';
+    if (liveBtn) liveBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer';
+    if (activeBtn) activeBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5';
+    if (localSec) localSec.classList.remove('hidden');
+    if (liveSec) liveSec.classList.add('hidden');
+    if (activeSec) activeSec.classList.add('hidden');
     loadLocalLdapUsers();
+  } else {
+    if (activeBtn) activeBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5';
+    if (liveBtn) liveBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer';
+    if (localBtn) localBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer';
+    if (activeSec) activeSec.classList.remove('hidden');
+    if (liveSec) liveSec.classList.add('hidden');
+    if (localSec) localSec.classList.add('hidden');
+    loadActiveLdapUsers();
   }
 }
+
+async function loadActiveLdapUsers() {
+  const tbody = document.getElementById('ldap-active-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando conexiones activas LDAP...</td></tr>';
+  
+  try {
+    const list = await api('GET', '/ldap-portal/active');
+    window._ldapActiveUsersList = Array.isArray(list) ? list : [];
+    
+    // Update badge count
+    const badge = document.getElementById('ldap-active-badge');
+    if (badge) badge.textContent = window._ldapActiveUsersList.length;
+    
+    renderActiveLdapTable();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar conexiones: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function renderActiveLdapTable() {
+  const tbody = document.getElementById('ldap-active-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  const query = window._ldapActiveSearchQuery.toLowerCase();
+  const filtered = window._ldapActiveUsersList.filter(s => {
+    return (
+      String(s.username || '').toLowerCase().includes(query) ||
+      String(s.nombres || '').toLowerCase().includes(query) ||
+      String(s.apellidos || '').toLowerCase().includes(query) ||
+      String(s.mac_address || '').toLowerCase().includes(query) ||
+      String(s.ip_address || '').toLowerCase().includes(query)
+    );
+  });
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay conexiones activas que coincidan con la búsqueda.</td></tr>';
+    document.getElementById('ldap-active-count').textContent = '0 conexiones activas';
+    return;
+  }
+  
+  tbody.innerHTML = filtered.map(s => {
+    const uploadFormatted = formatBytes(parseFloat(s.upload || 0));
+    const downloadFormatted = formatBytes(parseFloat(s.download || 0));
+    const startTime = fmtDate(s.start_time);
+    
+    const startMs = s.start_time ? new Date(s.start_time).getTime() : Date.now();
+    const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+    const hrs = Math.floor(elapsedSecs / 3600);
+    const mins = Math.floor((elapsedSecs % 3600) / 60);
+    const durationFormatted = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    
+    const kickAction = `kickActiveUserDevice('${s.radacctid}', '${s.username}', '${s.mac_address}', '${s.nas_ip}')`;
+    
+    return `
+      <tr class="hover:bg-gray-50/50 transition-colors">
+        <td class="px-4 py-3 font-mono text-xs text-gray-700 font-semibold">${esc(s.username)}</td>
+        <td class="px-4 py-3 text-gray-800 font-medium">${esc(s.nombres)} ${esc(s.apellidos)}</td>
+        <td class="px-4 py-3 font-mono text-xs text-gray-600">${esc(s.mac_address)}</td>
+        <td class="px-4 py-3 font-mono text-xs text-gray-600">${esc(s.ip_address || '—')}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-semibold">${esc(s.ssid || '—')}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs">${startTime}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-bold">${durationFormatted}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-semibold">${uploadFormatted} / ${downloadFormatted}</td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="${kickAction}" class="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-semibold border border-red-200/50" title="Expulsar equipo de la red">
+            Expulsar
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  document.getElementById('ldap-active-count').textContent = `${filtered.length} conexión${filtered.length !== 1 ? 'es' : ''} activa${filtered.length !== 1 ? 's' : ''}`;
+}
+
+function onActiveLdapSearchInput(val) {
+  window._ldapActiveSearchQuery = val.trim();
+  renderActiveLdapTable();
+}
+
 
 async function loadLocalLdapUsers() {
   const tbody = document.getElementById('ldap-local-users-tbody');
@@ -8487,7 +8772,125 @@ async function testLdapConnectionGlobal() {
 }
 
 // ── Hoteles: Huéspedes ────────────────────────────────────────────────────────
+let hotelSubTab = 'local';
+window._hotelActiveGuestsList = [];
+window._hotelActiveSearchQuery = '';
+
+function switchHotelSubTab(tab) {
+  hotelSubTab = tab;
+  
+  const localBtn = document.getElementById('hotel-subtab-local-btn');
+  const activeBtn = document.getElementById('hotel-subtab-active-btn');
+  
+  if (localBtn && activeBtn) {
+    if (tab === 'local') {
+      localBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer';
+      activeBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5';
+    } else {
+      localBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer';
+      activeBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5';
+    }
+  }
+  
+  document.getElementById('hotel-section-local').classList.toggle('hidden', tab !== 'local');
+  document.getElementById('hotel-section-active').classList.toggle('hidden', tab !== 'active');
+  
+  loadHotelGuests();
+}
+
+async function loadActiveHotelGuests() {
+  const tbody = document.getElementById('hotel-active-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando conexiones activas de hotel...</td></tr>';
+  
+  try {
+    const list = await api('GET', '/hotel/active');
+    window._hotelActiveGuestsList = Array.isArray(list) ? list : [];
+    
+    // Update badge count
+    const badge = document.getElementById('hotel-active-badge');
+    if (badge) badge.textContent = window._hotelActiveGuestsList.length;
+    
+    renderActiveHotelGuestsTable();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar conexiones: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function renderActiveHotelGuestsTable() {
+  const tbody = document.getElementById('hotel-active-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  const query = window._hotelActiveSearchQuery.toLowerCase();
+  const filtered = window._hotelActiveGuestsList.filter(s => {
+    return (
+      String(s.cedula || '').toLowerCase().includes(query) ||
+      String(s.username || '').toLowerCase().includes(query) ||
+      String(s.nombres || '').toLowerCase().includes(query) ||
+      String(s.apellidos || '').toLowerCase().includes(query) ||
+      String(s.mac_address || '').toLowerCase().includes(query) ||
+      String(s.ip_address || '').toLowerCase().includes(query)
+    );
+  });
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay huéspedes en línea que coincidan con la búsqueda.</td></tr>';
+    document.getElementById('hotel-active-count').textContent = '0 conexiones activas';
+    return;
+  }
+  
+  tbody.innerHTML = filtered.map(s => {
+    const uploadFormatted = formatBytes(parseFloat(s.upload || 0));
+    const downloadFormatted = formatBytes(parseFloat(s.download || 0));
+    const startTime = fmtDate(s.start_time);
+    
+    const startMs = s.start_time ? new Date(s.start_time).getTime() : Date.now();
+    const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+    const hrs = Math.floor(elapsedSecs / 3600);
+    const mins = Math.floor((elapsedSecs % 3600) / 60);
+    const durationFormatted = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    
+    const kickAction = `kickActiveUserDevice('${s.radacctid}', '${s.username}', '${s.mac_address}', '${s.nas_ip}')`;
+    
+    return `
+      <tr class="hover:bg-gray-50/50 transition-colors">
+        <td class="px-4 py-3 font-mono text-xs text-gray-700 font-semibold">${esc(s.cedula || '—')}</td>
+        <td class="px-4 py-3 text-gray-800 font-medium">${esc(s.nombres)} ${esc(s.apellidos)}</td>
+        <td class="px-4 py-3 font-mono text-xs text-gray-600">${esc(s.mac_address)}</td>
+        <td class="px-4 py-3 font-mono text-xs text-gray-600">${esc(s.ip_address || '—')}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-semibold">${esc(s.ssid || '—')}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs">${startTime}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-bold">${durationFormatted}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-semibold">${uploadFormatted} / ${downloadFormatted}</td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="${kickAction}" class="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-semibold border border-red-200/50" title="Expulsar equipo de la red">
+            Expulsar
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  document.getElementById('hotel-active-count').textContent = `${filtered.length} conexión${filtered.length !== 1 ? 'es' : ''} activa${filtered.length !== 1 ? 's' : ''}`;
+}
+
+function onActiveHotelSearchInput(val) {
+  window._hotelActiveSearchQuery = val.trim();
+  renderActiveHotelGuestsTable();
+}
+
 async function loadHotelGuests() {
+  // Update active count badge in background
+  api('GET', '/hotel/active').then(activeList => {
+    const badge = document.getElementById('hotel-active-badge');
+    if (badge) badge.textContent = activeList.length;
+  }).catch(() => {});
+
+  if (hotelSubTab === 'active') {
+    return loadActiveHotelGuests();
+  }
+
   const tbody = document.getElementById('hotel-guests-tbody');
   tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">Cargando huéspedes...</td></tr>';
   try {
@@ -8576,7 +8979,121 @@ async function deleteHotelGuest(id) {
 }
 
 // ── Restaurante: PINs ────────────────────────────────────────────────────────
+let restaurantSubTab = 'local';
+window._restaurantActivePinsList = [];
+window._restaurantActiveSearchQuery = '';
+
+function switchRestaurantSubTab(tab) {
+  restaurantSubTab = tab;
+  
+  const localBtn = document.getElementById('restaurant-subtab-local-btn');
+  const activeBtn = document.getElementById('restaurant-subtab-active-btn');
+  
+  if (localBtn && activeBtn) {
+    if (tab === 'local') {
+      localBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer';
+      activeBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5';
+    } else {
+      localBtn.className = 'border-b-2 border-transparent pb-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors focus:outline-none cursor-pointer';
+      activeBtn.className = 'border-b-2 border-blue-600 pb-2.5 text-sm font-semibold text-blue-600 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5';
+    }
+  }
+  
+  document.getElementById('restaurant-section-local').classList.toggle('hidden', tab !== 'local');
+  document.getElementById('restaurant-section-active').classList.toggle('hidden', tab !== 'active');
+  
+  loadRestaurantPins();
+}
+
+async function loadActiveRestaurantPins() {
+  const tbody = document.getElementById('restaurant-active-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando conexiones activas de restaurante...</td></tr>';
+  
+  try {
+    const list = await api('GET', '/restaurant/active');
+    window._restaurantActivePinsList = Array.isArray(list) ? list : [];
+    
+    // Update badge count
+    const badge = document.getElementById('restaurant-active-badge');
+    if (badge) badge.textContent = window._restaurantActivePinsList.length;
+    
+    renderActiveRestaurantPinsTable();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-medium">Error al cargar conexiones: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function renderActiveRestaurantPinsTable() {
+  const tbody = document.getElementById('restaurant-active-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  const query = window._restaurantActiveSearchQuery.toLowerCase();
+  const filtered = window._restaurantActivePinsList.filter(s => {
+    return (
+      String(s.username || '').toLowerCase().includes(query) ||
+      String(s.mac_address || '').toLowerCase().includes(query) ||
+      String(s.ip_address || '').toLowerCase().includes(query)
+    );
+  });
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400">No hay comensales en línea que coincidan con la búsqueda.</td></tr>';
+    document.getElementById('restaurant-active-count').textContent = '0 conexiones activas';
+    return;
+  }
+  
+  tbody.innerHTML = filtered.map(s => {
+    const uploadFormatted = formatBytes(parseFloat(s.upload || 0));
+    const downloadFormatted = formatBytes(parseFloat(s.download || 0));
+    const startTime = fmtDate(s.start_time);
+    
+    const startMs = s.start_time ? new Date(s.start_time).getTime() : Date.now();
+    const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+    const hrs = Math.floor(elapsedSecs / 3600);
+    const mins = Math.floor((elapsedSecs % 3600) / 60);
+    const durationFormatted = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    
+    const kickAction = `kickActiveUserDevice('${s.radacctid}', '${s.username}', '${s.mac_address}', '${s.nas_ip}')`;
+    
+    return `
+      <tr class="hover:bg-gray-50/50 transition-colors">
+        <td class="px-4 py-3 font-mono text-xs text-blue-600 font-semibold select-all">${esc(s.username)}</td>
+        <td class="px-4 py-3 font-mono text-xs text-gray-600">${esc(s.mac_address)}</td>
+        <td class="px-4 py-3 font-mono text-xs text-gray-600">${esc(s.ip_address || '—')}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-semibold">${esc(s.ssid || '—')}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs">${startTime}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-bold">${durationFormatted}</td>
+        <td class="px-4 py-3 text-gray-500 text-xs font-semibold">${uploadFormatted} / ${downloadFormatted}</td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="${kickAction}" class="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-semibold border border-red-200/50" title="Expulsar equipo de la red">
+            Expulsar
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  document.getElementById('restaurant-active-count').textContent = `${filtered.length} conexión${filtered.length !== 1 ? 'es' : ''} activa${filtered.length !== 1 ? 's' : ''}`;
+}
+
+function onActiveRestaurantSearchInput(val) {
+  window._restaurantActiveSearchQuery = val.trim();
+  renderActiveRestaurantPinsTable();
+}
+
 async function loadRestaurantPins() {
+  // Update active count badge in background
+  api('GET', '/restaurant/active').then(activeList => {
+    const badge = document.getElementById('restaurant-active-badge');
+    if (badge) badge.textContent = activeList.length;
+  }).catch(() => {});
+
+  if (restaurantSubTab === 'active') {
+    return loadActiveRestaurantPins();
+  }
+
   const tbody = document.getElementById('restaurant-pins-tbody');
   tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">Cargando PINs...</td></tr>';
   try {

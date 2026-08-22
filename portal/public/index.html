@@ -353,6 +353,21 @@
       document.title = cfg.name || 'Portal Wi-Fi';
       if (cfg.logo) PORTAL_LOGO.src = cfg.logo;
       if (cfg.timezone) APP_TIMEZONE = cfg.timezone;
+
+      if (cfg.methodDisabled) {
+        document.getElementById('form-cedula').classList.add('hidden');
+        document.getElementById('form-ldap').classList.add('hidden');
+        document.getElementById('form-hotel').classList.add('hidden');
+        document.getElementById('form-restaurant').classList.add('hidden');
+        document.getElementById('ad-access-container').classList.add('hidden');
+        const warningBox = document.getElementById('mac-warning-box');
+        if (warningBox) warningBox.classList.add('hidden');
+
+        const welcomeText = document.getElementById('welcome-text');
+        welcomeText.textContent = 'El método de acceso para esta red Wi-Fi se encuentra temporalmente fuera de servicio. Por favor, contacte al administrador.';
+        welcomeText.className = 'text-amber-700 text-sm font-medium mt-4 text-center bg-amber-50 p-4 border border-amber-200 rounded-xl';
+        return;
+      }
       
       if (cfg.disableRegistration) {
         document.getElementById('form-cedula').classList.add('hidden');

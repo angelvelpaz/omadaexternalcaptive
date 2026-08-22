@@ -135,6 +135,26 @@ async function connectOnce() {
     )
   `);
 
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS configuracion_metodos_auth (
+      id          VARCHAR(50) PRIMARY KEY,
+      nombre      VARCHAR(100) NOT NULL,
+      activo      BOOLEAN DEFAULT TRUE,
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await client.query(`
+    INSERT INTO configuracion_metodos_auth (id, nombre, activo) VALUES
+    ('autoregistro', 'Autoregistro (Cédula)', true),
+    ('ldap_portal', 'Portal LDAP (Active Directory)', true),
+    ('wpa_enterprise', 'WPA Enterprise (802.1X)', true),
+    ('mac_bypass', 'PPSK / MAC Bypass (MAB)', true),
+    ('hotel', 'Huéspedes (Hotel)', true),
+    ('restaurant', 'PINs (Restaurante)', true)
+    ON CONFLICT (id) DO NOTHING
+  `);
+
   // Insertar administrador inicial por defecto si la tabla está vacía
   const adminCheck = await client.query('SELECT 1 FROM administradores LIMIT 1');
   if (adminCheck.rowCount === 0) {
@@ -3007,6 +3027,30 @@ async function getActiveRestaurantSessions() {
   return result.rows;
 }
 
+async function listAuthMethods() {
+  const result = await pool.query(
+    'SELECT id, nombre, activo FROM configuracion_metodos_auth ORDER BY id ASC'
+  );
+  return result.rows;
+}
+
+async function updateAuthMethodStatus(id, activo) {
+  const result = await pool.query(
+    'UPDATE configuracion_metodos_auth SET activo = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+    [activo, id]
+  );
+  return result.rows[0];
+}
+
+async function isAuthMethodActive(id) {
+  const result = await pool.query(
+    'SELECT activo FROM configuracion_metodos_auth WHERE id = $1',
+    [id]
+  );
+  if (result.rows.length === 0) return true;
+  return result.rows[0].activo;
+}
+
 module.exports = {
   connect,
   getPool,
@@ -3042,4 +3086,5 @@ module.exports = {
   registerWpaDevice, deleteWpaDevice, getWpaDevices, getWpaDeviceCount,
   getOldestWpaDevice, getAllWpaDevices, getWpaUserMaxDevices, setWpaUserMaxDevices,
   setUserVlan, clearUserVlan, getUserVlan, isMacRegisteredInOtherType,
+  listAuthMethods, updateAuthMethodStatus, isAuthMethodActive,
 };

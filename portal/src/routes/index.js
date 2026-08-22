@@ -201,6 +201,13 @@ router.get('/auth/config', async (req, res, next) => {
       disableRegistration = false;
     }
 
+    let methodKey = 'autoregistro';
+    if (activeAuthType === 'ldap') methodKey = 'ldap_portal';
+    else if (activeAuthType === 'hotel') methodKey = 'hotel';
+    else if (activeAuthType === 'restaurant') methodKey = 'restaurant';
+
+    const isMethodActive = await db.isAuthMethodActive(methodKey);
+
     res.json({
       name: branding.portalName || process.env.PORTAL_NAME || 'Portal Wi-Fi',
       logo: branding.logoUrl || process.env.PORTAL_LOGO_URL || '/static/logo.svg',
@@ -221,6 +228,7 @@ router.get('/auth/config', async (req, res, next) => {
       ldapEnabled: ldapEnabled,
       authType: activeAuthType,
       timezone: branding.timezone || 'America/Guayaquil',
+      methodDisabled: !isMethodActive,
     });
   } catch (err) { next(err); }
 });
@@ -280,6 +288,10 @@ router.post('/auth/check',
   body('cedula').isString().trim().isLength({ min: 10, max: 10 }).isNumeric(),
   async (req, res, next) => {
     try {
+      const isAutoregistroActive = await db.isAuthMethodActive('autoregistro');
+      if (!isAutoregistroActive) {
+        return res.status(403).json({ error: 'El método de autoregistro se encuentra temporalmente inactivo.' });
+      }
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.json({ valid: false, exists: false, error: 'Cédula inválida.' });
@@ -455,6 +467,10 @@ router.post('/auth/register',
   body('terms').custom(val => val === true || val === 'true').withMessage('Debe aceptar los términos de uso.'),
   async (req, res, next) => {
     try {
+      const isAutoregistroActive = await db.isAuthMethodActive('autoregistro');
+      if (!isAutoregistroActive) {
+        return res.status(403).json({ error: 'El método de autoregistro se encuentra temporalmente inactivo.' });
+      }
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({
@@ -650,6 +666,10 @@ router.post('/auth/login',
   body('terms').custom(val => val === true || val === 'true').withMessage('Debe aceptar los términos de uso.'),
   async (req, res, next) => {
     try {
+      const isAutoregistroActive = await db.isAuthMethodActive('autoregistro');
+      if (!isAutoregistroActive) {
+        return res.status(403).json({ error: 'El método de autoregistro se encuentra temporalmente inactivo.' });
+      }
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
@@ -829,6 +849,10 @@ router.post('/auth/free-access',
   body('mac').isString().trim(),
   async (req, res, next) => {
     try {
+      const isAutoregistroActive = await db.isAuthMethodActive('autoregistro');
+      if (!isAutoregistroActive) {
+        return res.status(403).json({ error: 'El método de autoregistro se encuentra temporalmente inactivo.' });
+      }
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
@@ -972,6 +996,11 @@ router.post('/auth/ldap',
   body('mac').isString().trim().notEmpty().withMessage('La dirección MAC es obligatoria.'),
   async (req, res, next) => {
     try {
+      const isLdapPortalActive = await db.isAuthMethodActive('ldap_portal');
+      if (!isLdapPortalActive) {
+        return res.status(403).json({ error: 'La autenticación LDAP se encuentra temporalmente inactiva.' });
+      }
+
       if (!isCaptivePortalLdapEnabled()) {
         return res.status(403).json({ error: 'La autenticación LDAP del portal cautivo está desactivada.' });
       }
@@ -1214,6 +1243,10 @@ router.post('/auth/hotel',
   body('mac').isString().trim().notEmpty().withMessage('La dirección MAC es obligatoria.'),
   async (req, res, next) => {
     try {
+      const isHotelActive = await db.isAuthMethodActive('hotel');
+      if (!isHotelActive) {
+        return res.status(403).json({ error: 'La autenticación para Huéspedes se encuentra temporalmente inactiva.' });
+      }
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });
@@ -1346,6 +1379,10 @@ router.post('/auth/restaurant',
   body('mac').isString().trim().notEmpty().withMessage('La dirección MAC es obligatoria.'),
   async (req, res, next) => {
     try {
+      const isRestaurantActive = await db.isAuthMethodActive('restaurant');
+      if (!isRestaurantActive) {
+        return res.status(403).json({ error: 'La autenticación para Restaurante se encuentra temporalmente inactiva.' });
+      }
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: errors.array().map(e => e.msg).join(', ') });

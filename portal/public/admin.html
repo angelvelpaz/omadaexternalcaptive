@@ -1235,6 +1235,16 @@
     <!-- ── TAB CONTROLADORES ── -->
     <div id="tab-controllers" class="tab-content hidden">
 
+      <!-- Panel de Métodos de Autenticación (Solo Superadministradores) -->
+      <div id="auth-methods-panel" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h2 class="text-base font-bold text-gray-800 mb-2">Métodos de Autenticación / Acceso Wi-Fi</h2>
+        <p class="text-xs text-gray-500 mb-4">Active o desactive globalmente los métodos de conexión para los usuarios y comensales. Al desactivar un método, se ocultará del menú, del dashboard y los clientes recibirán un aviso de mantenimiento al conectarse.</p>
+        
+        <div id="auth-methods-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+          <!-- Generado dinámicamente -->
+        </div>
+      </div>
+
       <div class="space-y-4" id="controllers-cards">
         <!-- Cards generadas por JS -->
       </div>
@@ -2663,7 +2673,9 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
   document.getElementById('login-screen').classList.remove('hidden');
 });
 
-function showPanel() {
+window._authMethods = [];
+
+async function showPanel() {
   document.documentElement.classList.add('is-auth');
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('admin-panel').classList.remove('hidden');
@@ -2671,6 +2683,14 @@ function showPanel() {
   const adminNombres = localStorage.getItem('admin_nombres') || 'Administrador';
   const nameEl = document.getElementById('header-admin-nombres');
   if (nameEl) nameEl.textContent = adminNombres;
+
+  // Cargar métodos de autenticación antes de aplicar visibilidades
+  try {
+    const list = await api('GET', '/auth-methods');
+    window._authMethods = Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.error('Error al cargar métodos de autenticación:', err);
+  }
 
   fetch('/auth/config').then(r => r.json()).then(cfg => {
     document.getElementById('header-portal-name').textContent = cfg.name || '';
@@ -2687,7 +2707,7 @@ function showPanel() {
 }
 
 /**
- * Aplica las restricciones de visibilidad según el rol del administrador actual.
+ * Aplica las restricciones de visibilidad según el rol del administrador actual y estado de los métodos.
  */
 function applyRBAC() {
   adminRol = localStorage.getItem('admin_rol') || 'operador';
@@ -2701,10 +2721,7 @@ function applyRBAC() {
     rolBadge.className = `text-xs font-semibold px-2 py-0.5 rounded-full ${colors[adminRol] || 'bg-gray-100 text-gray-600'}`;
   }
 
-  // Ocultar/mostrar tabs de navegación según rol
-  // Operador: dashboard + gestión básica (cautivo, dispositivos, ldap portal) + sesiones
-  // Administrador: + reportes, auditoría, admins, personalización
-  // Superadministrador: todo
+  // Ocultar/mostrar tabs de navegación según rol y métodos activos
   const tabRules = {
     'dashboard':        'operador',
     'users':            'operador',
@@ -2728,11 +2745,30 @@ function applyRBAC() {
     'maintenance':      'superadministrador',
   };
 
+  const tabToMethodId = {
+    'users': 'autoregistro',
+    'devices': 'autoregistro',
+    'ldap-portal-users': 'ldap_portal',
+    'ldap-users': 'wpa_enterprise',
+    'mac-bypass': 'mac_bypass',
+    'hotel-guests': 'hotel',
+    'restaurant-pins': 'restaurant'
+  };
+
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const tab = btn.dataset.tab;
     if (!tab) return;
     const minRol = tabRules[tab] || 'superadministrador';
-    const visible = tieneRol(minRol);
+    let visible = tieneRol(minRol);
+
+    if (visible && tabToMethodId[tab]) {
+      const methodId = tabToMethodId[tab];
+      const method = window._authMethods.find(m => m.id === methodId);
+      if (method && !method.activo) {
+        visible = false;
+      }
+    }
+
     btn.closest('li') ? btn.closest('li').classList.toggle('hidden', !visible)
                       : btn.classList.toggle('hidden', !visible);
   });
@@ -2957,8 +2993,19 @@ async function loadDashboard() {
   try {
     const s = await api('GET', '/stats');
     
-    // Asignar el total de dispositivos activos
-    document.getElementById('dashboard-total-active').textContent = s.totalActivos;
+    const types = ['autoregistro', 'ldap_portal', 'wpa_enterprise', 'mac_bypass', 'hotel', 'restaurant'];
+    
+    const activeTypes = types.filter(t => {
+      if (!window._authMethods || window._authMethods.length === 0) return true;
+      const m = window._authMethods.find(x => x.id === t);
+      return m ? m.activo : true;
+    });
+
+    let sumActive = 0;
+    activeTypes.forEach(t => {
+      sumActive += s.activeByType[t] || 0;
+    });
+    document.getElementById('dashboard-total-active').textContent = sumActive;
 
     const typeLabels = {
       autoregistro: 'Autoregistro / Cédula',
@@ -2986,10 +3033,8 @@ async function loadDashboard() {
       hotel: '🏨',
       restaurant: '🍽️'
     };
-
-    const types = ['autoregistro', 'ldap_portal', 'wpa_enterprise', 'mac_bypass', 'hotel', 'restaurant'];
     
-    document.getElementById('dashboard-active-types-container').innerHTML = types.map(t => {
+    document.getElementById('dashboard-active-types-container').innerHTML = activeTypes.map(t => {
       const count = s.activeByType[t] || 0;
       const theme = typeColors[t] || 'from-gray-500/10 to-gray-500/5 text-gray-700 border-gray-200/50';
       const icon = typeIcons[t] || '📡';
@@ -5366,6 +5411,10 @@ function renderControllerCard(vendor, cfg) {
 async function loadControllers() {
   const container = document.getElementById('controllers-cards');
   container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Cargando...</p>';
+  
+  // Renderizar panel de métodos de autenticación
+  renderAuthMethodsPanel();
+
   try {
     const cfg = await api('GET', '/controllers');
     // Guardar config actual para acceso posterior en formularios
@@ -5375,6 +5424,45 @@ async function loadControllers() {
       .join('');
   } catch (err) {
     container.innerHTML = `<p class="text-red-500 text-sm text-center py-8">${esc(err.message)}</p>`;
+  }
+}
+
+function renderAuthMethodsPanel() {
+  const listContainer = document.getElementById('auth-methods-list');
+  if (!listContainer) return;
+
+  listContainer.innerHTML = window._authMethods.map(m => {
+    return `
+      <div class="flex items-center justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-100/50">
+        <div>
+          <h4 class="text-sm font-semibold text-gray-800">${esc(m.nombre)}</h4>
+          <span class="text-[10px] text-gray-400 font-mono">${esc(m.id)}</span>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" class="sr-only peer" ${m.activo ? 'checked' : ''} onchange="toggleAuthMethodStatus('${m.id}', this.checked)">
+          <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+        </label>
+      </div>
+    `;
+  }).join('');
+}
+
+async function toggleAuthMethodStatus(id, active) {
+  try {
+    const updated = await api('PUT', `/auth-methods/${id}`, { activo: active });
+    showToast(`Método ${updated.nombre} ${active ? 'activado' : 'desactivado'} con éxito.`, 'success');
+    
+    // Recargar la lista global de métodos de autenticación
+    const list = await api('GET', '/auth-methods');
+    window._authMethods = Array.isArray(list) ? list : [];
+    
+    // Re-aplicar visibilidades de navegación y refrescar UI
+    applyRBAC();
+    renderAuthMethodsPanel();
+  } catch (err) {
+    showToast('Error al modificar estado del método: ' + err.message, 'error');
+    // Re-renderizar para revertir el switch visualmente
+    renderAuthMethodsPanel();
   }
 }
 

@@ -3513,6 +3513,41 @@ router.post('/api/logout', requireAdmin, async (req, res, next) => {
   }
 });
 
+// ─── Métodos de Autenticación Activos ───
+
+// GET - Listar todos los métodos de autenticación y su estado (abierto a cualquier administrador/operador)
+router.get('/api/auth-methods', requireAdmin, async (req, res, next) => {
+  try {
+    const methods = await db.listAuthMethods();
+    res.json(methods);
+  } catch (err) { next(err); }
+});
+
+// PUT - Modificar estado de un método de autenticación (sólo superadministradores)
+router.put('/api/auth-methods/:id', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { activo } = req.body;
+    if (activo === undefined) {
+      return res.status(400).json({ error: 'El campo "activo" es obligatorio.' });
+    }
+
+    const updated = await db.updateAuthMethodStatus(id, !!activo);
+    if (!updated) {
+      return res.status(404).json({ error: 'Método de autenticación no encontrado.' });
+    }
+
+    await db.logAdminAudit({
+      username: req.adminUser,
+      ipAddress: getClientIp(req),
+      accion: 'MODIFICAR_ESTADO_METODO_AUTH',
+      detalles: `Cambió estado del método ${id} a activo=${activo}`
+    });
+
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
 // ─── Administradores (Múltiples Usuarios) ───
 
 router.get('/api/admins', requireAdmin, requireRol('administrador', 'superadministrador'), async (req, res, next) => {

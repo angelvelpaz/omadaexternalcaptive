@@ -1771,7 +1771,7 @@ router.delete('/api/ssids/:ssidName', requireAdmin, async (req, res, next) => {
 
 // ─── RUTAS PARA LISTA BLANCA DE DISPOSITIVOS (MAC BYPASS) ─────────────────────
 
-router.get('/api/mac-bypass', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.get('/api/mac-bypass', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const list = await db.listMacBypass();
     res.json(list);
@@ -1779,7 +1779,7 @@ router.get('/api/mac-bypass', requireAdmin, requireRol('superadministrador'), as
 });
 
 // GET - Listar todas las conexiones activas de mac-bypass
-router.get('/api/mac-bypass/active', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.get('/api/mac-bypass/active', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const sessions = await db.getActiveMacBypassSessions();
     res.json(sessions);
@@ -1787,7 +1787,7 @@ router.get('/api/mac-bypass/active', requireAdmin, requireRol('superadministrado
 });
 
 // POST - Importar dispositivos en bypass en lote desde CSV
-router.post('/api/mac-bypass/bulk-import', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.post('/api/mac-bypass/bulk-import', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { csvText } = req.body;
     if (!csvText) {
@@ -1856,7 +1856,7 @@ router.post('/api/mac-bypass/bulk-import', requireAdmin, requireRol('superadmini
 });
 
 // POST - Registrar nueva MAC en bypass
-router.post('/api/mac-bypass', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.post('/api/mac-bypass', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { macAddress, propietario, alias, ppsk, vlanId, cedula } = req.body;
     if (!macAddress || !propietario) {
@@ -1889,7 +1889,7 @@ router.post('/api/mac-bypass', requireAdmin, requireRol('superadministrador'), a
 });
 
 // PUT - Actualizar un bypass (Editar propietario, alias, ppsk, vlan_id, mac_address)
-router.put('/api/mac-bypass/:id', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.put('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { macAddress, propietario, alias, ppsk, vlanId, cedula } = req.body;
@@ -1933,7 +1933,7 @@ router.put('/api/mac-bypass/:id', requireAdmin, requireRol('superadministrador')
 });
 
 // PUT - Cambiar estado activo
-router.put('/api/mac-bypass/:id/active', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.put('/api/mac-bypass/:id/active', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { activo } = req.body;
@@ -1966,7 +1966,7 @@ router.put('/api/mac-bypass/:id/active', requireAdmin, requireRol('superadminist
 });
 
 // DELETE - Eliminar de la lista de bypass
-router.delete('/api/mac-bypass/:id', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.delete('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -1996,7 +1996,7 @@ router.delete('/api/mac-bypass/:id', requireAdmin, requireRol('superadministrado
 });
 
 // POST - Actualizar clave PPSK en lote
-router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { ids, ppsk } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -2034,7 +2034,7 @@ router.post('/api/mac-bypass/bulk-ppsk', requireAdmin, requireRol('superadminist
 });
 
 // POST - Actualizar VLAN en lote
-router.post('/api/mac-bypass/bulk-vlan', requireAdmin, requireRol('superadministrador'), async (req, res, next) => {
+router.post('/api/mac-bypass/bulk-vlan', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { ids, vlanId } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {

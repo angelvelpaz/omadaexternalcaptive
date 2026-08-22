@@ -450,6 +450,18 @@
             </button>
           </div>
 
+          <!-- Buscador de Conexiones Activas Autoregistro -->
+          <div class="mb-4 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <input type="text" id="users-active-search-input" placeholder="Buscar por cédula, nombre, MAC o IP..." 
+                oninput="onActiveUsersSearchInput(this.value)"
+                class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
+                🔍
+              </div>
+            </div>
+          </div>
+
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-gray-50 border-b">
@@ -623,6 +635,18 @@
           <button onclick="loadActiveBypasses()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm">
             🔄 Actualizar
           </button>
+        </div>
+
+        <!-- Buscador de Conexiones Activas MAB -->
+        <div class="mb-4 flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <input type="text" id="bypass-active-search-input" placeholder="Buscar por MAC, IP, propietario, alias o PPSK..." 
+              oninput="onActiveBypassSearchInput(this.value)"
+              class="w-full text-xs border border-gray-300 rounded-lg pl-8 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="absolute left-2.5 top-2 text-gray-400 text-xs">
+              🔍
+            </div>
+          </div>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -3017,6 +3041,9 @@ function switchUsersSubTab(tab) {
   loadUsers();
 }
 
+window._activeUsersList = [];
+window._activeUsersSearchQuery = '';
+
 async function loadActiveUsers() {
   const tbody = document.getElementById('users-active-tbody');
   if (!tbody) return;
@@ -3025,30 +3052,41 @@ async function loadActiveUsers() {
   
   try {
     const activeSessions = await api('GET', '/users/active');
-    window._activeUsersList = activeSessions;
+    window._activeUsersList = Array.isArray(activeSessions) ? activeSessions : [];
     
     // Update badge count
     const badge = document.getElementById('users-active-badge');
-    if (badge) badge.textContent = activeSessions.length;
+    if (badge) badge.textContent = window._activeUsersList.length;
     
-    renderActiveUsersTable(activeSessions);
+    renderActiveUsersTable();
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar conexiones: ${esc(err.message)}</td></tr>`;
   }
 }
 
-function renderActiveUsersTable(list) {
+function renderActiveUsersTable() {
   const tbody = document.getElementById('users-active-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
   
-  if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay conexiones activas en este momento.</td></tr>';
+  const query = window._activeUsersSearchQuery.toLowerCase();
+  const filtered = window._activeUsersList.filter(s => {
+    return (
+      String(s.cedula || '').toLowerCase().includes(query) ||
+      String(s.nombres || '').toLowerCase().includes(query) ||
+      String(s.apellidos || '').toLowerCase().includes(query) ||
+      String(s.mac_address || '').toLowerCase().includes(query) ||
+      String(s.ip_address || '').toLowerCase().includes(query)
+    );
+  });
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay conexiones activas que coincidan con la búsqueda.</td></tr>';
     document.getElementById('users-active-count').textContent = '0 conexiones activas';
     return;
   }
   
-  tbody.innerHTML = list.map(s => {
+  tbody.innerHTML = filtered.map(s => {
     const uploadFormatted = formatBytes(parseFloat(s.upload || 0));
     const downloadFormatted = formatBytes(parseFloat(s.download || 0));
     
@@ -3083,7 +3121,12 @@ function renderActiveUsersTable(list) {
     `;
   }).join('');
   
-  document.getElementById('users-active-count').textContent = `${list.length} conexión${list.length !== 1 ? 'es' : ''} activa${list.length !== 1 ? 's' : ''}`;
+  document.getElementById('users-active-count').textContent = `${filtered.length} conexión${filtered.length !== 1 ? 'es' : ''} activa${filtered.length !== 1 ? 's' : ''}`;
+}
+
+function onActiveUsersSearchInput(val) {
+  window._activeUsersSearchQuery = val.trim();
+  renderActiveUsersTable();
 }
 
 async function kickActiveUserDevice(radacctid, username, macAddress, nasIp) {
@@ -3439,6 +3482,9 @@ function switchBypassSubTab(tab) {
   }
 }
 
+window._activeBypassesList = [];
+window._activeBypassSearchQuery = '';
+
 async function loadActiveBypasses() {
   const tbody = document.getElementById('bypass-active-tbody');
   if (tbody) {
@@ -3446,10 +3492,10 @@ async function loadActiveBypasses() {
   }
   try {
     const activeSessions = await api('GET', '/mac-bypass/active');
-    window._activeBypassesList = activeSessions;
+    window._activeBypassesList = Array.isArray(activeSessions) ? activeSessions : [];
     const badge = document.getElementById('bypass-active-badge');
-    if (badge) badge.textContent = activeSessions.length;
-    renderActiveBypassesTable(activeSessions);
+    if (badge) badge.textContent = window._activeBypassesList.length;
+    renderActiveBypassesTable();
   } catch (err) {
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar la lista: ${esc(err.message)}</td></tr>`;
@@ -3457,18 +3503,29 @@ async function loadActiveBypasses() {
   }
 }
 
-function renderActiveBypassesTable(list) {
+function renderActiveBypassesTable() {
   const tbody = document.getElementById('bypass-active-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
   
-  if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay dispositivos en bypass conectados en este momento.</td></tr>';
+  const query = window._activeBypassSearchQuery.toLowerCase();
+  const filtered = window._activeBypassesList.filter(s => {
+    return (
+      String(s.mac_address || '').toLowerCase().includes(query) ||
+      String(s.ip_address || '').toLowerCase().includes(query) ||
+      String(s.propietario || '').toLowerCase().includes(query) ||
+      String(s.alias || '').toLowerCase().includes(query) ||
+      String(s.ppsk || '').toLowerCase().includes(query)
+    );
+  });
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay conexiones activas en bypass que coincidan con la búsqueda.</td></tr>';
     document.getElementById('bypass-active-count').textContent = '0 conexiones activas';
     return;
   }
   
-  list.forEach(s => {
+  filtered.forEach(s => {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50/50 transition-colors';
     
@@ -3500,7 +3557,12 @@ function renderActiveBypassesTable(list) {
     tbody.appendChild(tr);
   });
   
-  document.getElementById('bypass-active-count').textContent = `${list.length} conexión${list.length === 1 ? '' : 'es'} activa${list.length === 1 ? '' : 's'}`;
+  document.getElementById('bypass-active-count').textContent = `${filtered.length} conexión${filtered.length === 1 ? '' : 'es'} activa${filtered.length === 1 ? '' : 's'}`;
+}
+
+function onActiveBypassSearchInput(val) {
+  window._activeBypassSearchQuery = val.trim();
+  renderActiveBypassesTable();
 }
 
 async function kickActiveBypassDevice(mac) {

@@ -58,17 +58,6 @@ async function syncStats() {
       const mac = client.macAddress.toUpperCase().replace(/:/g, '-');
       processedMacs.add(mac);
 
-      // Buscar si el dispositivo está registrado a una cédula en la BD
-      const devRes = await pool.query(
-        "SELECT cedula FROM dispositivos_usuario WHERE REPLACE(UPPER(mac_address), ':', '-') = $1",
-        [mac]
-      );
-
-      if (devRes.rows.length === 0) {
-        continue;
-      }
-
-      const cedula = devRes.rows[0].cedula;
       const uptime = parseInt(client.uptime) || 0;
       const upload = parseInt(client.upload) || 0;
       const download = parseInt(client.download) || 0;
@@ -82,7 +71,7 @@ async function syncStats() {
       const calledStationId = client.apMac && client.ssid ? `${client.apMac}:${client.ssid}` : (client.ssid || null);
 
       const accRes = await pool.query(
-        `SELECT radacctid, acctsessionid
+        `SELECT radacctid, acctsessionid, username, nasipaddress
          FROM radacct
          WHERE REPLACE(UPPER(callingstationid), ':', '-') = $1 AND acctstoptime IS NULL LIMIT 1`,
         [mac]
@@ -91,27 +80,70 @@ async function syncStats() {
       if (accRes.rows.length > 0) {
         const existingSessionId = accRes.rows[0].acctsessionid;
         const radacctId = accRes.rows[0].radacctid;
+        const nasIp = accRes.rows[0].nasipaddress;
 
-        if (existingSessionId === sessionId) {
+        if (nasIp && nasIp !== '127.0.0.1') {
+          // Sesión nativa de FreeRADIUS (desde un AP físico): Solo actualizamos sus estadísticas
           await pool.query(
             `UPDATE radacct
              SET acctsessiontime = $1,
                  acctinputoctets = $2,
                  acctoutputoctets = $3,
                  acctupdatetime = NOW(),
-                 framedipaddress = $4,
+                 framedipaddress = COALESCE($4, framedipaddress),
                  calledstationid = COALESCE($5, calledstationid)
              WHERE radacctid = $6`,
             [uptime, upload, download, ip, calledStationId, radacctId]
           );
         } else {
-          await pool.query(
-            `UPDATE radacct
-             SET acctstoptime = NOW(), acctupdatetime = NOW()
-             WHERE radacctid = $1`,
-            [radacctId]
-          );
+          // Sesión interna creada por el portal
+          if (existingSessionId === sessionId) {
+            await pool.query(
+              `UPDATE radacct
+               SET acctsessiontime = $1,
+                   acctinputoctets = $2,
+                   acctoutputoctets = $3,
+                   acctupdatetime = NOW(),
+                   framedipaddress = $4,
+                   calledstationid = COALESCE($5, calledstationid)
+               WHERE radacctid = $6`,
+              [uptime, upload, download, ip, calledStationId, radacctId]
+            );
+          } else {
+            // Re-conexión detectada: Cerrar la anterior e insertar una nueva sesión interna
+            await pool.query(
+              `UPDATE radacct
+               SET acctstoptime = NOW(), acctupdatetime = NOW()
+               WHERE radacctid = $1`,
+              [radacctId]
+            );
 
+            const devRes = await pool.query(
+              "SELECT cedula FROM dispositivos_usuario WHERE REPLACE(UPPER(mac_address), ':', '-') = $1",
+              [mac]
+            );
+            const usernameVal = devRes.rows.length > 0 ? devRes.rows[0].cedula : client.macAddress;
+
+            await pool.query(
+              `INSERT INTO radacct (
+                 acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
+                 acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
+                 acctinputoctets, acctoutputoctets, callingstationid, framedipaddress, calledstationid
+               ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9, $10)
+               ON CONFLICT (acctuniqueid) DO NOTHING`,
+              [sessionId, uniqueId, usernameVal, startTime, uptime, upload, download, mac, ip, calledStationId]
+            );
+          }
+        }
+      } else {
+        // No existe sesión activa en radacct. La creamos localmente sólo si es un dispositivo de Autoregistro
+        const devRes = await pool.query(
+          "SELECT cedula FROM dispositivos_usuario WHERE REPLACE(UPPER(mac_address), ':', '-') = $1",
+          [mac]
+        );
+
+        if (devRes.rows.length > 0) {
+          const cedula = devRes.rows[0].cedula;
           await pool.query(
             `INSERT INTO radacct (
                acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
@@ -122,16 +154,6 @@ async function syncStats() {
             [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip, calledStationId]
           );
         }
-      } else {
-        await pool.query(
-          `INSERT INTO radacct (
-             acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
-             acctstarttime, acctupdatetime, acctstoptime, acctsessiontime,
-             acctinputoctets, acctoutputoctets, callingstationid, framedipaddress, calledstationid
-           ) VALUES ($1, $2, $3, '127.0.0.1', NULL, 'Wireless-802.11', $4, NOW(), NULL, $5, $6, $7, $8, $9, $10)
-           ON CONFLICT (acctuniqueid) DO NOTHING`,
-          [sessionId, uniqueId, cedula, startTime, uptime, upload, download, mac, ip, calledStationId]
-        );
       }
     }
 

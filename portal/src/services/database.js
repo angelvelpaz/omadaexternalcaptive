@@ -1195,83 +1195,96 @@ async function getConnectionsReport({ search = '', ssid = '', startDate, endDate
 }
 
 async function getConsolidatedConnectionsReport({ search = '', ssid = '', startDate, endDate, limit = 50, offset = 0 } = {}) {
-  let innerQuery = `
-    SELECT 
-      COALESCE(u.cedula, r.username) AS cedula,
-      COALESCE(u.nombres, 'Sin Registro') AS nombres,
-      COALESCE(u.apellidos, '') AS apellidos,
-      u.tipo_usuario,
-      REPLACE(UPPER(r.callingstationid), ':', '-') AS mac_address,
-      MAX(
-        CASE 
-          WHEN POSITION(':' IN r.calledstationid) > 0 THEN SUBSTRING(r.calledstationid FROM POSITION(':' IN r.calledstationid) + 1)
-          ELSE r.calledstationid
-        END
-      ) AS ssid,
-      COUNT(r.radacctid)::int AS total_sesiones,
-      MIN(r.acctstarttime) AS primera_conexion,
-      MAX(r.acctstarttime) AS ultima_conexion,
-      SUM(
-        CASE 
-          WHEN r.acctstoptime IS NULL THEN EXTRACT(EPOCH FROM (NOW() - r.acctstarttime))::bigint
-          ELSE r.acctsessiontime
-        END
-      )::bigint AS duration,
-      SUM(COALESCE(r.acctinputoctets, 0))::bigint AS upload,
-      SUM(COALESCE(r.acctoutputoctets, 0))::bigint AS download,
-      SUM(COALESCE(r.acctinputoctets, 0) + COALESCE(r.acctoutputoctets, 0))::bigint AS total_bytes
-    FROM radacct r
-    LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(r.callingstationid), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
-    LEFT JOIN usuarios_portal u ON u.cedula = (
-      CASE 
-        WHEN r.username ~ '^[0-9]+$' THEN r.username 
-        ELSE d.cedula 
-      END
-    )
-    WHERE r.callingstationid IS NOT NULL AND r.callingstationid <> ''
-  `;
+  let cteFilters = "WHERE callingstationid IS NOT NULL AND callingstationid <> ''";
   const params = [];
   let paramIdx = 1;
 
+  if (startDate) {
+    cteFilters += ` AND acctstarttime >= $${paramIdx}`;
+    params.push(startDate);
+    paramIdx++;
+  }
+  if (endDate) {
+    cteFilters += ` AND acctstarttime <= $${paramIdx}`;
+    params.push(endDate);
+    paramIdx++;
+  }
+
+  let query = `
+    WITH agg AS (
+      SELECT 
+        username,
+        callingstationid AS mac_address,
+        MAX(
+          CASE 
+            WHEN POSITION(':' IN calledstationid) > 0 THEN SUBSTRING(calledstationid FROM POSITION(':' IN calledstationid) + 1)
+            ELSE calledstationid
+          END
+        ) AS ssid,
+        COUNT(radacctid)::int AS total_sesiones,
+        MIN(acctstarttime) AS primera_conexion,
+        MAX(acctstarttime) AS ultima_conexion,
+        SUM(
+          CASE 
+            WHEN acctstoptime IS NULL THEN EXTRACT(EPOCH FROM (NOW() - acctstarttime))::bigint
+            ELSE acctsessiontime
+          END
+        )::bigint AS duration,
+        SUM(COALESCE(acctinputoctets, 0))::bigint AS upload,
+        SUM(COALESCE(acctoutputoctets, 0))::bigint AS download
+      FROM radacct
+      ${cteFilters}
+      GROUP BY username, callingstationid
+    )
+    SELECT 
+      COALESCE(u.cedula, a.username) AS cedula,
+      COALESCE(u.nombres, 'Sin Registro') AS nombres,
+      COALESCE(u.apellidos, '') AS apellidos,
+      u.tipo_usuario,
+      REPLACE(UPPER(a.mac_address), ':', '-') AS mac_address,
+      a.ssid,
+      a.total_sesiones,
+      a.primera_conexion,
+      a.ultima_conexion,
+      a.duration,
+      a.upload,
+      a.download,
+      (a.upload + a.download) AS total_bytes,
+      COUNT(*) OVER()::int AS total_count
+    FROM agg a
+    LEFT JOIN dispositivos_usuario d ON REPLACE(UPPER(a.mac_address), ':', '-') = REPLACE(UPPER(d.mac_address), ':', '-')
+    LEFT JOIN usuarios_portal u ON u.cedula = (
+      CASE 
+        WHEN a.username ~ '^[0-9]+$' THEN a.username 
+        ELSE d.cedula 
+      END
+    )
+    WHERE 1=1
+  `;
+
   if (search) {
-    innerQuery += ` AND (r.username ILIKE $${paramIdx} OR u.cedula ILIKE $${paramIdx} OR u.nombres ILIKE $${paramIdx} OR u.apellidos ILIKE $${paramIdx} OR r.callingstationid ILIKE $${paramIdx})`;
+    query += ` AND (a.username ILIKE $${paramIdx} OR u.cedula ILIKE $${paramIdx} OR u.nombres ILIKE $${paramIdx} OR u.apellidos ILIKE $${paramIdx} OR a.mac_address ILIKE $${paramIdx})`;
     params.push(`%${search}%`);
     paramIdx++;
   }
 
   if (ssid) {
-    innerQuery += ` AND (r.calledstationid ILIKE $${paramIdx} OR (POSITION(':' IN r.calledstationid) > 0 AND SUBSTRING(r.calledstationid FROM POSITION(':' IN r.calledstationid) + 1) ILIKE $${paramIdx}))`;
+    query += ` AND a.ssid ILIKE $${paramIdx}`;
     params.push(`%${ssid}%`);
     paramIdx++;
   }
 
-  if (startDate) {
-    innerQuery += ` AND r.acctstarttime >= $${paramIdx}`;
-    params.push(startDate);
-    paramIdx++;
-  }
-
-  if (endDate) {
-    innerQuery += ` AND r.acctstarttime <= $${paramIdx}`;
-    params.push(endDate);
-    paramIdx++;
-  }
-
-  innerQuery += ` GROUP BY COALESCE(u.cedula, r.username), u.nombres, u.apellidos, u.tipo_usuario, REPLACE(UPPER(r.callingstationid), ':', '-')`;
-
-  const countQuery = `SELECT COUNT(*) FROM (${innerQuery}) AS total_cnt`;
-  const totalRes = await pool.query(countQuery, params);
-
-  let fullQuery = `${innerQuery} ORDER BY total_bytes DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+  query += ` ORDER BY total_bytes DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
   params.push(limit, offset);
 
-  const res = await pool.query(fullQuery, params);
+  const res = await pool.query(query, params);
   const data = res.rows.map(row => ({
     ...row,
     vendor: getVendor(row.mac_address)
   }));
 
-  return { data, total: parseInt(totalRes.rows[0].count) };
+  const total = data.length > 0 ? data[0].total_count : 0;
+  return { data, total };
 }
 
 async function getDistinctSsids() {

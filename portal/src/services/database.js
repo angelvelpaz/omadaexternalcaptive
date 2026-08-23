@@ -1276,13 +1276,24 @@ async function getConsolidatedConnectionsReport({ search = '', ssid = '', startD
 
 async function getDistinctSsids() {
   const res = await pool.query(`
-    SELECT DISTINCT 
-      CASE 
-        WHEN POSITION(':' IN calledstationid) > 0 THEN SUBSTRING(calledstationid FROM POSITION(':' IN calledstationid) + 1)
-        ELSE calledstationid
-      END AS ssid
-    FROM radacct 
-    WHERE calledstationid IS NOT NULL AND calledstationid <> ''
+    SELECT DISTINCT ssid FROM (
+      SELECT ssid_name AS ssid FROM ssid_config
+      UNION
+      (WITH RECURSIVE t AS (
+         (SELECT calledstationid FROM radacct WHERE calledstationid IS NOT NULL AND calledstationid <> '' ORDER BY calledstationid LIMIT 1)
+         UNION ALL
+         SELECT (SELECT calledstationid FROM radacct WHERE calledstationid > t.calledstationid AND calledstationid IS NOT NULL AND calledstationid <> '' ORDER BY calledstationid LIMIT 1)
+         FROM t
+         WHERE t.calledstationid IS NOT NULL
+      )
+      SELECT 
+        CASE 
+          WHEN POSITION(':' IN calledstationid) > 0 THEN SUBSTRING(calledstationid FROM POSITION(':' IN calledstationid) + 1)
+          ELSE calledstationid
+        END AS ssid
+      FROM t
+      WHERE calledstationid IS NOT NULL)
+    ) AS combined
     ORDER BY ssid ASC
   `);
   return res.rows.map(r => r.ssid).filter(Boolean);

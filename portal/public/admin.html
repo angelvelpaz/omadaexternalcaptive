@@ -1371,12 +1371,13 @@
             <thead>
               <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold">
                 <th class="p-4">Usuario</th>
+                <th class="p-4">Nombre / Propietario</th>
                 <th class="p-4">Dirección MAC</th>
                 <th class="p-4">Dirección IP</th>
-                <th class="p-4">IP del AP (NAS)</th>
+                <th class="p-4">Tipo de Acceso</th>
                 <th class="p-4">Inicio de Sesión</th>
                 <th class="p-4">Tiempo Activo</th>
-                <th class="p-4">Subida / Bajada</th>
+                <th class="p-4">Tráfico (Subida/Bajada)</th>
                 <th class="p-4 text-right">Acciones</th>
               </tr>
             </thead>
@@ -7841,13 +7842,13 @@ function debouncedResolveMacBypassOwner() {
 async function loadActiveSessions() {
   const tbody = document.getElementById('active-sessions-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando sesiones...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400"><div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2"></div> Cargando sesiones...</td></tr>';
   
   try {
     const list = await api('GET', '/active-sessions');
     renderActiveSessionsTable(list);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-medium">Error al cargar sesiones: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-red-500 font-medium">Error al cargar sesiones: ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -7857,7 +7858,7 @@ function renderActiveSessionsTable(list) {
   tbody.innerHTML = '';
   
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400">No hay sesiones activas en este momento.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay sesiones activas en este momento.</td></tr>';
     document.getElementById('active-sessions-count').textContent = '0 sesiones activas';
     return;
   }
@@ -7884,12 +7885,26 @@ function renderActiveSessionsTable(list) {
       if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
       return (bytes / 1073741824).toFixed(1) + ' GB';
     };
+
+    const getTipoBadge = (tipo) => {
+      const badges = {
+        'WPA Enterprise': 'bg-blue-50 text-blue-700 border-blue-200/50',
+        'PPSK / MAB': 'bg-amber-50 text-amber-700 border-amber-200/50',
+        'Huéspedes (Hotel)': 'bg-yellow-50 text-yellow-700 border-yellow-200/50',
+        'PIN (Restaurante)': 'bg-purple-50 text-purple-700 border-purple-200/50',
+        'Portal LDAP': 'bg-indigo-50 text-indigo-700 border-indigo-200/50',
+        'Autoregistro (Cédula)': 'bg-green-50 text-green-700 border-green-200/50'
+      };
+      const cls = badges[tipo] || 'bg-gray-50 text-gray-700 border-gray-200/50';
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cls}">${tipo}</span>`;
+    };
     
     tr.innerHTML = `
       <td class="p-4 font-semibold text-gray-800">${esc(s.username)}</td>
+      <td class="p-4 text-gray-600 font-medium">${esc(s.propietario || 'Invitado')}</td>
       <td class="p-4 font-mono text-gray-600">${esc(s.mac_address)}</td>
       <td class="p-4 font-mono text-gray-600">${esc(s.ip_address || '—')}</td>
-      <td class="p-4 font-mono text-gray-600">${esc(s.nas_ip || '—')}</td>
+      <td class="p-4">${getTipoBadge(s.tipo_conexion)}</td>
       <td class="p-4 text-gray-500">${startTime}</td>
       <td class="p-4 text-gray-500 font-medium">${activeTimeStr}</td>
       <td class="p-4 text-gray-500 font-mono text-xs">▲ ${formatBytes(upBytes)} / ▼ ${formatBytes(downBytes)}</td>

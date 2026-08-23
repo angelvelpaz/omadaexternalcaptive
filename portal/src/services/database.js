@@ -1473,8 +1473,19 @@ async function getActiveSessions() {
       r.acctstarttime AS start_time,
       r.acctsessiontime AS session_time,
       r.acctinputoctets AS upload,
-      r.acctoutputoctets AS download
+      r.acctoutputoctets AS download,
+      COALESCE(u.nombres || ' ' || u.apellidos, b.propietario, '') AS propietario,
+      CASE 
+        WHEN r.acctauthentic = 'RADIUS' THEN 'WPA Enterprise'
+        WHEN b.id IS NOT NULL THEN 'PPSK / MAB'
+        WHEN u.tipo_usuario = 'hotel' THEN 'Huéspedes (Hotel)'
+        WHEN u.tipo_usuario = 'restaurant' THEN 'PIN (Restaurante)'
+        WHEN u.tipo_usuario = 'ldap_portal' THEN 'Portal LDAP'
+        ELSE 'Autoregistro (Cédula)'
+      END AS tipo_conexion
     FROM radacct r
+    LEFT JOIN usuarios_portal u ON u.radius_username = r.username OR u.cedula = r.username
+    LEFT JOIN mac_bypass b ON REPLACE(REPLACE(UPPER(b.mac_address), ':', ''), '-', '') = REPLACE(REPLACE(UPPER(r.callingstationid), ':', ''), '-', '')
     WHERE r.acctstoptime IS NULL
     ORDER BY r.acctstarttime DESC
   `;

@@ -8,23 +8,29 @@ function getTransporter() {
   const pass = process.env.SMTP_PASS;
   const secure = process.env.SMTP_SECURE === 'true'; // true para puerto 465, false para otros
 
-  if (!host || !user || !pass) {
-    console.warn('[EMAIL] Configuración de SMTP incompleta en las variables de entorno. Los correos no se enviarán.');
+  if (!host) {
+    console.warn('[EMAIL] SMTP_HOST no configurado en las variables de entorno. Los correos no se enviarán.');
     return null;
   }
 
-  return nodemailer.createTransport({
+  const transportConfig = {
     host,
     port,
     secure,
-    auth: {
-      user,
-      pass
-    },
     tls: {
       rejectUnauthorized: false // Permite certificados autofirmados institucionales si aplica
     }
-  });
+  };
+
+  // Si se configuran tanto el usuario como la contraseña, agregar autenticación
+  if (user && pass) {
+    transportConfig.auth = {
+      user,
+      pass
+    };
+  }
+
+  return nodemailer.createTransport(transportConfig);
 }
 
 /**
@@ -36,7 +42,8 @@ async function sendResetPasswordEmail({ to, nombres, token }) {
     throw new Error('El servicio de correo institucional no está configurado.');
   }
 
-  const from = process.env.SMTP_FROM || `"Portal Administrativo Pastaza" <${process.env.SMTP_USER}>`;
+  const defaultFrom = process.env.SMTP_USER || 'no-reply@pastaza.gob.ec';
+  const from = process.env.SMTP_FROM || `"Portal Administrativo Pastaza" <${defaultFrom}>`;
   
   // URL base del portal (usar variables de entorno o fallback a localhost)
   const baseUrl = process.env.PORTAL_ADMIN_URL || 'https://omada.pastaza.gob.ec/admin';

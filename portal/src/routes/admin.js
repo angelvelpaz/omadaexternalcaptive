@@ -3702,20 +3702,31 @@ router.post('/api/users', requireAdmin,
 
 router.post('/api/admins', requireAdmin, requireRol('superadministrador'),
   body('username').isString().trim().isLength({ min: 3, max: 50 }).matches(/^[a-zA-Z0-9_.-]+$/),
-  body('password').isString().isLength({ min: 6 }),
+  body('password').custom((value, { req }) => {
+    if (!req.body.sendLink && (!value || value.length < 6)) {
+      throw new Error('La contraseña debe tener al menos 6 caracteres');
+    }
+    return true;
+  }),
   body('nombres').isString().trim().isLength({ min: 2, max: 100 }),
   body('email').isEmail().normalizeEmail(),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'Datos de administrador inválidos. Verifique que la contraseña tenga al menos 6 caracteres y el correo sea válido.' });
+        return res.status(400).json({ error: 'Datos de administrador inválidos. Verifique que el correo sea válido y la contraseña tenga min. 6 caracteres si no envía enlace.' });
       }
       
-      const { username, password, nombres, email, rol } = req.body;
+      const { username, password, nombres, email, rol, sendLink } = req.body;
       const clientIp = getClientIp(req);
       
-      const newAdmin = await db.createAdmin({ username, password, nombres, email, rol });
+      let finalPassword = password;
+      if (sendLink) {
+        const crypto = require('crypto');
+        finalPassword = crypto.randomBytes(24).toString('hex');
+      }
+      
+      const newAdmin = await db.createAdmin({ username, password: finalPassword, nombres, email, rol });
       
       await db.logAdminAudit({
         username: req.adminUser,
@@ -3723,6 +3734,28 @@ router.post('/api/admins', requireAdmin, requireRol('superadministrador'),
         accion: 'CREAR_ADMINISTRADOR',
         detalles: `Creó el administrador: ${newAdmin.username} (${newAdmin.nombres}) con correo: ${newAdmin.email} y rol: ${newAdmin.rol}`
       });
+
+      if (sendLink) {
+        const crypto = require('crypto');
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+        
+        await db.createPasswordResetToken(newAdmin.username, token, expiresAt);
+        
+        const emailService = require('../services/email');
+        await emailService.sendResetPasswordEmail({
+          to: newAdmin.email,
+          nombres: newAdmin.nombres,
+          token: token
+        });
+        
+        await db.logAdminAudit({
+          username: req.adminUser,
+          ipAddress: clientIp,
+          accion: 'SOLICITUD_ESTABLECIMIENTO_CONTRASENA_CREACION',
+          detalles: `Enviado correo de establecimiento de contraseña a: ${newAdmin.email} al crear la cuenta`
+        });
+      }
       
       res.status(201).json(newAdmin);
     } catch (err) {
@@ -3760,6 +3793,56 @@ router.put('/api/admins/:username/status', requireAdmin, requireRol('administrad
       res.json({ ok: true });
     } catch (err) {
       res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+router.post('/api/admins/:username/send-reset-link', requireAdmin, requireRol('superadministrador'),
+  param('username').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Parámetro username inválido.' });
+      }
+      
+      const username = req.params.username;
+      
+      const admins = await db.getPool().query(
+        'SELECT username, nombres, email FROM administradores WHERE username = $1 LIMIT 1',
+        [username]
+      );
+      const admin = admins.rows[0];
+      if (!admin) {
+        return res.status(404).json({ error: 'Administrador no encontrado.' });
+      }
+      if (!admin.email) {
+        return res.status(400).json({ error: 'El administrador no tiene un correo electrónico configurado.' });
+      }
+      
+      const crypto = require('crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+      
+      await db.createPasswordResetToken(username, token, expiresAt);
+      
+      const emailService = require('../services/email');
+      await emailService.sendResetPasswordEmail({
+        to: admin.email,
+        nombres: admin.nombres,
+        token: token
+      });
+      
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: getClientIp(req),
+        accion: 'SOLICITUD_RESTABLECIMIENTO_CONTRASENA_FORZADA',
+        detalles: `Superadministrador envió enlace de restablecimiento al correo: ${admin.email}`
+      });
+      
+      res.json({ success: true, message: `Enlace de restablecimiento enviado con éxito al correo ${admin.email}.` });
+    } catch (err) {
+      next(err);
     }
   }
 );

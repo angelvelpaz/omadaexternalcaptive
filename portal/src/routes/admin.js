@@ -3750,6 +3750,7 @@ router.post('/api/admins', requireAdmin, requireRol('superadministrador'),
         await emailService.sendResetPasswordEmail({
           to: newAdmin.email,
           nombres: newAdmin.nombres,
+          username: newAdmin.username,
           token: token
         });
         
@@ -3834,6 +3835,7 @@ router.post('/api/admins/:username/send-reset-link', requireAdmin, requireRol('s
       await emailService.sendResetPasswordEmail({
         to: admin.email,
         nombres: admin.nombres,
+        username: admin.username,
         token: token
       });
       
@@ -4083,6 +4085,7 @@ router.post('/api/forgot-password',
       await emailService.sendResetPasswordEmail({
         to: admin.email,
         nombres: admin.nombres,
+        username: admin.username,
         token: token
       });
       

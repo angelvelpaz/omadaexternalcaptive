@@ -36,7 +36,7 @@ function getTransporter() {
 /**
  * Envía un correo con el enlace para restablecer la contraseña.
  */
-async function sendResetPasswordEmail({ to, nombres, token }) {
+async function sendResetPasswordEmail({ to, nombres, username, token }) {
   const transporter = getTransporter();
   if (!transporter) {
     throw new Error('El servicio de correo institucional no está configurado.');
@@ -58,7 +58,7 @@ async function sendResetPasswordEmail({ to, nombres, token }) {
         <h2 style="color: #1e3a8a; text-align: center;">Portal Administrativo Pastaza</h2>
         <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
         <p>Estimado/a <strong>${nombres}</strong>,</p>
-        <p>Hemos recibido una solicitud para restablecer la contraseña de su cuenta de administración del portal cautivo.</p>
+        <p>Hemos recibido una solicitud para restablecer la contraseña de su cuenta de administración <strong>${username}</strong> del portal cautivo.</p>
         <p>Para proceder, haga clic en el siguiente botón. Este enlace es válido por <strong>15 minutos</strong>:</p>
         <div style="text-align: center; margin: 30px 0;">
           <a href="${resetLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Restablecer Contraseña</a>

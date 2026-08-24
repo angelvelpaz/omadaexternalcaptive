@@ -190,6 +190,10 @@ router.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC, 'admin.html'));
 });
 
+router.get('/reset-password.html', (req, res) => {
+  res.sendFile(path.join(PUBLIC, 'reset-password.html'));
+});
+
 // ─── Estadísticas ─────────────────────────────────────────────────────────────
 
 router.get('/api/stats', requireAdmin, async (req, res, next) => {

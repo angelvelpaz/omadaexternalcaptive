@@ -83,18 +83,40 @@ async function connectOnce() {
       nombres        VARCHAR(100) NOT NULL,
       activo         BOOLEAN DEFAULT TRUE,
       rol            VARCHAR(30) DEFAULT 'operador',
-      created_at     TIMESTAMPTZ DEFAULT NOW()
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      email          VARCHAR(150) UNIQUE DEFAULT NULL,
+      tfa_activo     BOOLEAN DEFAULT FALSE,
+      tfa_secret     VARCHAR(128) DEFAULT NULL,
+      tfa_backup_codes VARCHAR(256)[] DEFAULT NULL
+    )
+  `);
+
+  await client.query('ALTER TABLE administradores ADD COLUMN IF NOT EXISTS email VARCHAR(150) UNIQUE DEFAULT NULL');
+  await client.query('ALTER TABLE administradores ADD COLUMN IF NOT EXISTS tfa_activo BOOLEAN DEFAULT FALSE');
+  await client.query('ALTER TABLE administradores ADD COLUMN IF NOT EXISTS tfa_secret VARCHAR(128) DEFAULT NULL');
+  await client.query('ALTER TABLE administradores ADD COLUMN IF NOT EXISTS tfa_backup_codes VARCHAR(256)[] DEFAULT NULL');
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS admin_password_resets (
+      id         SERIAL PRIMARY KEY,
+      username   VARCHAR(50) NOT NULL REFERENCES administradores(username) ON DELETE CASCADE,
+      token      VARCHAR(128) UNIQUE NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 
   await client.query(`
     CREATE TABLE IF NOT EXISTS admin_sessions (
-      token       VARCHAR(255) PRIMARY KEY,
-      username    VARCHAR(50) NOT NULL REFERENCES administradores(username) ON DELETE CASCADE,
-      created_at  TIMESTAMPTZ DEFAULT NOW(),
-      expires_at  TIMESTAMPTZ NOT NULL
+      token        VARCHAR(255) PRIMARY KEY,
+      username     VARCHAR(50) NOT NULL REFERENCES administradores(username) ON DELETE CASCADE,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      expires_at   TIMESTAMPTZ NOT NULL,
+      tfa_verified BOOLEAN DEFAULT TRUE
     )
   `);
+
+  await client.query('ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS tfa_verified BOOLEAN DEFAULT TRUE');
 
   await client.query(`
     CREATE TABLE IF NOT EXISTS auditoria_admin (
@@ -2031,24 +2053,32 @@ function verifyAdminPassword(password, storedHash) {
 
 async function verifyAdminLogin(username, password) {
   const res = await pool.query(
-    'SELECT username, password_hash, nombres, activo, rol FROM administradores WHERE username = $1 LIMIT 1',
+    'SELECT username, password_hash, nombres, activo, rol, email, tfa_activo, tfa_secret, tfa_backup_codes FROM administradores WHERE username = $1 LIMIT 1',
     [username.trim().toLowerCase()]
   );
   const admin = res.rows[0];
   if (!admin || !admin.activo) return null;
   if (verifyAdminPassword(password, admin.password_hash)) {
-    return { username: admin.username, nombres: admin.nombres, rol: admin.rol || 'operador' };
+    return {
+      username: admin.username,
+      nombres: admin.nombres,
+      rol: admin.rol || 'operador',
+      email: admin.email,
+      tfa_activo: admin.tfa_activo,
+      tfa_secret: admin.tfa_secret,
+      tfa_backup_codes: admin.tfa_backup_codes
+    };
   }
   return null;
 }
 
-async function createAdminSession(username) {
+async function createAdminSession(username, tfaVerified = true, expiresMinutes = 120) {
   const token = crypto.randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 horas
+  const expiresAt = new Date(Date.now() + expiresMinutes * 60 * 1000);
   await pool.query(
-    `INSERT INTO admin_sessions (token, username, expires_at)
-     VALUES ($1, $2, $3)`,
-    [token, username, expiresAt]
+    `INSERT INTO admin_sessions (token, username, expires_at, tfa_verified)
+     VALUES ($1, $2, $3, $4)`,
+    [token, username, expiresAt, tfaVerified]
   );
   return { token, expiresAt };
 }
@@ -2058,7 +2088,7 @@ async function getAdminBySessionToken(token) {
     `SELECT s.username, a.rol, a.nombres
      FROM admin_sessions s
      JOIN administradores a ON a.username = s.username
-     WHERE s.token = $1 AND s.expires_at > NOW() AND a.activo = TRUE LIMIT 1`,
+     WHERE s.token = $1 AND s.expires_at > NOW() AND s.tfa_verified = TRUE AND a.activo = TRUE LIMIT 1`,
     [token]
   );
   const session = res.rows[0];
@@ -2072,6 +2102,23 @@ async function getAdminBySessionToken(token) {
   );
   
   return { username: session.username, rol: session.rol || 'operador', nombres: session.nombres };
+}
+
+async function verifyTfaSession(token) {
+  const res = await pool.query(
+    `SELECT username FROM admin_sessions
+     WHERE token = $1 AND expires_at > NOW() AND tfa_verified = FALSE LIMIT 1`,
+    [token]
+  );
+  const session = res.rows[0];
+  if (!session) return null;
+  
+  const newExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 horas
+  await pool.query(
+    'UPDATE admin_sessions SET tfa_verified = TRUE, expires_at = $1 WHERE token = $2',
+    [newExpiresAt, token]
+  );
+  return session.username;
 }
 
 async function deleteAdminSession(token) {
@@ -2088,22 +2135,96 @@ async function logAdminAudit({ username, ipAddress, accion, detalles }) {
 
 async function listAdmins() {
   const res = await pool.query(
-    'SELECT id, username, nombres, activo, rol, created_at FROM administradores ORDER BY username ASC'
+    'SELECT id, username, nombres, email, tfa_activo, activo, rol, created_at FROM administradores ORDER BY username ASC'
   );
   return res.rows;
 }
 
-async function createAdmin({ username, password, nombres, rol = 'operador' }) {
+async function createAdmin({ username, password, nombres, email, rol = 'operador' }) {
   const validRoles = ['operador', 'administrador', 'superadministrador'];
   const rolFinal = validRoles.includes(rol) ? rol : 'operador';
   const hash = hashAdminPassword(password);
   const res = await pool.query(
-    `INSERT INTO administradores (username, password_hash, nombres, activo, rol)
-     VALUES ($1, $2, $3, TRUE, $4)
-     RETURNING id, username, nombres, rol`,
-    [username.trim().toLowerCase(), hash, nombres.trim(), rolFinal]
+    `INSERT INTO administradores (username, password_hash, nombres, email, activo, rol)
+     VALUES ($1, $2, $3, $4, TRUE, $5)
+     RETURNING id, username, nombres, email, rol`,
+    [username.trim().toLowerCase(), hash, nombres.trim(), email ? email.trim().toLowerCase() : null, rolFinal]
   );
   return res.rows[0];
+}
+
+async function updateAdminProfile(username, { nombres, email, rol }) {
+  const validRoles = ['operador', 'administrador', 'superadministrador'];
+  const rolFinal = validRoles.includes(rol) ? rol : 'operador';
+  const userLower = username.trim().toLowerCase();
+  
+  if (userLower === 'admin') {
+    // El admin principal siempre es superadministrador
+    await pool.query(
+      'UPDATE administradores SET nombres = $1, email = $2 WHERE username = $3',
+      [nombres.trim(), email ? email.trim().toLowerCase() : null, userLower]
+    );
+  } else {
+    await pool.query(
+      'UPDATE administradores SET nombres = $1, email = $2, rol = $3 WHERE username = $4',
+      [nombres.trim(), email ? email.trim().toLowerCase() : null, rolFinal, userLower]
+    );
+  }
+}
+
+async function getAdminByEmail(email) {
+  if (!email) return null;
+  const res = await pool.query(
+    'SELECT username, email, nombres, tfa_activo FROM administradores WHERE UPPER(email) = UPPER($1) LIMIT 1',
+    [email.trim()]
+  );
+  return res.rows[0];
+}
+
+async function saveTfaSecret(username, secret, backupCodes) {
+  await pool.query(
+    'UPDATE administradores SET tfa_secret = $1, tfa_backup_codes = $2 WHERE username = $3',
+    [secret, backupCodes, username.trim().toLowerCase()]
+  );
+}
+
+async function enableTfa(username) {
+  await pool.query(
+    'UPDATE administradores SET tfa_activo = TRUE WHERE username = $1',
+    [username.trim().toLowerCase()]
+  );
+}
+
+async function disableTfa(username) {
+  await pool.query(
+    'UPDATE administradores SET tfa_activo = FALSE, tfa_secret = NULL, tfa_backup_codes = NULL WHERE username = $1',
+    [username.trim().toLowerCase()]
+  );
+}
+
+async function createPasswordResetToken(username, token, expiresAt) {
+  // Limpiar tokens anteriores del mismo usuario
+  await pool.query('DELETE FROM admin_password_resets WHERE username = $1', [username.trim().toLowerCase()]);
+  
+  await pool.query(
+    'INSERT INTO admin_password_resets (username, token, expires_at) VALUES ($1, $2, $3)',
+    [username.trim().toLowerCase(), token, expiresAt]
+  );
+}
+
+async function verifyPasswordResetToken(token) {
+  const res = await pool.query(
+    `SELECT r.username, r.expires_at, a.tfa_activo, a.email
+     FROM admin_password_resets r
+     JOIN administradores a ON a.username = r.username
+     WHERE r.token = $1 AND r.expires_at > NOW() LIMIT 1`,
+    [token]
+  );
+  return res.rows[0];
+}
+
+async function deletePasswordResetToken(token) {
+  await pool.query('DELETE FROM admin_password_resets WHERE token = $1', [token]);
 }
 
 async function updateAdminRol(username, rol) {
@@ -3107,9 +3228,11 @@ module.exports = {
   getUserDevicesCount, isDeviceRegistered, getUserByDeviceMac, listAllDevices, updateUserDevice,
   getRandomMacStats, getRandomMacPreview, purgeRandomMacs, runScheduledMaintenance, getActiveSessions, getActiveWpaSessions, disconnectRadiusClient,
   // administradores y auditoría
-  verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession,
+  verifyAdminLogin, createAdminSession, getAdminBySessionToken, deleteAdminSession, verifyTfaSession,
   logAdminAudit, listAdmins, createAdmin, updateAdminStatus, updateAdminPassword,
-  deleteAdmin, getAdminAuditLogs, updateAdminRol,
+  deleteAdmin, getAdminAuditLogs, updateAdminRol, updateAdminProfile, getAdminByEmail,
+  saveTfaSecret, enableTfa, disableTfa, createPasswordResetToken, verifyPasswordResetToken,
+  deletePasswordResetToken,
   // ssid configurations
   getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
   // mac bypass admin

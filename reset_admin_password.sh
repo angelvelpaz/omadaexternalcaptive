@@ -47,46 +47,81 @@ if [ "$USER_EXISTS" != "1" ]; then
   exit 1
 fi
 
-# Solicitar la nueva contraseña
-read -s -p "Ingrese la nueva contraseña para '${ADMIN_USER}': " NEW_PWD
-echo ""
-read -s -p "Confirme la nueva contraseña: " NEW_PWD_CONFIRM
-echo ""
+# Solicitar la acción a realizar
+echo -e "\nSeleccione la acción que desea ejecutar para '${ADMIN_USER}':"
+echo -e "1) Restablecer Contraseña"
+echo -e "2) Desactivar Doble Factor (2FA)"
+echo -e "3) Realizar ambos (Restablecer contraseña y desactivar 2FA)"
+read -p "Seleccione una opción [1]: " ACCION_OPCION
+ACCION_OPCION=${ACCION_OPCION:-1}
 
-if [ "$NEW_PWD" != "$NEW_PWD_CONFIRM" ]; then
-  echo -e "${RED}Error: Las contraseñas no coinciden. Intente de nuevo.${NC}"
+RESET_PASS=false
+DISABLE_TFA=false
+
+if [ "$ACCION_OPCION" == "1" ]; then
+  RESET_PASS=true
+elif [ "$ACCION_OPCION" == "2" ]; then
+  DISABLE_TFA=true
+elif [ "$ACCION_OPCION" == "3" ]; then
+  RESET_PASS=true
+  DISABLE_TFA=true
+else
+  echo -e "${RED}Error: Opción inválida.${NC}"
   exit 1
 fi
 
-if [ -z "$NEW_PWD" ]; then
-  echo -e "${RED}Error: La contraseña no puede estar vacía.${NC}"
-  exit 1
+PWD_HASH=""
+
+if [ "$RESET_PASS" = true ]; then
+  # Solicitar la nueva contraseña
+  read -s -p "Ingrese la nueva contraseña para '${ADMIN_USER}': " NEW_PWD
+  echo ""
+  read -s -p "Confirme la nueva contraseña: " NEW_PWD_CONFIRM
+  echo ""
+
+  if [ "$NEW_PWD" != "$NEW_PWD_CONFIRM" ]; then
+    echo -e "${RED}Error: Las contraseñas no coinciden. Intente de nuevo.${NC}"
+    exit 1
+  fi
+
+  if [ -z "$NEW_PWD" ]; then
+    echo -e "${RED}Error: La contraseña no puede estar vacía.${NC}"
+    exit 1
+  fi
+
+  echo -e "${YELLOW}Generando hash PBKDF2 seguro...${NC}"
+
+  # Generar el hash utilizando la lógica de Node.js de la aplicación para garantizar compatibilidad
+  PWD_HASH=$(docker compose exec -T portal node -e "
+    const crypto = require('crypto');
+    const pwd = process.argv[1];
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(pwd, salt, 1000, 64, 'sha512').toString('hex');
+    console.log(salt + ':' + hash);
+  " "$NEW_PWD")
+
+  if [ $? -ne 0 ] || [ -z "$PWD_HASH" ]; then
+    echo -e "${RED}Error al generar el hash criptográfico de la contraseña.${NC}"
+    exit 1
+  fi
 fi
 
-echo -e "${YELLOW}Generando hash PBKDF2 seguro...${NC}"
-
-# Generar el hash utilizando la lógica de Node.js de la aplicación para garantizar compatibilidad
-PWD_HASH=$(docker compose exec -T portal node -e "
-  const crypto = require('crypto');
-  const pwd = process.argv[1];
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(pwd, salt, 1000, 64, 'sha512').toString('hex');
-  console.log(salt + ':' + hash);
-" "$NEW_PWD")
-
-if [ $? -ne 0 ] || [ -z "$PWD_HASH" ]; then
-  echo -e "${RED}Error al generar el hash criptográfico de la contraseña.${NC}"
-  exit 1
-fi
-
-# Actualizar el hash en la base de datos
+# Actualizar en la base de datos
 echo -e "${YELLOW}Actualizando la base de datos...${NC}"
-docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
-  -v admin_user="$ADMIN_USER" -v pwd_hash="$PWD_HASH" \
-  -c "UPDATE administradores SET password_hash = :'pwd_hash', activo = TRUE WHERE username = :'admin_user';" >/dev/null
+
+SQL_QUERY="UPDATE administradores SET activo = TRUE"
+if [ "$RESET_PASS" = true ]; then
+  SQL_QUERY="${SQL_QUERY}, password_hash = '${PWD_HASH}'"
+fi
+if [ "$DISABLE_TFA" = true ]; then
+  SQL_QUERY="${SQL_QUERY}, tfa_activo = FALSE, tfa_secret = NULL, tfa_backup_codes = NULL"
+fi
+SQL_QUERY="${SQL_QUERY} WHERE username = '${ADMIN_USER}';"
+
+docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c "${SQL_QUERY}" >/dev/null
 
 if [ $? -eq 0 ]; then
-  echo -e "${GREEN}✓ La contraseña del administrador '${ADMIN_USER}' ha sido restablecida exitosamente.${NC}"
+  echo -e "${GREEN}✓ Los cambios solicitados para '${ADMIN_USER}' se aplicaron exitosamente.${NC}"
   echo -e "${BLUE}=== Proceso finalizado con éxito ===${NC}"
 else
   echo -e "${RED}Error al actualizar el registro en la base de datos PostgreSQL.${NC}"

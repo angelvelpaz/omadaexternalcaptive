@@ -36,20 +36,46 @@
       <p class="text-gray-500 text-sm mt-1">Portal Cautivo</p>
     </div>
     <div id="login-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
-      <input type="text" id="username-input" placeholder=""
-        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+    
+    <div id="login-fields">
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
+        <input type="text" id="username-input" placeholder=""
+          class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+      </div>
+      <div class="mb-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+        <input type="password" id="password-input" placeholder="••••••••"
+          class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+      </div>
+      <div class="text-right mb-4">
+        <button id="btn-forgot-password-trigger" class="text-xs text-blue-600 hover:text-blue-800 font-semibold transition-colors">¿Olvidó su contraseña?</button>
+      </div>
+      <button id="btn-login"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors">
+        Ingresar
+      </button>
     </div>
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-      <input type="password" id="password-input" placeholder="••••••••"
-        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+    <!-- Contenedor 2FA (Oculto inicialmente) -->
+    <div id="login-2fa-fields" class="hidden space-y-4">
+      <div class="p-3 bg-blue-50 text-blue-700 rounded-lg text-xs leading-relaxed font-medium">
+        Su cuenta tiene activa la autenticación de doble factor. Ingrese el código de 6 dígitos de su aplicación móvil (o código de respaldo de 8 dígitos).
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Código de Seguridad (2FA)</label>
+        <input type="text" id="tfa-code-input" placeholder="ej: 123456" maxlength="8"
+          class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-lg font-bold tracking-widest text-gray-800">
+      </div>
+      <div class="flex gap-2">
+        <button id="btn-cancel-2fa" class="w-1/3 border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg transition-colors text-sm hover:bg-gray-50">
+          Atrás
+        </button>
+        <button id="btn-verify-2fa" class="w-2/3 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">
+          Verificar y Entrar
+        </button>
+      </div>
     </div>
-    <button id="btn-login"
-      class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors">
-      Ingresar
-    </button>
   </div>
 </div>
 
@@ -70,7 +96,10 @@
         <div class="hidden sm:flex flex-col items-end text-right">
           <span class="text-xs text-gray-400">Sesión iniciada</span>
           <span id="header-admin-nombres" class="text-sm font-semibold text-gray-600"></span>
-          <span id="header-admin-rol" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 mt-0.5"></span>
+          <div class="flex items-center gap-1.5 mt-0.5">
+            <span id="header-admin-rol" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"></span>
+            <button id="btn-my-security" class="text-[10px] text-blue-600 hover:text-blue-800 font-bold px-1.5 py-0.5 rounded border border-blue-200 hover:bg-blue-50 transition-colors">2FA</button>
+          </div>
         </div>
         <button id="btn-logout" class="text-sm text-gray-500 hover:text-red-600 transition-colors flex items-center gap-1 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2225,8 +2254,10 @@
               <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold">
                 <th class="py-3 px-4">Usuario</th>
                 <th class="py-3 px-4">Nombre Completo</th>
+                <th class="py-3 px-4">Correo Electrónico</th>
                 <th class="py-3 px-4">Rol</th>
                 <th class="py-3 px-4">Fecha Creación</th>
+                <th class="py-3 px-4">2FA</th>
                 <th class="py-3 px-4">Estado</th>
                 <th class="py-3 px-4 text-right">Acciones</th>
               </tr>
@@ -2621,10 +2652,13 @@ async function api(method, path, body) {
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
+let tfaTempToken = '';
+
 document.getElementById('btn-login').addEventListener('click', async () => {
   const username = document.getElementById('username-input').value.trim();
   const password = document.getElementById('password-input').value;
   if (!username || !password) return;
+  document.getElementById('login-error').classList.add('hidden');
   try {
     const res = await fetch('/admin/api/login', {
       method: 'POST',
@@ -2635,6 +2669,16 @@ document.getElementById('btn-login').addEventListener('click', async () => {
     if (!res.ok) {
       throw new Error(data.error || 'Credenciales incorrectas');
     }
+    
+    if (data.tfaRequired) {
+      tfaTempToken = data.tfaToken;
+      document.getElementById('login-fields').classList.add('hidden');
+      document.getElementById('login-2fa-fields').classList.remove('hidden');
+      document.getElementById('tfa-code-input').value = '';
+      document.getElementById('tfa-code-input').focus();
+      return;
+    }
+
     token = data.token;
     adminRol = data.adminUser.rol || 'operador';
     localStorage.setItem('admin_token', token);
@@ -2649,11 +2693,255 @@ document.getElementById('btn-login').addEventListener('click', async () => {
   }
 });
 
+document.getElementById('btn-verify-2fa').addEventListener('click', async () => {
+  const code = document.getElementById('tfa-code-input').value.trim();
+  if (!code) return;
+  document.getElementById('login-error').classList.add('hidden');
+  try {
+    const res = await fetch('/admin/api/login/verify-2fa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tfaToken: tfaTempToken, code })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Código incorrecto');
+    }
+    token = data.token;
+    adminRol = data.adminUser.rol || 'operador';
+    localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_rol', adminRol);
+    localStorage.setItem('admin_username', data.adminUser.username);
+    localStorage.setItem('admin_nombres', data.adminUser.nombres);
+    
+    document.getElementById('password-input').value = '';
+    document.getElementById('username-input').value = '';
+    document.getElementById('tfa-code-input').value = '';
+    
+    document.getElementById('login-2fa-fields').classList.add('hidden');
+    document.getElementById('login-fields').classList.remove('hidden');
+    
+    showPanel();
+  } catch (err) {
+    document.getElementById('login-error').textContent = err.message || 'Error al validar 2FA.';
+    document.getElementById('login-error').classList.remove('hidden');
+  }
+});
+
+document.getElementById('btn-cancel-2fa').addEventListener('click', () => {
+  document.getElementById('login-2fa-fields').classList.add('hidden');
+  document.getElementById('login-fields').classList.remove('hidden');
+  document.getElementById('login-error').classList.add('hidden');
+  document.getElementById('password-input').focus();
+});
+
+document.getElementById('btn-forgot-password-trigger').addEventListener('click', async () => {
+  const email = prompt("Ingrese su correo electrónico institucional registrado:");
+  if (!email) return;
+  
+  try {
+    const res = await fetch('/admin/api/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    alert(data.message || 'Se ha procesado la solicitud.');
+  } catch (err) {
+    alert('Error de conexión: ' + err.message);
+  }
+});
+
 document.getElementById('password-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('btn-login').click();
 });
 document.getElementById('username-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('password-input').focus();
+});
+document.getElementById('tfa-code-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-verify-2fa').click();
+});
+
+document.getElementById('btn-my-security').addEventListener('click', async () => {
+  const modal = document.getElementById('user-modal');
+  const body = document.getElementById('modal-body');
+  document.querySelector('#user-modal h2').textContent = 'Configuración de Seguridad 2FA';
+  
+  body.innerHTML = '<div class="py-4 text-center">Cargando estado de seguridad...</div>';
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  try {
+    const admins = await api('GET', '/admins');
+    const myUsername = localStorage.getItem('admin_username');
+    const me = admins.find(a => a.username === myUsername);
+    
+    if (!me) {
+      throw new Error('No se pudo cargar la información de su cuenta.');
+    }
+    
+    if (me.tfa_activo) {
+      body.innerHTML = `
+        <div id="tfa-profile-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+        <div class="space-y-4">
+          <div class="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+            <span class="p-2 bg-green-100 text-green-700 rounded-full">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              </svg>
+            </span>
+            <div>
+              <h3 class="font-bold text-green-800 text-sm">Doble Factor (2FA) Activado</h3>
+              <p class="text-xs text-green-700 mt-0.5">Su cuenta está protegida con código de autenticador dinámico.</p>
+            </div>
+          </div>
+          <form id="form-disable-tfa" class="space-y-3 pt-2">
+            <label class="block text-xs font-semibold text-gray-500 uppercase">Para desactivar el 2FA, confirme su contraseña:</label>
+            <input type="password" id="tfa-disable-pass" placeholder="Contraseña de la cuenta" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" id="btn-close-tfa-modal" class="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cerrar</button>
+              <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors">Desactivar 2FA</button>
+            </div>
+          </form>
+        </div>
+      `;
+      
+      document.getElementById('btn-close-tfa-modal').addEventListener('click', () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      });
+      
+      document.getElementById('form-disable-tfa').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const password = document.getElementById('tfa-disable-pass').value;
+        try {
+          await api('POST', '/profile/tfa/disable', { password });
+          alert('✓ Doble factor desactivado con éxito.');
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          loadAdmins();
+        } catch (err) {
+          const errEl = document.getElementById('tfa-profile-error');
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+        }
+      });
+    } else {
+      body.innerHTML = `
+        <div id="tfa-profile-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+        <div class="space-y-4">
+          <div class="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl">
+            <span class="p-2 bg-gray-100 text-gray-400 rounded-full">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+            </span>
+            <div>
+              <h3 class="font-bold text-gray-700 text-sm">Doble Factor (2FA) Inactivo</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Proteja su cuenta exigiendo un código dinámico además de su contraseña.</p>
+            </div>
+          </div>
+          
+          <div id="tfa-setup-section" class="text-center pt-2">
+            <button id="btn-init-tfa" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">
+              Iniciar Configuración de 2FA
+            </button>
+            <button type="button" id="btn-close-tfa-modal" class="mt-2 w-full py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('btn-close-tfa-modal').addEventListener('click', () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      });
+      
+      document.getElementById('btn-init-tfa').addEventListener('click', async () => {
+        try {
+          document.getElementById('btn-init-tfa').disabled = true;
+          document.getElementById('btn-init-tfa').textContent = 'Generando secreto...';
+          
+          const setup = await api('POST', '/profile/tfa/setup');
+          
+          body.innerHTML = `
+            <div id="tfa-profile-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+            <div class="space-y-4">
+              <p class="text-xs text-gray-600 font-medium">1. Escanee el siguiente código QR con su aplicación móvil de autenticación (Google Authenticator, Authy, etc.):</p>
+              <div class="flex justify-center py-2 bg-gray-50 rounded-xl border border-gray-100">
+                <img src="${setup.qrCode}" class="w-44 h-44 object-contain">
+              </div>
+              <p class="text-xs text-gray-400">Si no puede escanear, ingrese esta clave secreta manualmente: <strong class="text-gray-700 tracking-wider break-all select-all">${setup.secret}</strong></p>
+              
+              <div class="border-t border-gray-100 pt-3">
+                <p class="text-xs text-gray-600 font-medium mb-2">2. Ingrese el código de 6 dígitos generado por su aplicación para confirmar:</p>
+                <form id="form-enable-tfa" class="flex gap-2">
+                  <input type="text" id="tfa-confirm-code" placeholder="123456" maxlength="6" required class="w-2/3 text-center tracking-widest text-lg font-bold border border-gray-300 rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <button type="submit" class="w-1/3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">Activar</button>
+                </form>
+              </div>
+            </div>
+          `;
+          
+          document.getElementById('form-enable-tfa').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const code = document.getElementById('tfa-confirm-code').value.trim();
+            try {
+              const res = await api('POST', '/profile/tfa/enable', { code });
+              
+              body.innerHTML = `
+                <div class="space-y-4">
+                  <div class="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+                    <span class="p-2 bg-green-100 text-green-700 rounded-full">✓</span>
+                    <div>
+                      <h3 class="font-bold text-green-800 text-sm">¡Doble Factor (2FA) Habilitado!</h3>
+                      <p class="text-xs text-green-700 mt-0.5">Su cuenta está protegida con éxito.</p>
+                    </div>
+                  </div>
+                  
+                  <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-xl space-y-2">
+                    <h4 class="font-bold text-yellow-800 text-xs uppercase tracking-wider">⚠️ Códigos de Respaldo de Emergencia</h4>
+                    <p class="text-[11px] text-yellow-700 leading-normal">
+                      Guarde estos códigos en un lugar seguro. Le permitirán acceder a su cuenta si pierde su teléfono móvil. Cada código sirve una sola vez.
+                    </p>
+                    <div class="grid grid-cols-2 gap-2 bg-white p-3 rounded-lg border border-yellow-100 text-center font-mono text-xs font-bold text-gray-800 tracking-wider">
+                      ${res.backupCodes.map(c => `<div>${c}</div>`).join('')}
+                    </div>
+                  </div>
+                  
+                  <button id="btn-finish-tfa" class="w-full py-2.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-semibold transition-colors">
+                    Entendido, Cerrar
+                  </button>
+                </div>
+              `;
+              
+              document.getElementById('btn-finish-tfa').addEventListener('click', () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                loadAdmins();
+              });
+              
+            } catch (err) {
+              const errEl = document.getElementById('tfa-profile-error');
+              errEl.textContent = err.message;
+              errEl.classList.remove('hidden');
+            }
+          });
+          
+        } catch (err) {
+          const errEl = document.getElementById('tfa-profile-error');
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+          document.getElementById('btn-init-tfa').disabled = false;
+          document.getElementById('btn-init-tfa').textContent = 'Iniciar Configuración de 2FA';
+        }
+      });
+    }
+    
+  } catch (err) {
+    body.innerHTML = `<div class="py-4 text-center text-red-600">Error: ${esc(err.message)}</div>`;
+  }
 });
 
 document.getElementById('btn-logout').addEventListener('click', async () => {
@@ -7372,14 +7660,14 @@ let auditSearch = '';
 
 async function loadAdmins() {
   const tbody = document.getElementById('admins-list-tbody');
-  tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center">Cargando administradores...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center">Cargando administradores...</td></tr>';
   
   try {
     const admins = await api('GET', '/admins');
     tbody.innerHTML = '';
     
     if (admins.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center">No hay administradores registrados.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center">No hay administradores registrados.</td></tr>';
       return;
     }
     
@@ -7397,19 +7685,19 @@ async function loadAdmins() {
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-gray-50 border-b border-gray-50';
       
+      const tfaBadge = adm.tfa_activo ? 
+        `<div class="flex items-center gap-1.5"><span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700">Activo</span>${tieneRol('superadministrador') ? `<button class="text-xs text-red-500 hover:text-red-750 font-medium btn-disable-tfa" data-username="${adm.username}">Apagar</button>` : ''}</div>` : 
+        `<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-500">Inactivo</span>`;
+
       tr.innerHTML = `
         <td class="py-3.5 px-4 font-semibold text-gray-800">${esc(adm.username)}</td>
         <td class="py-3.5 px-4">${esc(adm.nombres)}</td>
+        <td class="py-3.5 px-4 text-gray-500 font-medium">${esc(adm.email || 'Sin registro')}</td>
         <td class="py-3.5 px-4">
           <span class="px-2 py-0.5 text-xs font-semibold rounded-full ${rolColor}">${rolLabel}</span>
-          ${!isRoot && tieneRol('superadministrador') ? `
-            <select class="ml-2 text-xs border border-gray-200 rounded px-1 py-0.5 text-gray-600 btn-change-rol" data-username="${adm.username}">
-              <option value="operador" ${adm.rol === 'operador' ? 'selected' : ''}>Operador</option>
-              <option value="administrador" ${adm.rol === 'administrador' ? 'selected' : ''}>Administrador</option>
-              <option value="superadministrador" ${adm.rol === 'superadministrador' ? 'selected' : ''}>Superadmin</option>
-            </select>` : ''}
         </td>
         <td class="py-3.5 px-4 text-xs text-gray-400">${fmtDate(adm.created_at)}</td>
+        <td class="py-3.5 px-4">${tfaBadge}</td>
         <td class="py-3.5 px-4">
           ${isRoot ? 
             `<span class="px-2 py-1 text-xs font-semibold text-green-700 bg-green-50 rounded-full">Activo (Fijo)</span>` : 
@@ -7420,6 +7708,9 @@ async function loadAdmins() {
           }
         </td>
         <td class="py-3.5 px-4 text-right flex items-center justify-end gap-2">
+          <button class="btn-edit-admin px-2.5 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 font-medium transition-colors" data-username="${adm.username}">
+            Editar
+          </button>
           <button class="btn-change-pass px-2.5 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 font-medium transition-colors" data-username="${adm.username}">
             Contraseña
           </button>
@@ -7432,6 +7723,11 @@ async function loadAdmins() {
       `;
       
       tbody.appendChild(tr);
+      
+      // Asociar evento de editar
+      tr.querySelector('.btn-edit-admin').addEventListener('click', () => {
+        openEditAdminModal(adm);
+      });
     });
 
     // Eventos
@@ -7444,19 +7740,6 @@ async function loadAdmins() {
         } catch (err) {
           alert('Error al cambiar estado: ' + err.message);
           e.target.checked = !active;
-        }
-      });
-    });
-
-    tbody.querySelectorAll('.btn-change-rol').forEach(el => {
-      el.addEventListener('change', async (e) => {
-        const username = el.dataset.username;
-        const rol = el.value;
-        try {
-          await api('PUT', `/admins/${username}/rol`, { rol });
-        } catch (err) {
-          alert('Error al cambiar rol: ' + err.message);
-          loadAdmins();
         }
       });
     });
@@ -7475,8 +7758,23 @@ async function loadAdmins() {
       });
     });
 
+    tbody.querySelectorAll('.btn-disable-tfa').forEach(el => {
+      el.addEventListener('click', async () => {
+        const username = el.dataset.username;
+        if (confirm(`¿Está seguro de desactivar el 2FA de la cuenta "${username}"?`)) {
+          try {
+            await api('POST', `/admins/${username}/disable-tfa`);
+            alert('✓ 2FA desactivado con éxito.');
+            loadAdmins();
+          } catch (err) {
+            alert('Error al desactivar 2FA: ' + err.message);
+          }
+        }
+      });
+    });
+
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-red-600">Error: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="py-4 text-center text-red-600">Error: ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -7498,13 +7796,16 @@ function openCreateAdminModal() {
     <div id="create-admin-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
     <form id="form-create-admin" class="space-y-4">
       <div>
-      <div>
         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre de Usuario</label>
         <input type="text" id="admin-user-input" placeholder="ej: jperez" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
       </div>
       <div>
         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre Completo</label>
         <input type="text" id="admin-nombres-input" placeholder="ej: Juan Pérez" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Correo Electrónico Institucional</label>
+        <input type="email" id="admin-email-input" placeholder="ej: juan.perez@pastaza.gob.ec" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
       </div>
       <div>
         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Contraseña</label>
@@ -7537,16 +7838,75 @@ function openCreateAdminModal() {
     e.preventDefault();
     const username = document.getElementById('admin-user-input').value.trim();
     const nombres = document.getElementById('admin-nombres-input').value.trim();
+    const email = document.getElementById('admin-email-input').value.trim();
     const password = document.getElementById('admin-pass-input').value;
     const rol = document.getElementById('admin-rol-input').value;
     
     try {
-      await api('POST', '/admins', { username, nombres, password, rol });
+      await api('POST', '/admins', { username, nombres, email, password, rol });
       modal.classList.add('hidden');
       modal.classList.remove('flex');
       loadAdmins();
     } catch (err) {
       const errEl = document.getElementById('create-admin-error');
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    }
+  });
+}
+
+function openEditAdminModal(adm) {
+  const modal = document.getElementById('user-modal');
+  const body = document.getElementById('modal-body');
+  document.querySelector('#user-modal h2').textContent = 'Editar Administrador — ' + adm.username;
+  
+  body.innerHTML = `
+    <div id="edit-admin-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+    <form id="form-edit-admin" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nombre Completo</label>
+        <input type="text" id="admin-nombres-edit" value="${esc(adm.nombres)}" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Correo Electrónico Institucional</label>
+        <input type="email" id="admin-email-edit" value="${esc(adm.email || '')}" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nivel de Acceso</label>
+        <select id="admin-rol-edit" ${adm.username === 'admin' ? 'disabled' : ''} class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800">
+          <option value="operador" ${adm.rol === 'operador' ? 'selected' : ''}>Operador — Dashboard y usuarios (sin eliminar)</option>
+          <option value="administrador" ${adm.rol === 'administrador' ? 'selected' : ''}>Administrador — + eliminar usuarios, editar admins, reportes</option>
+          <option value="superadministrador" ${adm.rol === 'superadministrador' ? 'selected' : ''}>Superadministrador — Acceso total a toda la configuración</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-2 pt-4 border-t">
+        <button type="button" id="btn-cancel-edit-admin" class="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
+        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">Guardar Cambios</button>
+      </div>
+    </form>
+  `;
+  
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  
+  document.getElementById('btn-cancel-edit-admin').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  });
+  
+  document.getElementById('form-edit-admin').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nombres = document.getElementById('admin-nombres-edit').value.trim();
+    const email = document.getElementById('admin-email-edit').value.trim();
+    const rol = document.getElementById('admin-rol-edit').value;
+    
+    try {
+      await api('PUT', `/admins/${adm.username}/profile`, { nombres, email, rol });
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      loadAdmins();
+    } catch (err) {
+      const errEl = document.getElementById('edit-admin-error');
       errEl.textContent = err.message;
       errEl.classList.remove('hidden');
     }

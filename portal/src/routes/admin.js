@@ -3466,7 +3466,26 @@ router.post('/api/login',
         return res.status(401).json({ error: 'Credenciales inválidas o cuenta inactiva.' });
       }
       
-      const { token, expiresAt } = await db.createAdminSession(admin.username);
+      if (admin.tfa_activo) {
+        // Si tiene 2FA activo, creamos una sesión temporal de 5 minutos no verificada
+        const { token } = await db.createAdminSession(admin.username, false, 5);
+        
+        await db.logAdminAudit({
+          username: admin.username,
+          ipAddress: clientIp,
+          accion: 'LOGIN_1FA',
+          detalles: 'Contraseña correcta. Redirección a verificación de 2FA.'
+        });
+        
+        return res.json({
+          success: true,
+          tfaRequired: true,
+          tfaToken: token
+        });
+      }
+      
+      // Sin 2FA: sesión normal directa de 2 horas
+      const { token, expiresAt } = await db.createAdminSession(admin.username, true, 120);
       
       await db.logAdminAudit({
         username: admin.username,
@@ -3478,6 +3497,91 @@ router.post('/api/login',
       res.json({
         success: true,
         token,
+        expiresAt,
+        adminUser: {
+          username: admin.username,
+          nombres: admin.nombres,
+          rol: admin.rol || 'operador'
+        }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post('/api/login/verify-2fa',
+  body('tfaToken').isString().notEmpty(),
+  body('code').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Token y código 2FA requeridos.' });
+      }
+      
+      const { tfaToken, code } = req.body;
+      const clientIp = getClientIp(req);
+      
+      const username = await db.verifyTfaSession(tfaToken);
+      if (!username) {
+        return res.status(401).json({ error: 'Token temporal inválido o expirado.' });
+      }
+      
+      const adminRes = await db.getPool().query(
+        'SELECT username, nombres, rol, tfa_secret, tfa_backup_codes FROM administradores WHERE username = $1 LIMIT 1',
+        [username]
+      );
+      const admin = adminRes.rows[0];
+      if (!admin) {
+        return res.status(401).json({ error: 'Administrador no encontrado.' });
+      }
+      
+      const { authenticator } = require('otplib');
+      const bcrypt = require('bcryptjs');
+      let codeValid = false;
+      
+      if (code.length === 8 && admin.tfa_backup_codes) {
+        // Verificar código de respaldo
+        const matchIdx = admin.tfa_backup_codes.findIndex(hashed => bcrypt.compareSync(code, hashed));
+        if (matchIdx !== -1) {
+          codeValid = true;
+          // Eliminar el código de respaldo usado
+          const updatedBackups = [...admin.tfa_backup_codes];
+          updatedBackups.splice(matchIdx, 1);
+          await db.getPool().query(
+            'UPDATE administradores SET tfa_backup_codes = $1 WHERE username = $2',
+            [updatedBackups, username]
+          );
+        }
+      } else {
+        // Verificar código TOTP normal
+        codeValid = authenticator.check(code, admin.tfa_secret || '');
+      }
+      
+      if (!codeValid) {
+        // Eliminar sesión temporal en caso de error
+        await db.deleteAdminSession(tfaToken);
+        await db.logAdminAudit({
+          username: username,
+          ipAddress: clientIp,
+          accion: 'LOGIN_2FA_FALLIDO',
+          detalles: 'Código 2FA incorrecto.'
+        });
+        return res.status(401).json({ error: 'Código 2FA incorrecto o expirado. Inicie sesión nuevamente.' });
+      }
+      
+      await db.logAdminAudit({
+        username: username,
+        ipAddress: clientIp,
+        accion: 'LOGIN',
+        detalles: 'Inicio de sesión exitoso con 2FA.'
+      });
+      
+      const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      res.json({
+        success: true,
+        token: tfaToken,
         expiresAt,
         adminUser: {
           username: admin.username,
@@ -3600,29 +3704,30 @@ router.post('/api/admins', requireAdmin, requireRol('superadministrador'),
   body('username').isString().trim().isLength({ min: 3, max: 50 }).matches(/^[a-zA-Z0-9_.-]+$/),
   body('password').isString().isLength({ min: 6 }),
   body('nombres').isString().trim().isLength({ min: 2, max: 100 }),
+  body('email').isEmail().normalizeEmail(),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'Datos de administrador inválidos (el nombre de usuario debe ser alfanumérico, y la contraseña debe tener al menos 6 caracteres).' });
+        return res.status(400).json({ error: 'Datos de administrador inválidos. Verifique que la contraseña tenga al menos 6 caracteres y el correo sea válido.' });
       }
       
-      const { username, password, nombres, rol } = req.body;
+      const { username, password, nombres, email, rol } = req.body;
       const clientIp = getClientIp(req);
       
-      const newAdmin = await db.createAdmin({ username, password, nombres, rol });
+      const newAdmin = await db.createAdmin({ username, password, nombres, email, rol });
       
       await db.logAdminAudit({
         username: req.adminUser,
         ipAddress: clientIp,
         accion: 'CREAR_ADMINISTRADOR',
-        detalles: `Creó el administrador: ${newAdmin.username} (${newAdmin.nombres}) con rol: ${newAdmin.rol}`
+        detalles: `Creó el administrador: ${newAdmin.username} (${newAdmin.nombres}) con correo: ${newAdmin.email} y rol: ${newAdmin.rol}`
       });
       
       res.status(201).json(newAdmin);
     } catch (err) {
       if (err.code === '23505') {
-        return res.status(409).json({ error: 'El nombre de usuario ya está registrado.' });
+        return res.status(409).json({ error: 'El nombre de usuario o correo electrónico ya está registrado.' });
       }
       next(err);
     }
@@ -3862,6 +3967,314 @@ router.post('/api/maintenance/schedule', requireAdmin, requireRol('superadminist
 
       res.json({ success: true });
     } catch (err) { next(err); }
+  }
+);
+
+// ─── Recuperación de Contraseña por Correo Electrónico y 2FA ───
+
+router.post('/api/forgot-password',
+  body('email').isEmail().normalizeEmail(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Correo electrónico inválido.' });
+      
+      const { email } = req.body;
+      const admin = await db.getAdminByEmail(email);
+      if (!admin) {
+        // Por seguridad, respondemos genérico
+        return res.json({ success: true, message: 'Si el correo está registrado, se enviará un enlace de recuperación.' });
+      }
+      
+      const crypto = require('crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+      
+      await db.createPasswordResetToken(admin.username, token, expiresAt);
+      
+      const emailService = require('../services/email');
+      await emailService.sendResetPasswordEmail({
+        to: admin.email,
+        nombres: admin.nombres,
+        token: token
+      });
+      
+      await db.logAdminAudit({
+        username: admin.username,
+        ipAddress: getClientIp(req),
+        accion: 'SOLICITUD_RECUPERACION_CONTRASENA',
+        detalles: `Solicitud de restablecimiento enviada al correo: ${admin.email}`
+      });
+      
+      res.json({ success: true, message: 'Si el correo está registrado, se enviará un enlace de recuperación.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post('/api/reset-password/verify',
+  body('token').isString().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const { token } = req.body;
+      const reset = await db.verifyPasswordResetToken(token);
+      if (!reset) {
+        return res.status(400).json({ error: 'El enlace de restablecimiento es inválido o ha expirado.' });
+      }
+      res.json({ success: true, username: reset.username, tfaRequired: reset.tfa_activo });
+    } catch (err) { next(err); }
+  }
+);
+
+router.post('/api/reset-password/confirm',
+  body('token').isString().notEmpty(),
+  body('newPassword').isString().isLength({ min: 6 }),
+  body('tfaCode').optional().isString().trim(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+      }
+      
+      const { token, newPassword, tfaCode } = req.body;
+      const clientIp = getClientIp(req);
+      
+      const reset = await db.verifyPasswordResetToken(token);
+      if (!reset) {
+        return res.status(400).json({ error: 'El enlace de restablecimiento es inválido o ha expirado.' });
+      }
+      
+      if (reset.tfa_activo) {
+        if (!tfaCode) {
+          return res.status(400).json({ error: 'Se requiere el código de verificación 2FA para completar la acción.' });
+        }
+        
+        const adminRes = await db.getPool().query(
+          'SELECT tfa_secret, tfa_backup_codes FROM administradores WHERE username = $1 LIMIT 1',
+          [reset.username]
+        );
+        const admin = adminRes.rows[0];
+        
+        const { authenticator } = require('otplib');
+        const bcrypt = require('bcryptjs');
+        let codeValid = false;
+        
+        if (tfaCode.length === 8 && admin.tfa_backup_codes) {
+          const matchIdx = admin.tfa_backup_codes.findIndex(hashed => bcrypt.compareSync(tfaCode, hashed));
+          if (matchIdx !== -1) {
+            codeValid = true;
+            const updatedBackups = [...admin.tfa_backup_codes];
+            updatedBackups.splice(matchIdx, 1);
+            await db.getPool().query(
+              'UPDATE administradores SET tfa_backup_codes = $1 WHERE username = $2',
+              [updatedBackups, reset.username]
+            );
+          }
+        } else {
+          codeValid = authenticator.check(tfaCode, admin.tfa_secret || '');
+        }
+        
+        if (!codeValid) {
+          await db.logAdminAudit({
+            username: reset.username,
+            ipAddress: clientIp,
+            accion: 'RECUPERACION_CONTRASENA_2FA_FALLIDA',
+            detalles: 'Código 2FA incorrecto durante la recuperación.'
+          });
+          return res.status(400).json({ error: 'Código 2FA incorrecto.' });
+        }
+      }
+      
+      await db.updateAdminPassword(reset.username, newPassword);
+      await db.deletePasswordResetToken(token);
+      
+      await db.logAdminAudit({
+        username: reset.username,
+        ipAddress: clientIp,
+        accion: 'RECUPERACION_CONTRASENA_EXITOSA',
+        detalles: 'Contraseña restablecida con éxito mediante enlace de correo.'
+      });
+      
+      res.json({ success: true, message: 'Su contraseña ha sido actualizada con éxito.' });
+    } catch (err) { next(err); }
+  }
+);
+
+// ─── Gestión del Doble Factor (2FA) en Perfil del Administrador ───
+
+router.post('/api/profile/tfa/setup', requireAdmin, async (req, res, next) => {
+  try {
+    const username = req.adminUser;
+    const adminRes = await db.getPool().query(
+      'SELECT email, nombres FROM administradores WHERE username = $1 LIMIT 1',
+      [username]
+    );
+    const admin = adminRes.rows[0];
+    
+    if (!admin || !admin.email) {
+      return res.status(400).json({ error: 'Debe configurar un correo electrónico institucional en su cuenta antes de activar el 2FA.' });
+    }
+    
+    const { authenticator } = require('otplib');
+    const QRCode = require('qrcode');
+    
+    const secret = authenticator.generateSecret();
+    const otpauthUrl = authenticator.keyuri(admin.email, 'Wi-Fi Pastaza', secret);
+    
+    await db.saveTfaSecret(username, secret, null);
+    
+    const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
+    
+    res.json({
+      success: true,
+      secret,
+      qrCode: qrCodeDataUrl
+    });
+  } catch (err) { next(err); }
+});
+
+router.post('/api/profile/tfa/enable', requireAdmin,
+  body('code').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Código de verificación requerido.' });
+      
+      const username = req.adminUser;
+      const { code } = req.body;
+      const clientIp = getClientIp(req);
+      
+      const adminRes = await db.getPool().query(
+        'SELECT tfa_secret FROM administradores WHERE username = $1 LIMIT 1',
+        [username]
+      );
+      const admin = adminRes.rows[0];
+      
+      if (!admin || !admin.tfa_secret) {
+        return res.status(400).json({ error: 'Debe iniciar la configuración de 2FA primero.' });
+      }
+      
+      const { authenticator } = require('otplib');
+      const codeValid = authenticator.check(code, admin.tfa_secret);
+      
+      if (!codeValid) {
+        return res.status(400).json({ error: 'El código ingresado es incorrecto.' });
+      }
+      
+      const crypto = require('crypto');
+      const bcrypt = require('bcryptjs');
+      const backupCodes = [];
+      const hashedBackupCodes = [];
+      
+      for (let i = 0; i < 8; i++) {
+        const rawCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+        backupCodes.push(rawCode);
+        hashedBackupCodes.push(bcrypt.hashSync(rawCode, 10));
+      }
+      
+      await db.saveTfaSecret(username, admin.tfa_secret, hashedBackupCodes);
+      await db.enableTfa(username);
+      
+      await db.logAdminAudit({
+        username: username,
+        ipAddress: clientIp,
+        accion: 'ACTIVAR_2FA',
+        detalles: 'Activó la autenticación de doble factor (2FA) en su perfil.'
+      });
+      
+      res.json({
+        success: true,
+        backupCodes
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+router.post('/api/profile/tfa/disable', requireAdmin,
+  body('password').isString().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Se requiere ingresar la contraseña.' });
+      
+      const username = req.adminUser;
+      const { password } = req.body;
+      const clientIp = getClientIp(req);
+      
+      const admin = await db.verifyAdminLogin(username, password);
+      if (!admin) {
+        return res.status(401).json({ error: 'Contraseña incorrecta.' });
+      }
+      
+      await db.disableTfa(username);
+      
+      await db.logAdminAudit({
+        username: username,
+        ipAddress: clientIp,
+        accion: 'DESACTIVAR_2FA',
+        detalles: 'Desactivó la autenticación de doble factor (2FA) en su perfil.'
+      });
+      
+      res.json({ success: true, message: 'Doble factor desactivado con éxito.' });
+    } catch (err) { next(err); }
+  }
+);
+
+// Desactivación de 2FA a terceros (Superadministrador)
+router.post('/api/admins/:username/disable-tfa', requireAdmin, requireRol('superadministrador'),
+  param('username').isString().trim().notEmpty(),
+  async (req, res, next) => {
+    try {
+      const username = req.params.username;
+      const clientIp = getClientIp(req);
+      
+      await db.disableTfa(username);
+      
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'DESACTIVAR_2FA_TERCERO',
+        detalles: `Desactivó el 2FA de la cuenta: ${username}`
+      });
+      
+      res.json({ success: true, message: `Doble factor de ${username} desactivado con éxito.` });
+    } catch (err) { next(err); }
+  }
+);
+
+// Actualizar perfil de administrador (Nombres, Correo, Rol)
+router.put('/api/admins/:username/profile', requireAdmin, requireSelfOrRol('superadministrador'),
+  param('username').isString().trim().notEmpty(),
+  body('nombres').isString().trim().isLength({ min: 2, max: 100 }),
+  body('email').isEmail().normalizeEmail(),
+  body('rol').isString().isIn(['operador', 'administrador', 'superadministrador']),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: 'Datos de perfil inválidos.' });
+      
+      const username = req.params.username;
+      const { nombres, email, rol } = req.body;
+      const clientIp = getClientIp(req);
+      
+      await db.updateAdminProfile(username, { nombres, email, rol });
+      
+      await db.logAdminAudit({
+        username: req.adminUser,
+        ipAddress: clientIp,
+        accion: 'ACTUALIZAR_PERFIL_ADMINISTRADOR',
+        detalles: `Actualizó perfil de ${username} (Nombres: ${nombres}, Email: ${email}, Rol: ${rol})`
+      });
+      
+      res.json({ success: true });
+    } catch (err) {
+      if (err.code === '23505') {
+        return res.status(409).json({ error: 'El correo electrónico ya está registrado por otro administrador.' });
+      }
+      next(err);
+    }
   }
 );
 

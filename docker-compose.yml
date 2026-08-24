@@ -96,6 +96,13 @@ services:
       OMADA_CLIENT_SECRET: ${OMADA_CLIENT_SECRET:-}
       EXT_DB_ALLOWED_TABLES: ${EXT_DB_ALLOWED_TABLES:-}
       EXT_DB_ALLOWED_COLS: ${EXT_DB_ALLOWED_COLS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_FROM: ${SMTP_FROM:-}
+      PORTAL_ADMIN_URL: ${PORTAL_ADMIN_URL:-}
       TZ: ${TZ:-America/Guayaquil}
     networks:
       - captive_net

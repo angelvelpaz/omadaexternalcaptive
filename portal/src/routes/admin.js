@@ -18,6 +18,22 @@ const { getClientIp, validateBase64Image } = require('../services/utils');
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin_secret_cambia_esto';
 const PUBLIC = path.join(__dirname, '../../public');
 
+function hashBackupCode(code) {
+  const crypto = require('crypto');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(code, salt, 1000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyBackupCode(code, storedHash) {
+  const crypto = require('crypto');
+  const parts = String(storedHash || '').split(':');
+  if (parts.length !== 2) return false;
+  const [salt, hash] = parts;
+  const checkHash = crypto.pbkdf2Sync(code, salt, 1000, 64, 'sha512').toString('hex');
+  return hash === checkHash;
+}
+
 // Desactivar caché en todas las respuestas del router admin (API y HTML)
 router.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -3542,12 +3558,11 @@ router.post('/api/login/verify-2fa',
       }
       
       const { authenticator } = require('otplib');
-      const bcrypt = require('bcryptjs');
       let codeValid = false;
       
       if (code.length === 8 && admin.tfa_backup_codes) {
         // Verificar código de respaldo
-        const matchIdx = admin.tfa_backup_codes.findIndex(hashed => bcrypt.compareSync(code, hashed));
+        const matchIdx = admin.tfa_backup_codes.findIndex(hashed => verifyBackupCode(code, hashed));
         if (matchIdx !== -1) {
           codeValid = true;
           // Eliminar el código de respaldo usado
@@ -4148,11 +4163,10 @@ router.post('/api/reset-password/confirm',
         const admin = adminRes.rows[0];
         
         const { authenticator } = require('otplib');
-        const bcrypt = require('bcryptjs');
         let codeValid = false;
         
         if (tfaCode.length === 8 && admin.tfa_backup_codes) {
-          const matchIdx = admin.tfa_backup_codes.findIndex(hashed => bcrypt.compareSync(tfaCode, hashed));
+          const matchIdx = admin.tfa_backup_codes.findIndex(hashed => verifyBackupCode(tfaCode, hashed));
           if (matchIdx !== -1) {
             codeValid = true;
             const updatedBackups = [...admin.tfa_backup_codes];
@@ -4267,14 +4281,13 @@ router.post('/api/profile/tfa/enable', requireAdmin,
       }
       
       const crypto = require('crypto');
-      const bcrypt = require('bcryptjs');
       const backupCodes = [];
       const hashedBackupCodes = [];
       
       for (let i = 0; i < 8; i++) {
         const rawCode = crypto.randomBytes(4).toString('hex').toUpperCase();
         backupCodes.push(rawCode);
-        hashedBackupCodes.push(bcrypt.hashSync(rawCode, 10));
+        hashedBackupCodes.push(hashBackupCode(rawCode));
       }
       
       await db.saveTfaSecret(username, admin.tfa_secret, hashedBackupCodes);

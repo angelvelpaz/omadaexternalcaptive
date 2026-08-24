@@ -2772,13 +2772,7 @@ document.getElementById('btn-my-security').addEventListener('click', async () =>
   modal.classList.add('flex');
 
   try {
-    const admins = await api('GET', '/admins');
-    const myUsername = localStorage.getItem('admin_username');
-    const me = admins.find(a => a.username === myUsername);
-    
-    if (!me) {
-      throw new Error('No se pudo cargar la información de su cuenta.');
-    }
+    const me = await api('GET', '/profile');
     
     if (me.tfa_activo) {
       body.innerHTML = `

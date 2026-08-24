@@ -4104,6 +4104,19 @@ router.post('/api/reset-password/confirm',
 
 // ─── Gestión del Doble Factor (2FA) en Perfil del Administrador ───
 
+router.get('/api/profile', requireAdmin, async (req, res, next) => {
+  try {
+    const username = req.adminUser;
+    const adminRes = await db.getPool().query(
+      'SELECT username, nombres, email, rol, tfa_activo FROM administradores WHERE username = $1 LIMIT 1',
+      [username]
+    );
+    const admin = adminRes.rows[0];
+    if (!admin) return res.status(404).json({ error: 'Perfil no encontrado.' });
+    res.json(admin);
+  } catch (err) { next(err); }
+});
+
 router.post('/api/profile/tfa/setup', requireAdmin, async (req, res, next) => {
   try {
     const username = req.adminUser;

@@ -585,7 +585,7 @@
       <div id="bypass-view-list" class="space-y-4">
         <!-- Búsqueda y controles -->
         <div class="flex flex-col sm:flex-row gap-3 mb-4">
-          <input type="text" id="mac-bypass-search" placeholder="Buscar por MAC, propietario o alias..."
+          <input type="text" id="mac-bypass-search" placeholder="Buscar por MAC, IP, propietario o alias..."
             class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800"
             oninput="filterMacBypass()">
           <select id="mac-bypass-vlan-filter" onchange="filterMacBypass()"
@@ -4174,7 +4174,8 @@ function filterMacBypass() {
     filtered = filtered.filter(d => 
       d.mac_address.toLowerCase().includes(term) ||
       d.propietario.toLowerCase().includes(term) ||
-      (d.alias && d.alias.toLowerCase().includes(term))
+      (d.alias && d.alias.toLowerCase().includes(term)) ||
+      (d.ip_address && d.ip_address.toLowerCase().includes(term))
     );
   }
   

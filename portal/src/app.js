@@ -10,6 +10,7 @@ const adminRoutes = require('./routes/admin');
 const db = require('./services/database');
 const statsWorker = require('./services/statsWorker');
 const maintenanceWorker = require('./services/maintenanceWorker');
+const dhcpSyncWorker = require('./services/dhcpSyncWorker');
 const { setupSwagger } = require('./swagger');
 
 
@@ -155,6 +156,9 @@ async function start() {
 
       // Iniciar el programador de depuración automática en background
       maintenanceWorker.startMaintenanceWorker();
+
+      // Iniciar el sincronizador de DHCP leases MikroTik ↔ MAC Bypass
+      dhcpSyncWorker.startDhcpSyncWorker();
     });
   }
 }

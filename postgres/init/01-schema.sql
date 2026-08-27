@@ -146,12 +146,15 @@ CREATE TABLE IF NOT EXISTS mac_bypass (
     alias         VARCHAR(100),
     ppsk          VARCHAR(64),
     vlan_id       INTEGER,
+    ip_address    INET,
     cedula        VARCHAR(150) REFERENCES usuarios_portal(cedula) ON DELETE CASCADE,
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     activo        BOOLEAN DEFAULT TRUE
 );
 
 CREATE INDEX IF NOT EXISTS idx_mac_bypass_mac ON mac_bypass(mac_address);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mac_bypass_ip_unique ON mac_bypass(ip_address) WHERE ip_address IS NOT NULL;
 
 -- ─── Tabla de asignación dinámica de VLANs por Grupo LDAP ──────────────────────
 CREATE TABLE IF NOT EXISTS ldap_group_vlans (

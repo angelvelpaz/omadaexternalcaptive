@@ -2415,14 +2415,14 @@ async function deleteSsidConfig(ssidName) {
 
 async function listMacBypass() {
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, ip_address, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
   );
   return result.rows;
 }
 
 async function getMacBypassById(id) {
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass WHERE id = $1',
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, ip_address, created_at, activo FROM mac_bypass WHERE id = $1',
     [id]
   );
   return result.rows[0] || null;
@@ -2433,7 +2433,7 @@ async function getMacBypassByMac(mac) {
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const colonMac = mac.trim().toUpperCase().replace(/-/g, ':');
   const result = await pool.query(
-    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, ip_address, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
     [cleanMac, colonMac]
   );
   return result.rows[0] || null;
@@ -2474,7 +2474,7 @@ async function createMacBypass(mac, propietario, alias, ppsk, vlanId, cedula = n
   return result.rows[0];
 }
 
-async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula = null) {
+async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula = null, ipAddress = null) {
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
@@ -2483,13 +2483,14 @@ async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula
   if (cleanCedula === '') {
     cleanCedula = null;
   }
+  const cleanIp = ipAddress ? String(ipAddress).trim() : null;
 
   // Eliminar el dispositivo del autoregistro si se actualiza en bypass MAB
   await pool.query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
 
   const result = await pool.query(
-    'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6, cedula = $7 WHERE id = $1 RETURNING *',
-    [id, cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanCedula]
+    'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6, ip_address = $7, cedula = $8 WHERE id = $1 RETURNING *',
+    [id, cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanIp, cleanCedula]
   );
 
   // Actualizar atributos de radreply para el nuevo/actual MAC address
@@ -2804,6 +2805,36 @@ async function deleteMacBypass(id) {
   );
   return result.rows[0];
 }
+
+async function getMacBypassByIp(ipAddress, excludeId = null) {
+  if (!ipAddress) return null;
+  let query = 'SELECT id, mac_address, ip_address FROM mac_bypass WHERE ip_address = $1';
+  const params = [ipAddress];
+  if (excludeId) {
+    query += ' AND id != $2';
+    params.push(excludeId);
+  }
+  const result = await pool.query(query, params);
+  return result.rows[0] || null;
+}
+
+async function updateMacBypassIp(id, ipAddress) {
+  const result = await pool.query(
+    'UPDATE mac_bypass SET ip_address = $2 WHERE id = $1 RETURNING id, mac_address, ip_address',
+    [id, ipAddress]
+  );
+  return result.rows[0] || null;
+}
+
+async function getMacBypassesByMacs(macs) {
+  if (!macs || macs.length === 0) return [];
+  const result = await pool.query(
+    'SELECT id, mac_address, ip_address FROM mac_bypass WHERE mac_address = ANY($1)',
+    [macs]
+  );
+  return result.rows;
+}
+
 async function getUsersLocalStatus(usernames) {
   if (!usernames || usernames.length === 0) return [];
   const result = await pool.query(
@@ -3236,7 +3267,7 @@ module.exports = {
   // ssid configurations
   getSsidConfig, saveSsidConfig, listAllSsidConfigs, deleteSsidConfig,
   // mac bypass admin
-  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, bulkUpdateMacBypassVlan, updateMacBypassStatus, deleteMacBypass, getActiveMacBypassSessions, bulkImportMacBypass,
+  listMacBypass, getMacBypassById, getMacBypassByMac, createMacBypass, updateMacBypass, bulkUpdateMacBypassPpsk, bulkUpdateMacBypassVlan, updateMacBypassStatus,   deleteMacBypass, getActiveMacBypassSessions, bulkImportMacBypass, updateMacBypassIp, getMacBypassesByMacs, getMacBypassByIp,
   // hoteles y restaurantes
   getHotelGuest, createHotelGuest, listHotelGuests, deleteHotelGuest,
   getRestaurantPin, createRestaurantPin, incrementPinUsage, listRestaurantPins, deleteRestaurantPin,

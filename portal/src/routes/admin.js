@@ -11,6 +11,8 @@ const omadaSvc       = require('../services/omada');
 const unifiSvc       = require('../services/unifi');
 const ldapSvc        = require('../services/ldap');
 const winbindManager = require('../services/winbindManager');
+const mikrotikSvc    = require('../services/mikrotik');
+const dhcpSyncWorker = require('../services/dhcpSyncWorker');
 const axios          = require('axios');
 const externalApi    = require('../services/externalApi');
 const { getClientIp, validateBase64Image } = require('../services/utils');
@@ -1878,7 +1880,7 @@ router.post('/api/mac-bypass/bulk-import', requireAdmin, requireRol('operador'),
 // POST - Registrar nueva MAC en bypass
 router.post('/api/mac-bypass', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
-    const { macAddress, propietario, alias, ppsk, vlanId, cedula } = req.body;
+    const { macAddress, propietario, alias, ppsk, vlanId, cedula, ipAddress } = req.body;
     if (!macAddress || !propietario) {
       return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
     }
@@ -1895,7 +1897,23 @@ router.post('/api/mac-bypass', requireAdmin, requireRol('operador'), async (req,
       return res.status(400).json({ error: 'Esta dirección MAC ya está registrada en la lista de exclusiones (MAC Bypass).' });
     }
 
-    const newDevice = await db.createMacBypass(cleanMac, propietario, alias, ppsk, vlanId, cedula);
+    // Validar que la IP no esté asignada a otro dispositivo
+    if (ipAddress) {
+      const ipTaken = await db.getMacBypassByIp(ipAddress);
+      if (ipTaken) {
+        return res.status(409).json({ error: `Esta IP ya está asignada al dispositivo ${ipTaken.mac_address}.` });
+      }
+    }
+
+    const newDevice = await db.createMacBypass(cleanMac, propietario, alias, ppsk, vlanId, cedula, ipAddress);
+
+    // Crear DHCP static lease en MikroTik si se proporcionó IP
+    if (ipAddress) {
+      mikrotikSvc.setDhcpLease({
+        macAddress: cleanMac, ipAddress, server: 'all',
+        comment: `MAC Bypass - ${propietario}`
+      }).catch(err => console.warn(`[MIKROTIK] Error creando DHCP lease para ${cleanMac}:`, err.message));
+    }
 
     await db.logAdminAudit({
       username: req.adminUser,
@@ -1912,7 +1930,7 @@ router.post('/api/mac-bypass', requireAdmin, requireRol('operador'), async (req,
 router.put('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { macAddress, propietario, alias, ppsk, vlanId, cedula } = req.body;
+    const { macAddress, propietario, alias, ppsk, vlanId, cedula, ipAddress } = req.body;
     
     if (!macAddress || !propietario) {
       return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
@@ -1929,9 +1947,35 @@ router.put('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async (r
       return res.status(400).json({ error: 'Esta dirección MAC ya está registrada en otra exclusión (MAC Bypass).' });
     }
 
-    const updated = await db.updateMacBypass(id, cleanMac, propietario, alias, ppsk, vlanId, cedula);
+    // Obtener IP vieja antes del update para comparar
+    const oldDevice = await db.getMacBypassById(id);
+    if (!oldDevice) {
+      return res.status(404).json({ error: 'Registro no encontrado.' });
+    }
+
+    // Validar que la IP no esté asignada a otro dispositivo
+    if (ipAddress && ipAddress !== oldDevice.ip_address) {
+      const ipTaken = await db.getMacBypassByIp(ipAddress, id);
+      if (ipTaken) {
+        return res.status(409).json({ error: `Esta IP ya está asignada al dispositivo ${ipTaken.mac_address}.` });
+      }
+    }
+
+    const updated = await db.updateMacBypass(id, cleanMac, propietario, alias, ppsk, vlanId, cedula, ipAddress);
     if (!updated) {
       return res.status(404).json({ error: 'Registro no encontrado.' });
+    }
+
+    // Sincronizar DHCP lease con MikroTik
+    if (ipAddress && ipAddress !== oldDevice.ip_address) {
+      // IP nueva o cambiada → crear/actualizar lease
+      mikrotikSvc.setDhcpLease({
+        macAddress: cleanMac, ipAddress, server: 'all',
+        comment: `MAC Bypass - ${propietario}`
+      }).catch(err => console.warn(`[MIKROTIK] Error actualizando DHCP lease para ${cleanMac}:`, err.message));
+    } else if (!ipAddress && oldDevice.ip_address) {
+      // IP eliminada → borrar lease
+      mikrotikSvc.removeDhcpLease(cleanMac).catch(err => console.warn(`[MIKROTIK] Error eliminando DHCP lease para ${cleanMac}:`, err.message));
     }
 
     // Hotspot dynamic disconnect client (CoA) if MAC changed or configuration updated
@@ -1995,6 +2039,13 @@ router.delete('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async
       return res.status(404).json({ error: 'Dispositivo no encontrado.' });
     }
 
+    // Eliminar DHCP static lease de MikroTik si tiene IP
+    if (device.ip_address) {
+      mikrotikSvc.removeDhcpLease(device.mac_address).catch(err =>
+        console.warn(`[MIKROTIK] Error eliminando DHCP lease para ${device.mac_address}:`, err.message)
+      );
+    }
+
     await db.deleteMacBypass(id);
 
     await db.logAdminAudit({
@@ -2012,6 +2063,82 @@ router.delete('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async
     }
 
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// GET - Verificar estado de DHCP static lease en MikroTik
+router.get('/api/mac-bypass/:id/dhcp-lease', requireAdmin, requireRol('operador'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const device = await db.getMacBypassById(id);
+    if (!device) {
+      return res.status(404).json({ error: 'Dispositivo no encontrado.' });
+    }
+    const result = await mikrotikSvc.checkDhcpLease(device.mac_address);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST - Crear/actualizar DHCP static lease en MikroTik
+router.post('/api/mac-bypass/:id/dhcp-lease', requireAdmin, requireRol('operador'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { ipAddress, server } = req.body;
+    if (!ipAddress) {
+      return res.status(400).json({ error: 'La dirección IP es requerida.' });
+    }
+    const device = await db.getMacBypassById(id);
+    if (!device) {
+      return res.status(404).json({ error: 'Dispositivo no encontrado.' });
+    }
+    // Validar que la IP no esté asignada a otro dispositivo
+    if (ipAddress !== device.ip_address) {
+      const ipTaken = await db.getMacBypassByIp(ipAddress, id);
+      if (ipTaken) {
+        return res.status(409).json({ error: `Esta IP ya está asignada al dispositivo ${ipTaken.mac_address}.` });
+      }
+    }
+    const result = await mikrotikSvc.setDhcpLease({
+      macAddress: device.mac_address,
+      ipAddress,
+      server: server || 'all',
+      comment: `MAC Bypass - ${device.propietario}`
+    });
+    if (!result.ok) {
+      return res.status(500).json({ error: result.error });
+    }
+    // Actualizar la IP en la base de datos
+    await db.updateMacBypass(device.id, device.mac_address, device.propietario, device.alias, device.ppsk, device.vlan_id, device.cedula, ipAddress);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// DELETE - Eliminar DHCP static lease de MikroTik
+router.delete('/api/mac-bypass/:id/dhcp-lease', requireAdmin, requireRol('operador'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const device = await db.getMacBypassById(id);
+    if (!device) {
+      return res.status(404).json({ error: 'Dispositivo no encontrado.' });
+    }
+    const result = await mikrotikSvc.removeDhcpLease(device.mac_address);
+    if (!result.ok) {
+      return res.status(500).json({ error: result.error });
+    }
+    // Limpiar la IP en la base de datos
+    await db.updateMacBypass(device.id, device.mac_address, device.propietario, device.alias, device.ppsk, device.vlan_id, device.cedula, null);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST - Sincronizar DHCP leases desde MikroTik hacia la base de datos
+router.post('/api/mac-bypass/sync-dhcp', requireAdmin, requireRol('operador'), async (req, res, next) => {
+  try {
+    const result = await dhcpSyncWorker.syncDhcpLeasesToMacBypass();
+    if (result.error) {
+      return res.status(500).json({ error: result.error });
+    }
+    res.json({ ok: true, synced: result.synced, message: `${result.synced} dispositivo(s) actualizado(s) con IPs de MikroTik.` });
   } catch (err) { next(err); }
 });
 

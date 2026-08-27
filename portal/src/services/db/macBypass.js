@@ -4,14 +4,14 @@ const { getPool } = require('./pool');
 
 async function listMacBypass() {
   const result = await getPool().query(
-    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, ip_address, created_at, activo FROM mac_bypass ORDER BY created_at DESC'
   );
   return result.rows;
 }
 
 async function getMacBypassById(id) {
   const result = await getPool().query(
-    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass WHERE id = $1',
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, ip_address, created_at, activo FROM mac_bypass WHERE id = $1',
     [id]
   );
   return result.rows[0] || null;
@@ -22,26 +22,27 @@ async function getMacBypassByMac(mac) {
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const colonMac = mac.trim().toUpperCase().replace(/-/g, ':');
   const result = await getPool().query(
-    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
+    'SELECT id, mac_address, propietario, alias, ppsk, vlan_id, ip_address, created_at, activo FROM mac_bypass WHERE mac_address = $1 OR mac_address = $2',
     [cleanMac, colonMac]
   );
   return result.rows[0] || null;
 }
 
-async function createMacBypass(mac, propietario, alias, ppsk, vlanId, cedula = null) {
+async function createMacBypass(mac, propietario, alias, ppsk, vlanId, cedula = null, ipAddress = null) {
   if (!mac) throw new Error('La dirección MAC es obligatoria');
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
   const cleanCedula = cedula ? String(cedula).trim() : null;
+  const cleanIp = ipAddress ? String(ipAddress).trim() : null;
   
   // Eliminar el dispositivo del autoregistro si se agrega a bypass MAB
   await getPool().query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
 
   const result = await getPool().query(
-    'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, vlan_id, cedula, activo) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *',
-    [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanCedula]
+    'INSERT INTO mac_bypass (mac_address, propietario, alias, ppsk, vlan_id, ip_address, cedula, activo) VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING *',
+    [cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanIp, cleanCedula]
   );
 
   // Configurar atributos de ancho de banda predeterminados para la MAC en radreply (15M/5M)
@@ -60,19 +61,20 @@ async function createMacBypass(mac, propietario, alias, ppsk, vlanId, cedula = n
   return result.rows[0];
 }
 
-async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula = null) {
+async function updateMacBypass(id, mac, propietario, alias, ppsk, vlanId, cedula = null, ipAddress = null) {
   const cleanMac = mac.trim().toUpperCase().replace(/:/g, '-');
   const cleanPpsk = ppsk ? String(ppsk).trim() : null;
   const cleanVlan = vlanId ? parseInt(vlanId) : null;
   const dbVlan = isNaN(cleanVlan) ? null : cleanVlan;
   const cleanCedula = cedula ? String(cedula).trim() : null;
+  const cleanIp = ipAddress ? String(ipAddress).trim() : null;
 
   // Eliminar el dispositivo del autoregistro si se actualiza en bypass MAB
   await getPool().query('DELETE FROM dispositivos_usuario WHERE mac_address = $1 OR mac_address = $2', [cleanMac, cleanMac.replace(/-/g, ':')]);
 
   const result = await getPool().query(
-    'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6, cedula = $7 WHERE id = $1 RETURNING *',
-    [id, cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanCedula]
+    'UPDATE mac_bypass SET mac_address = $2, propietario = $3, alias = $4, ppsk = $5, vlan_id = $6, ip_address = $7, cedula = $8 WHERE id = $1 RETURNING *',
+    [id, cleanMac, propietario.trim(), (alias || '').trim(), cleanPpsk, dbVlan, cleanIp, cleanCedula]
   );
 
   // Actualizar atributos de radreply para el nuevo/actual MAC address
@@ -185,6 +187,23 @@ async function bulkUpdateMacBypassVlan(ids, vlanId) {
   }
 }
 
+async function updateMacBypassIp(id, ipAddress) {
+  const result = await getPool().query(
+    'UPDATE mac_bypass SET ip_address = $2 WHERE id = $1 RETURNING id, mac_address, ip_address',
+    [id, ipAddress]
+  );
+  return result.rows[0] || null;
+}
+
+async function getMacBypassesByMacs(macs) {
+  if (!macs || macs.length === 0) return [];
+  const result = await getPool().query(
+    'SELECT id, mac_address, ip_address FROM mac_bypass WHERE mac_address = ANY($1)',
+    [macs]
+  );
+  return result.rows;
+}
+
 module.exports = {
   listMacBypass,
   getMacBypassById,
@@ -195,4 +214,6 @@ module.exports = {
   bulkUpdateMacBypassVlan,
   updateMacBypassStatus,
   deleteMacBypass,
+  updateMacBypassIp,
+  getMacBypassesByMacs,
 };

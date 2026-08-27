@@ -4155,6 +4155,13 @@ function renderMacBypassTable(list) {
   document.getElementById('mac-bypass-count').textContent = `${list.length} dispositivo${list.length === 1 ? '' : 's'}`;
 }
 
+// Normalizar MAC a formato xx-xx-xx-xx-xx-xx
+function normalizeMac(str) {
+  const clean = str.replace(/[:\-\s]/g, '').toUpperCase();
+  if (clean.length !== 12 || !/^[0-9A-F]{12}$/.test(clean)) return null;
+  return clean.match(/.{2}/g).join('-').toLowerCase();
+}
+
 // Filtrar por texto y por VLAN
 function filterMacBypass() {
   const term = document.getElementById('mac-bypass-search').value.toLowerCase().trim();
@@ -4171,12 +4178,16 @@ function filterMacBypass() {
 
   // 2. Filtrar por búsqueda de texto
   if (term) {
-    filtered = filtered.filter(d => 
-      d.mac_address.toLowerCase().includes(term) ||
-      d.propietario.toLowerCase().includes(term) ||
-      (d.alias && d.alias.toLowerCase().includes(term)) ||
-      (d.ip_address && d.ip_address.toLowerCase().includes(term))
-    );
+    const normalizedTerm = normalizeMac(term);
+    filtered = filtered.filter(d => {
+      if (normalizedTerm) {
+        const macNorm = normalizeMac(d.mac_address);
+        return macNorm && macNorm.includes(normalizedTerm);
+      }
+      return d.propietario.toLowerCase().includes(term) ||
+        (d.alias && d.alias.toLowerCase().includes(term)) ||
+        (d.ip_address && d.ip_address.toLowerCase().includes(term));
+    });
   }
   
   renderMacBypassTable(filtered);

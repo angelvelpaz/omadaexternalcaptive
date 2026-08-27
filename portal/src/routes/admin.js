@@ -1880,7 +1880,7 @@ router.post('/api/mac-bypass/bulk-import', requireAdmin, requireRol('operador'),
 // POST - Registrar nueva MAC en bypass
 router.post('/api/mac-bypass', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
-    const { macAddress, propietario, alias, ppsk, vlanId, cedula, ipAddress } = req.body;
+    const { macAddress, propietario, alias, ppsk, vlanId, cedula, ipAddress, dhcpServer } = req.body;
     if (!macAddress || !propietario) {
       return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
     }
@@ -1910,7 +1910,7 @@ router.post('/api/mac-bypass', requireAdmin, requireRol('operador'), async (req,
     // Crear DHCP static lease en MikroTik si se proporcionó IP
     if (ipAddress) {
       mikrotikSvc.setDhcpLease({
-        macAddress: cleanMac, ipAddress, server: 'all',
+        macAddress: cleanMac, ipAddress, server: dhcpServer || 'all',
         comment: `MAC Bypass - ${propietario}`
       }).catch(err => console.warn(`[MIKROTIK] Error creando DHCP lease para ${cleanMac}:`, err.message));
     }
@@ -1930,7 +1930,7 @@ router.post('/api/mac-bypass', requireAdmin, requireRol('operador'), async (req,
 router.put('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { macAddress, propietario, alias, ppsk, vlanId, cedula, ipAddress } = req.body;
+    const { macAddress, propietario, alias, ppsk, vlanId, cedula, ipAddress, dhcpServer } = req.body;
     
     if (!macAddress || !propietario) {
       return res.status(400).json({ error: 'La dirección MAC y el propietario son obligatorios.' });
@@ -1970,7 +1970,7 @@ router.put('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async (r
     if (ipAddress && ipAddress !== oldDevice.ip_address) {
       // IP nueva o cambiada → crear/actualizar lease
       mikrotikSvc.setDhcpLease({
-        macAddress: cleanMac, ipAddress, server: 'all',
+        macAddress: cleanMac, ipAddress, server: dhcpServer || 'all',
         comment: `MAC Bypass - ${propietario}`
       }).catch(err => console.warn(`[MIKROTIK] Error actualizando DHCP lease para ${cleanMac}:`, err.message));
     } else if (!ipAddress && oldDevice.ip_address) {
@@ -2063,6 +2063,14 @@ router.delete('/api/mac-bypass/:id', requireAdmin, requireRol('operador'), async
     }
 
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// GET - Listar servidores DHCP de MikroTik
+router.get('/api/mac-bypass/dhcp-servers', requireAdmin, requireRol('operador'), async (req, res, next) => {
+  try {
+    const servers = await mikrotikSvc.getDhcpServerNames();
+    res.json(servers);
   } catch (err) { next(err); }
 });
 

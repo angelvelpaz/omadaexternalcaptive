@@ -2451,6 +2451,13 @@
           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
         <p class="text-gray-400 text-[11px] mt-1 font-medium">💡 Se sincronizará automáticamente con MikroTik al guardar.</p>
       </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">DHCP Server (MikroTik)</label>
+        <select id="bypass-dhcp-server"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800">
+          <option value="">Seleccionar servidor DHCP...</option>
+        </select>
+      </div>
       <p id="bypass-error" class="text-red-500 text-xs hidden"></p>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" onclick="closeCreateMacBypassModal()"
@@ -4267,6 +4274,7 @@ function openCreateMacBypassModal() {
   document.getElementById('bypass-propietario').placeholder = 'Nombre completo resuelto';
   document.getElementById('modal-mac-title').textContent = 'Registrar Dispositivo PPSK/MAB';
   document.getElementById('btn-mac-submit').textContent = 'Registrar';
+  loadDhcpServers();
   const modal = document.getElementById('modal-create-mac-bypass');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -4291,6 +4299,7 @@ function editMacBypass(id) {
   document.getElementById('bypass-ppsk').value = item.ppsk || '';
   document.getElementById('bypass-vlan').value = item.vlan_id || '';
   document.getElementById('bypass-ip').value = item.ip_address || '';
+  loadDhcpServers();
 
   document.getElementById('modal-mac-title').textContent = 'Editar Dispositivo PPSK/MAB';
   document.getElementById('btn-mac-submit').textContent = 'Guardar';
@@ -4308,15 +4317,16 @@ async function submitCreateMacBypass(e) {
   const ppsk = document.getElementById('bypass-ppsk').value;
   const vlanId = document.getElementById('bypass-vlan').value.trim();
   const ipAddress = document.getElementById('bypass-ip').value.trim();
+  const dhcpServer = document.getElementById('bypass-dhcp-server').value;
   const errorEl = document.getElementById('bypass-error');
   
   errorEl.classList.add('hidden');
   
   try {
     if (editingBypassId) {
-      await api('PUT', `/mac-bypass/${editingBypassId}`, { macAddress, propietario, alias, ppsk, vlanId, ipAddress });
+      await api('PUT', `/mac-bypass/${editingBypassId}`, { macAddress, propietario, alias, ppsk, vlanId, ipAddress, dhcpServer });
     } else {
-      await api('POST', '/mac-bypass', { macAddress, propietario, alias, ppsk, vlanId, ipAddress });
+      await api('POST', '/mac-bypass', { macAddress, propietario, alias, ppsk, vlanId, ipAddress, dhcpServer });
     }
     closeCreateMacBypassModal();
     await loadMacBypass();
@@ -4338,6 +4348,20 @@ function togglePpskReveal(id, actualPpsk) {
     textEl.textContent = '••••••••';
     btnEl.textContent = '👁️';
     btnEl.title = 'Mostrar clave';
+  }
+}
+
+// Cargar servidores DHCP de MikroTik para el select
+async function loadDhcpServers() {
+  try {
+    const servers = await api('GET', '/mac-bypass/dhcp-servers');
+    const select = document.getElementById('bypass-dhcp-server');
+    select.innerHTML = '<option value="">Seleccionar servidor DHCP...</option>';
+    servers.forEach(s => {
+      select.innerHTML += `<option value="${s}">${s}</option>`;
+    });
+  } catch (err) {
+    console.warn('Error cargando servidores DHCP:', err.message);
   }
 }
 

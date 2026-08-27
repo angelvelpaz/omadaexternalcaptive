@@ -105,7 +105,7 @@ async function setDhcpLease({ macAddress, ipAddress, server, comment }) {
       return { ok: true, action: 'updated', leaseId: leases[0]['.id'] };
     } else {
       // Crear nuevo lease
-      const res = await client.post('/rest/ip/dhcp-server/lease', payload);
+      const res = await client.put('/rest/ip/dhcp-server/lease', payload);
       return { ok: true, action: 'created', leaseId: res.data?.['.id'] };
     }
   } catch (err) {
@@ -174,5 +174,6 @@ module.exports = {
   listDhcpLeases,
   setDhcpLease,
   removeDhcpLease,
-  checkDhcpLease
+  checkDhcpLease,
+  getDhcpServerNames
 };

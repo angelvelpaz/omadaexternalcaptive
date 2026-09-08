@@ -59,6 +59,45 @@ async function pollDevice(device) {
     ifMap[iface.ifIndex] = iface.descr || iface.alias || ('if' + iface.ifIndex);
   }
 
+  // If device is a router with related_switches, query switches for FDB to get physical ports
+  const macToSwitchPort = {};
+  const relatedSwitchIds = device.related_switches || [];
+  if (device.device_type === 'router' && relatedSwitchIds.length > 0) {
+    for (const switchId of relatedSwitchIds) {
+      try {
+        const swDevice = await ipamDb.getNetworkDeviceById(switchId);
+        if (!swDevice || !swDevice.enabled) continue;
+
+        const swCredential = swDevice.snmp_credential_id
+          ? await ipamDb.getSnmpCredentialById(swDevice.snmp_credential_id)
+          : {};
+
+        const swConfig = buildDeviceConfig(swDevice, swCredential);
+        const swResult = await genericFdbOnly(swConfig);
+
+        // Build ifIndex -> name map for this switch
+        const swIfMap = {};
+        for (const iface of (swResult.interfaces || [])) {
+          swIfMap[iface.ifIndex] = iface.descr || iface.alias || ('if' + iface.ifIndex);
+        }
+
+        // Map MAC -> switch port
+        for (const entry of (swResult.macTable || [])) {
+          if (entry.mac) {
+            macToSwitchPort[entry.mac] = {
+              switchId: swDevice.id,
+              switchName: swDevice.name,
+              ifIndex: entry.ifIndex,
+              portName: swIfMap[entry.ifIndex] || ('if' + entry.ifIndex),
+            };
+          }
+        }
+      } catch (err) {
+        console.error(`[IPAM-WORKER] Error consultando switch ${switchId}:`, err.message);
+      }
+    }
+  }
+
   let recordCount = 0;
 
   for (const entry of result.arp) {
@@ -71,12 +110,19 @@ async function pollDevice(device) {
       device_id: device.id,
       last_seen_at: new Date(),
     });
+
+    // Look up switch port for this MAC
+    const swPort = macToSwitchPort[entry.mac] || null;
+
     await ipamDb.insertObservation({
       ip_address: entry.ip,
       mac_address: entry.mac,
       interface_index: entry.ifIndex,
       interface_name: ifMap[entry.ifIndex] || null,
       device_id: device.id,
+      switch_device_id: swPort ? swPort.switchId : null,
+      switch_port_name: swPort ? swPort.portName : null,
+      switch_name: swPort ? swPort.switchName : null,
       source: 'arp',
     });
     recordCount++;

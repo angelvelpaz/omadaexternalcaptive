@@ -93,27 +93,29 @@ async function getNetworkDeviceById(id) {
 
 async function createNetworkDevice(data) {
   const trunkPorts = Array.isArray(data.trunk_ports) ? data.trunk_ports : null;
+  const relatedSwitches = Array.isArray(data.related_switches) ? data.related_switches : null;
   const r = await getPool().query(
-    `INSERT INTO ipam_network_devices (site_id, name, hostname, management_ip, vendor, model, device_type, enabled, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, trunk_ports)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    `INSERT INTO ipam_network_devices (site_id, name, hostname, management_ip, vendor, model, device_type, enabled, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, trunk_ports, related_switches)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [data.site_id || null, data.name, data.hostname || null, data.management_ip,
      data.vendor || 'generic', data.model || null, data.device_type || 'switch',
      data.enabled !== false, data.snmp_port || 161, data.snmp_timeout_ms || 5000,
-     data.snmp_retries || 2, data.snmp_credential_id || null, trunkPorts]
+     data.snmp_retries || 2, data.snmp_credential_id || null, trunkPorts, relatedSwitches]
   );
   return r.rows[0];
 }
 
 async function updateNetworkDevice(id, data) {
   const trunkPorts = Array.isArray(data.trunk_ports) ? data.trunk_ports : null;
+  const relatedSwitches = Array.isArray(data.related_switches) ? data.related_switches : null;
   const r = await getPool().query(
     `UPDATE ipam_network_devices SET site_id=$2, name=$3, hostname=$4, management_ip=$5, vendor=$6,
      model=$7, device_type=$8, enabled=$9, snmp_port=$10, snmp_timeout_ms=$11, snmp_retries=$12,
-     snmp_credential_id=$13, trunk_ports=$14, updated_at=NOW() WHERE id=$1 RETURNING *`,
+     snmp_credential_id=$13, trunk_ports=$14, related_switches=$15, updated_at=NOW() WHERE id=$1 RETURNING *`,
     [id, data.site_id || null, data.name, data.hostname || null, data.management_ip,
      data.vendor || 'generic', data.model || null, data.device_type || 'switch',
      data.enabled !== false, data.snmp_port || 161, data.snmp_timeout_ms || 5000,
-     data.snmp_retries || 2, data.snmp_credential_id || null, trunkPorts]
+     data.snmp_retries || 2, data.snmp_credential_id || null, trunkPorts, relatedSwitches]
   );
   return r.rows[0];
 }
@@ -299,10 +301,11 @@ async function getIpamStats() {
 async function insertObservation(data) {
   const mac = data.mac_address ? data.mac_address.toUpperCase().replace(/:/g, '-') : null;
   await getPool().query(
-    `INSERT INTO ipam_observations (address_id, device_id, ip_address, mac_address, interface_index, interface_name, vlan_id, source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    `INSERT INTO ipam_observations (address_id, device_id, ip_address, mac_address, interface_index, interface_name, vlan_id, source, switch_device_id, switch_port_name, switch_name)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
     [data.address_id || null, data.device_id || null, data.ip_address, mac,
-     data.interface_index || null, data.interface_name || null, data.vlan_id || null, data.source || 'snmp']
+     data.interface_index || null, data.interface_name || null, data.vlan_id || null, data.source || 'snmp',
+     data.switch_device_id || null, data.switch_port_name || null, data.switch_name || null]
   );
 }
 

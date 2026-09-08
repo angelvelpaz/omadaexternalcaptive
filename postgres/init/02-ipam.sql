@@ -109,6 +109,9 @@ CREATE TABLE IF NOT EXISTS ipam_observations (
     interface_name   VARCHAR(100),
     vlan_id          INTEGER,
     source           VARCHAR(20),
+    switch_device_id INTEGER,
+    switch_port_name VARCHAR(100),
+    switch_name      VARCHAR(100),
     observed_at      TIMESTAMPTZ DEFAULT NOW()
 );
 

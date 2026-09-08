@@ -100,16 +100,16 @@ router.get('/devices/:id', async (req, res, next) => {
 
 router.post('/devices', async (req, res, next) => {
   try {
-    const { name, hostname, management_ip, vendor, model, device_type, site_id, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, trunk_ports } = req.body;
+    const { name, hostname, management_ip, vendor, model, device_type, site_id, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, trunk_ports, related_switches } = req.body;
     if (!name || !management_ip) return res.status(400).json({ error: 'Nombre e IP de gestión requeridos.' });
-    res.json(await ipamDb.createNetworkDevice({ name, hostname, management_ip, vendor, model, device_type, site_id, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, trunk_ports }));
+    res.json(await ipamDb.createNetworkDevice({ name, hostname, management_ip, vendor, model, device_type, site_id, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, trunk_ports, related_switches }));
   } catch (err) { next(err); }
 });
 
 router.put('/devices/:id', async (req, res, next) => {
   try {
-    const { name, hostname, management_ip, vendor, model, device_type, site_id, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, enabled, trunk_ports } = req.body;
-    res.json(await ipamDb.updateNetworkDevice(req.params.id, { name, hostname, management_ip, vendor, model, device_type, site_id, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, enabled, trunk_ports }));
+    const { name, hostname, management_ip, vendor, model, device_type, site_id, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, enabled, trunk_ports, related_switches } = req.body;
+    res.json(await ipamDb.updateNetworkDevice(req.params.id, { name, hostname, management_ip, vendor, model, device_type, site_id, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, enabled, trunk_ports, related_switches }));
   } catch (err) { next(err); }
 });
 

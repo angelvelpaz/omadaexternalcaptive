@@ -10872,23 +10872,59 @@ async function queryFdbFromDevice(id) {
 }
 
 async function crossReferenceArpFdb() {
-  const routerId = prompt('ID del router (para ARP):');
-  if (!routerId) return;
-  const switchIdsStr = prompt('IDs de switches (separados por coma, para FDB):');
+  // Get available devices
+  let devices;
+  try {
+    devices = await api('GET', '/ipam/devices');
+  } catch (err) {
+    showToast('Error cargando dispositivos: ' + err.message, 'error');
+    return;
+  }
+
+  if (!devices || devices.length < 2) {
+    showToast('Se necesitan al menos 2 dispositivos (1 router + 1 switch).', 'error');
+    return;
+  }
+
+  const routers = devices.filter(d => d.device_type === 'router');
+  const switches = devices.filter(d => d.device_type === 'switch');
+
+  if (routers.length === 0) {
+    showToast('No hay routers configurados. Agregue un router primero.', 'error');
+    return;
+  }
+  if (switches.length === 0) {
+    showToast('No hay switches configurados. Agregue un switch primero.', 'error');
+    return;
+  }
+
+  // Build router options
+  let routerOptions = routers.map(r => `${r.id}: ${r.name} (${r.management_ip})`).join('\n');
+  const routerIdStr = prompt('Seleccione el router (para ARP):\n\n' + routerOptions + '\n\nIngrese el ID:');
+  if (!routerIdStr) return;
+  const routerId = parseInt(routerIdStr.trim());
+  if (isNaN(routerId)) {
+    showToast('ID de router inválido.', 'error');
+    return;
+  }
+
+  // Build switch options
+  let switchOptions = switches.map(s => `${s.id}: ${s.name} (${s.management_ip})`).join('\n');
+  const switchIdsStr = prompt('Seleccione los switches (para FDB):\n\n' + switchOptions + '\n\nIngrese IDs separados por coma:');
   if (!switchIdsStr) return;
-  const switchIds = switchIdsStr.split(',').map(s => parseInt(s.trim())).filter(Boolean);
+  const switchIds = switchIdsStr.split(',').map(s => parseInt(s.trim())).filter(id => !isNaN(id) && id > 0);
   if (switchIds.length === 0) {
-    showToast('Debe especificar al menos un switch.', 'error');
+    showToast('Debe especificar al menos un switch válido.', 'error');
     return;
   }
 
   try {
     showToast('Realizando mapeo cruzado ARP↔FDB...', 'success');
     const result = await api('POST', '/ipam/cross-reference', {
-      router_id: parseInt(routerId),
+      router_id: routerId,
       switch_ids: switchIds,
     });
-    showToast(`Mapeo completado: ${result.mappedCount} de ${result.arpCount} hosts con puerto identificado.`, 'success');
+    showToast('Mapeo completado: ' + result.mappedCount + ' de ' + result.arpCount + ' hosts con puerto identificado.', 'success');
     console.log('Cross-reference result:', result);
   } catch (err) {
     showToast('Error: ' + err.message, 'error');

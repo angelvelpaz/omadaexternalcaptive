@@ -244,8 +244,8 @@ router.delete('/addresses/:id', async (req, res, next) => {
 // ─── Observations ───────────────────────────────────────────────────────────
 router.get('/observations', async (req, res, next) => {
   try {
-    const { device_id, mac_address, ip_address, limit } = req.query;
-    res.json(await ipamDb.listObservations({ device_id, mac_address, ip_address, limit: parseInt(limit) || 100 }));
+    const { device_id, mac_address, ip_address, source, limit } = req.query;
+    res.json(await ipamDb.listObservations({ device_id, mac_address, ip_address, source, limit: parseInt(limit) || 100 }));
   } catch (err) { next(err); }
 });
 

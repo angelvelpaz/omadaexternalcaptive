@@ -314,6 +314,7 @@ async function listObservations(filters) {
   if (filters.device_id) { params.push(filters.device_id); conds.push(`o.device_id=$${params.length}`); }
   if (filters.mac_address) { params.push(filters.mac_address); conds.push(`o.mac_address=$${params.length}`); }
   if (filters.ip_address) { params.push(filters.ip_address); conds.push(`o.ip_address=$${params.length}`); }
+  if (filters.source) { params.push(filters.source); conds.push(`o.source=$${params.length}`); }
   if (conds.length) q += ' WHERE ' + conds.join(' AND ');
   q += ' ORDER BY o.observed_at DESC';
   if (filters.limit) { params.push(filters.limit); q += ` LIMIT $${params.length}`; }

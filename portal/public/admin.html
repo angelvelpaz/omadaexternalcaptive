@@ -10441,7 +10441,7 @@ async function loadIpamDashboard() {
   try {
     const [stats, observations] = await Promise.all([
       api('GET', '/ipam/stats'),
-      api('GET', '/ipam/observations?limit=20'),
+      api('GET', '/ipam/observations?source=arp&limit=20'),
     ]);
     document.getElementById('ipam-stat-subnets').textContent = stats.subnets;
     document.getElementById('ipam-stat-assigned').textContent = stats.assigned;
@@ -10452,12 +10452,12 @@ async function loadIpamDashboard() {
 
     const tbody = document.getElementById('ipam-observations-tbody');
     if (!observations.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">Sin observaciones recientes.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">Sin observaciones ARP recientes. Ejecute un descubrimiento primero.</td></tr>';
       return;
     }
     tbody.innerHTML = observations.map(o => `
       <tr class="hover:bg-gray-50/50">
-        <td class="px-4 py-3 font-mono text-xs">${esc(o.ip_address)}</td>
+        <td class="px-4 py-3 font-mono text-xs">${esc(o.ip_address || '—')}</td>
         <td class="px-4 py-3 font-mono text-xs">${esc(o.mac_address || '—')}</td>
         <td class="px-4 py-3 text-xs">${esc(o.device_name || '—')}</td>
         <td class="px-4 py-3 text-xs">${esc(o.interface_name || o.interface_index || '—')}</td>

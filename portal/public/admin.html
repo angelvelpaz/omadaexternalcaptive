@@ -146,6 +146,14 @@
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="mac-bypass" role="menuitem">PPSK / MAC Bypass</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="groups" role="menuitem">Grupos RADIUS</button>
               <div class="border-t border-gray-50 my-1"></div>
+              <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">IPAM</div>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam" role="menuitem">Resumen IPAM</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-addresses" role="menuitem">Direcciones IP</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-vlans" role="menuitem">Subredes y VLAN</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-devices" role="menuitem">Dispositivos de Red</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-conflicts" role="menuitem">Conflictos IP</button>
+              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-discovery" role="menuitem">Descubrimiento SNMP</button>
+              <div class="border-t border-gray-50 my-1"></div>
               <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Hospitalidad</div>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="hotel-guests" role="menuitem">Huéspedes (Hotel)</button>
               <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="restaurant-pins" role="menuitem">PINs (Restaurante)</button>
@@ -241,6 +249,13 @@
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ldap-users">WPA Enterprise</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="mac-bypass">PPSK / MAC Bypass</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="groups">Grupos RADIUS</button>
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-2 pb-0.5">IPAM</div>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam">Resumen IPAM</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-addresses">Direcciones IP</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-vlans">Subredes y VLAN</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-devices">Dispositivos de Red</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-conflicts">Conflictos IP</button>
+              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-discovery">Descubrimiento SNMP</button>
               <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-2 pb-0.5">Hospitalidad</div>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="hotel-guests">Huéspedes (Hotel)</button>
               <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="restaurant-pins">PINs (Restaurante)</button>
@@ -2325,7 +2340,531 @@
       </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- IPAM — Resumen                                                        -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-ipam" class="tab-content hidden">
+      <div class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Resumen IPAM</h2>
+            <p class="text-sm text-gray-500">Gestión centralizada de direccionamiento IP y dispositivos de red.</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="runIpamDiscovery()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
+              🔄 Ejecutar Descubrimiento
+            </button>
+          </div>
+        </div>
+        <!-- Tarjetas de estadísticas -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="ipam-stats-cards">
+          <div class="bg-white rounded-xl border border-gray-100 p-4 text-center">
+            <div class="text-2xl font-bold text-blue-600" id="ipam-stat-subnets">0</div>
+            <div class="text-xs text-gray-500 font-medium mt-1">Subredes</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 p-4 text-center">
+            <div class="text-2xl font-bold text-green-600" id="ipam-stat-assigned">0</div>
+            <div class="text-xs text-gray-500 font-medium mt-1">IP Asignadas</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 p-4 text-center">
+            <div class="text-2xl font-bold text-gray-600" id="ipam-stat-available">0</div>
+            <div class="text-xs text-gray-500 font-medium mt-1">Disponibles</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 p-4 text-center">
+            <div class="text-2xl font-bold text-red-600" id="ipam-stat-conflicts">0</div>
+            <div class="text-xs text-gray-500 font-medium mt-1">Conflictos</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 p-4 text-center">
+            <div class="text-2xl font-bold text-indigo-600" id="ipam-stat-devices">0</div>
+            <div class="text-xs text-gray-500 font-medium mt-1">Dispositivos</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 p-4 text-center">
+            <div class="text-2xl font-bold text-emerald-600" id="ipam-stat-active-devices">0</div>
+            <div class="text-xs text-gray-500 font-medium mt-1">Activos SNMP</div>
+          </div>
+        </div>
+        <!-- Últimas observaciones -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 class="text-sm font-bold text-gray-700 mb-4">Últimas Observaciones</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold">
+                  <th class="py-3 px-4">IP</th>
+                  <th class="py-3 px-4">MAC</th>
+                  <th class="py-3 px-4">Dispositivo</th>
+                  <th class="py-3 px-4">Interfaz</th>
+                  <th class="py-3 px-4">Fuente</th>
+                  <th class="py-3 px-4">Fecha</th>
+                </tr>
+              </thead>
+              <tbody id="ipam-observations-tbody" class="divide-y divide-gray-50 text-gray-600">
+                <tr><td colspan="6" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- IPAM — Direcciones IP                                                 -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-ipam-addresses" class="tab-content hidden">
+      <div class="space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Direcciones IP</h2>
+            <p class="text-sm text-gray-500">Inventario de direcciones IP registradas y observadas.</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="openIpamAddressModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
+              + Registrar IP
+            </button>
+          </div>
+        </div>
+        <!-- Filtros -->
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input type="text" id="ipam-addr-search" placeholder="Buscar IP, MAC, hostname o propietario..." oninput="loadIpamAddresses()"
+            class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          <select id="ipam-addr-vlan-filter" onchange="loadIpamAddresses()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Todas las VLAN</option>
+          </select>
+          <select id="ipam-addr-status-filter" onchange="loadIpamAddresses()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Todos los estados</option>
+            <option value="available">Disponible</option>
+            <option value="assigned">Asignada</option>
+            <option value="observed">Observada</option>
+            <option value="conflict">Conflicto</option>
+            <option value="reserved">Reservada</option>
+          </select>
+        </div>
+        <!-- Tabla -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold bg-gray-50/50">
+                  <th class="py-3 px-4">Dirección IP</th>
+                  <th class="py-3 px-4">VLAN</th>
+                  <th class="py-3 px-4">MAC</th>
+                  <th class="py-3 px-4">Hostname</th>
+                  <th class="py-3 px-4">Propietario</th>
+                  <th class="py-3 px-4">Estado</th>
+                  <th class="py-3 px-4">Fuente</th>
+                  <th class="py-3 px-4">Última vez</th>
+                  <th class="py-3 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ipam-addresses-tbody" class="divide-y divide-gray-50 text-gray-600">
+                <tr><td colspan="9" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+            <span id="ipam-addr-count" class="text-xs text-gray-500">0 direcciones</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- IPAM — Subredes y VLAN                                                -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-ipam-vlans" class="tab-content hidden">
+      <div class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Subredes y VLAN</h2>
+            <p class="text-sm text-gray-500">Configuración de VLAN y redes gestionadas.</p>
+          </div>
+          <button onclick="openIpamVlanModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
+            + Nueva VLAN
+          </button>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold bg-gray-50/50">
+                  <th class="py-3 px-4">VLAN ID</th>
+                  <th class="py-3 px-4">Nombre</th>
+                  <th class="py-3 px-4">Red/CIDR</th>
+                  <th class="py-3 px-4">Gateway</th>
+                  <th class="py-3 px-4">DHCP</th>
+                  <th class="py-3 px-4">Estado</th>
+                  <th class="py-3 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ipam-vlans-tbody" class="divide-y divide-gray-50 text-gray-600">
+                <tr><td colspan="7" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- IPAM — Dispositivos de Red                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-ipam-devices" class="tab-content hidden">
+      <div class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Dispositivos de Red</h2>
+            <p class="text-sm text-gray-500">Inventario de routers y switches gestionados por SNMP.</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="openIpamCredentialModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              🔑 Credenciales SNMP
+            </button>
+            <button onclick="openIpamDeviceModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
+              + Agregar Dispositivo
+            </button>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold bg-gray-50/50">
+                  <th class="py-3 px-4">Nombre</th>
+                  <th class="py-3 px-4">IP Gestión</th>
+                  <th class="py-3 px-4">Fabricante</th>
+                  <th class="py-3 px-4">Tipo</th>
+                  <th class="py-3 px-4">Último Poll</th>
+                  <th class="py-3 px-4">Estado</th>
+                  <th class="py-3 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ipam-devices-tbody" class="divide-y divide-gray-50 text-gray-600">
+                <tr><td colspan="7" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- IPAM — Conflictos IP                                                  -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-ipam-conflicts" class="tab-content hidden">
+      <div class="space-y-6">
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">Conflictos IP</h2>
+          <p class="text-sm text-gray-500">Direcciones IP detectadas con múltiples MAC asociadas.</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold bg-gray-50/50">
+                  <th class="py-3 px-4">Dirección IP</th>
+                  <th class="py-3 px-4">VLAN</th>
+                  <th class="py-3 px-4">MAC Detectadas</th>
+                  <th class="py-3 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ipam-conflicts-tbody" class="divide-y divide-gray-50 text-gray-600">
+                <tr><td colspan="4" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- IPAM — Descubrimiento SNMP                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-ipam-discovery" class="tab-content hidden">
+      <div class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Descubrimiento SNMP</h2>
+            <p class="text-sm text-gray-500">Historial de ejecuciones de descubrimiento y polling.</p>
+          </div>
+          <button onclick="runIpamDiscovery()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
+            🔄 Ejecutar Ahora
+          </button>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold bg-gray-50/50">
+                  <th class="py-3 px-4">Dispositivo</th>
+                  <th class="py-3 px-4">Inicio</th>
+                  <th class="py-3 px-4">Fin</th>
+                  <th class="py-3 px-4">Estado</th>
+                  <th class="py-3 px-4">Registros</th>
+                  <th class="py-3 px-4">Error</th>
+                </tr>
+              </thead>
+              <tbody id="ipam-pollruns-tbody" class="divide-y divide-gray-50 text-gray-600">
+                <tr><td colspan="6" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
+</div>
+
+<!-- ── MODAL DISPOSITIVO IPAM ── -->
+<div id="modal-ipam-device" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-indigo-800 to-blue-900 text-white">
+      <h3 class="font-bold text-lg leading-tight" id="ipam-device-modal-title">Agregar Dispositivo de Red</h3>
+      <button onclick="closeIpamDeviceModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <form onsubmit="submitIpamDevice(event)" class="p-6 space-y-4">
+      <input type="hidden" id="ipam-device-id">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre *</label>
+          <input type="text" id="ipam-device-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">IP Gestión *</label>
+          <input type="text" id="ipam-device-ip" required placeholder="192.168.1.1" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fabricante</label>
+          <select id="ipam-device-vendor" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="generic">Genérico</option>
+            <option value="mikrotik">MikroTik</option>
+            <option value="cisco">Cisco</option>
+            <option value="hpe">HPE/Aruba</option>
+            <option value="ruijie">Ruijie</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tipo</label>
+          <select id="ipam-device-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="switch">Switch</option>
+            <option value="router">Router</option>
+            <option value="firewall">Firewall</option>
+            <option value="ap">Access Point</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Modelo</label>
+          <input type="text" id="ipam-device-model" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hostname</label>
+          <input type="text" id="ipam-device-hostname" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Credencial SNMP</label>
+          <select id="ipam-device-credential" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Sede</label>
+          <select id="ipam-device-site" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Puerto SNMP</label>
+          <input type="number" id="ipam-device-port" value="161" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Timeout (ms)</label>
+          <input type="number" id="ipam-device-timeout" value="5000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Reintentos</label>
+          <input type="number" id="ipam-device-retries" value="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+        </div>
+      </div>
+      <p id="ipam-device-error" class="text-red-500 text-xs hidden"></p>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeIpamDeviceModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
+        <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL CREDENCIAL SNMP ── -->
+<div id="modal-ipam-credential" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-gray-700 to-gray-900 text-white">
+      <h3 class="font-bold text-lg leading-tight" id="ipam-cred-modal-title">Agregar Credencial SNMP</h3>
+      <button onclick="closeIpamCredentialModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <form onsubmit="submitIpamCredential(event)" class="p-6 space-y-4">
+      <input type="hidden" id="ipam-cred-id">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre *</label>
+        <input type="text" id="ipam-cred-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Versión SNMP</label>
+        <select id="ipam-cred-version" onchange="toggleSnmpV3Fields()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+          <option value="2c">SNMPv2c</option>
+          <option value="3" selected>SNMPv3</option>
+        </select>
+      </div>
+      <div id="snmpv2c-fields">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Community</label>
+        <input type="text" id="ipam-cred-community" value="public" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+      </div>
+      <div id="snmpv3-fields" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nivel de Seguridad</label>
+          <select id="ipam-cred-level" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="authPriv">authPriv</option>
+            <option value="authNoPriv">authNoPriv</option>
+            <option value="noAuthNoPriv">noAuthNoPriv</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Usuario</label>
+          <input type="text" id="ipam-cred-username" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Auth Protocol</label>
+            <select id="ipam-cred-auth-proto" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              <option value="">--</option>
+              <option value="SHA">SHA</option>
+              <option value="SHA256">SHA256</option>
+              <option value="MD5">MD5</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Auth Secret</label>
+            <input type="password" id="ipam-cred-auth-secret" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Priv Protocol</label>
+            <select id="ipam-cred-priv-proto" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              <option value="">--</option>
+              <option value="AES">AES</option>
+              <option value="AES256">AES256</option>
+              <option value="DES">DES</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Priv Secret</label>
+            <input type="password" id="ipam-cred-priv-secret" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeIpamCredentialModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
+        <button type="submit" class="px-5 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL VLAN IPAM ── -->
+<div id="modal-ipam-vlan" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-700 to-indigo-800 text-white">
+      <h3 class="font-bold text-lg leading-tight" id="ipam-vlan-modal-title">Nueva VLAN</h3>
+      <button onclick="closeIpamVlanModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <form onsubmit="submitIpamVlan(event)" class="p-6 space-y-4">
+      <input type="hidden" id="ipam-vlan-db-id">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">VLAN ID *</label>
+          <input type="number" id="ipam-vlan-id" required min="1" max="4094" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre</label>
+          <input type="text" id="ipam-vlan-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Red/CIDR</label>
+        <input type="text" id="ipam-vlan-network" placeholder="192.168.1.0/24" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Gateway</label>
+          <input type="text" id="ipam-vlan-gateway" placeholder="192.168.1.1" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">DHCP</label>
+          <input type="text" id="ipam-vlan-dhcp" placeholder="MikroTik" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Descripción</label>
+        <input type="text" id="ipam-vlan-desc" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeIpamVlanModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
+        <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL REGISTRAR IP ── -->
+<div id="modal-ipam-address" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-green-700 to-emerald-800 text-white">
+      <h3 class="font-bold text-lg leading-tight">Registrar Dirección IP</h3>
+      <button onclick="closeIpamAddressModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <form onsubmit="submitIpamAddress(event)" class="p-6 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dirección IP *</label>
+        <input type="text" id="ipam-addr-ip" required placeholder="192.168.1.100" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">VLAN</label>
+        <select id="ipam-addr-vlan" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+          <option value="">Seleccionar VLAN...</option>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">MAC Address</label>
+          <input type="text" id="ipam-addr-mac" placeholder="AA:BB:CC:DD:EE:FF" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hostname</label>
+          <input type="text" id="ipam-addr-hostname" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Propietario</label>
+        <input type="text" id="ipam-addr-owner" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Descripción</label>
+        <input type="text" id="ipam-addr-desc" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeIpamAddressModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
+        <button type="submit" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">Registrar</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- ── MODAL IMPORTAR CSV PPSK MAB ── -->
@@ -3204,6 +3743,12 @@ function switchTab(tab) {
   else if (tab === 'external-db') loadExternalDb();
   else if (tab === 'admins') loadAdmins();
   else if (tab === 'audit') loadAuditLogs(0);
+  else if (tab === 'ipam') loadIpamDashboard();
+  else if (tab === 'ipam-addresses') loadIpamAddresses();
+  else if (tab === 'ipam-vlans') loadIpamVlans();
+  else if (tab === 'ipam-devices') loadIpamDevices();
+  else if (tab === 'ipam-conflicts') loadIpamConflicts();
+  else if (tab === 'ipam-discovery') loadIpamPollRuns();
 }
 
 // ── Controladores e Interacción de Dropdowns ──────────────────────────────────
@@ -9872,6 +10417,562 @@ function showToast(msg, type) {
   document.body.appendChild(toast);
   setTimeout(() => { toast.style.opacity = '0'; }, 2500);
   setTimeout(() => { toast.remove(); }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// IPAM — Funciones JavaScript
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const IPAM_API = '/admin/api/ipam';
+let ipamVlansList = [];
+let ipamDevicesList = [];
+let ipamCredentialsList = [];
+
+// ── IPAM Dashboard ──────────────────────────────────────────────────────────
+async function loadIpamDashboard() {
+  try {
+    const [stats, observations] = await Promise.all([
+      api('GET', '/ipam/stats'),
+      api('GET', '/ipam/observations?limit=20'),
+    ]);
+    document.getElementById('ipam-stat-subnets').textContent = stats.subnets;
+    document.getElementById('ipam-stat-assigned').textContent = stats.assigned;
+    document.getElementById('ipam-stat-available').textContent = stats.available;
+    document.getElementById('ipam-stat-conflicts').textContent = stats.conflicts;
+    document.getElementById('ipam-stat-devices').textContent = stats.devices;
+    document.getElementById('ipam-stat-active-devices').textContent = stats.active_devices;
+
+    const tbody = document.getElementById('ipam-observations-tbody');
+    if (!observations.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">Sin observaciones recientes.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = observations.map(o => `
+      <tr class="hover:bg-gray-50/50">
+        <td class="px-4 py-3 font-mono text-xs">${esc(o.ip_address)}</td>
+        <td class="px-4 py-3 font-mono text-xs">${esc(o.mac_address || '—')}</td>
+        <td class="px-4 py-3 text-xs">${esc(o.device_name || '—')}</td>
+        <td class="px-4 py-3 text-xs">${esc(o.interface_name || o.interface_index || '—')}</td>
+        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs font-mono bg-gray-100 text-gray-700">${esc(o.source)}</span></td>
+        <td class="px-4 py-3 text-xs text-gray-400">${fmtDate(o.observed_at)}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    showToast('Error cargando IPAM: ' + err.message, 'error');
+  }
+}
+
+// ── IPAM Addresses ──────────────────────────────────────────────────────────
+async function loadIpamAddresses() {
+  try {
+    const search = document.getElementById('ipam-addr-search').value.trim();
+    const vlan = document.getElementById('ipam-addr-vlan-filter').value;
+    const status = document.getElementById('ipam-addr-status-filter').value;
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (vlan) params.set('vlan_id', vlan);
+    if (status) params.set('status', status);
+    params.set('limit', '200');
+
+    const [addresses, vlans] = await Promise.all([
+      api('GET', `/ipam/addresses?${params}`),
+      ipamVlansList.length ? Promise.resolve(ipamVlansList) : api('GET', '/ipam/vlans'),
+    ]);
+    ipamVlansList = vlans;
+
+    // Populate VLAN filter
+    const vlanSelect = document.getElementById('ipam-addr-vlan-filter');
+    const currentVlan = vlanSelect.value;
+    if (vlanSelect.options.length <= 1) {
+      vlans.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = `VLAN ${v.vlan_id}${v.name ? ' - ' + v.name : ''}`;
+        vlanSelect.appendChild(opt);
+      });
+      vlanSelect.value = currentVlan;
+    }
+
+    const tbody = document.getElementById('ipam-addresses-tbody');
+    if (!addresses.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay direcciones IP registradas.</td></tr>';
+      document.getElementById('ipam-addr-count').textContent = '0 direcciones';
+      return;
+    }
+
+    const statusColors = {
+      available: 'bg-gray-100 text-gray-600',
+      assigned: 'bg-green-100 text-green-700',
+      observed: 'bg-blue-100 text-blue-700',
+      conflict: 'bg-red-100 text-red-700',
+      reserved: 'bg-yellow-100 text-yellow-700',
+    };
+
+    tbody.innerHTML = addresses.map(a => `
+      <tr class="hover:bg-gray-50/50">
+        <td class="px-4 py-3 font-mono font-semibold text-sm">${esc(a.address)}</td>
+        <td class="px-4 py-3 text-xs">${a.vlan_number ? 'VLAN ' + a.vlan_number : '—'}</td>
+        <td class="px-4 py-3 font-mono text-xs">${esc(a.mac_address || '—')}</td>
+        <td class="px-4 py-3 text-xs">${esc(a.hostname || '—')}</td>
+        <td class="px-4 py-3 text-xs">${esc(a.owner || '—')}</td>
+        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[a.status] || 'bg-gray-100'}">${esc(a.status)}</span></td>
+        <td class="px-4 py-3 text-xs">${esc(a.source)}</td>
+        <td class="px-4 py-3 text-xs text-gray-400">${fmtDate(a.last_seen_at)}</td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="deleteIpamAddress(${a.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
+        </td>
+      </tr>
+    `).join('');
+    document.getElementById('ipam-addr-count').textContent = `${addresses.length} direcciones`;
+  } catch (err) {
+    showToast('Error cargando direcciones: ' + err.message, 'error');
+  }
+}
+
+function openIpamAddressModal() {
+  document.getElementById('modal-ipam-address').classList.remove('hidden');
+  document.getElementById('modal-ipam-address').classList.add('flex');
+  // Populate VLAN dropdown
+  const select = document.getElementById('ipam-addr-vlan');
+  select.innerHTML = '<option value="">Seleccionar VLAN...</option>';
+  ipamVlansList.forEach(v => {
+    select.innerHTML += `<option value="${v.id}">VLAN ${v.vlan_id}${v.name ? ' - ' + v.name : ''}</option>`;
+  });
+}
+
+function closeIpamAddressModal() {
+  document.getElementById('modal-ipam-address').classList.add('hidden');
+  document.getElementById('modal-ipam-address').classList.remove('flex');
+}
+
+async function submitIpamAddress(e) {
+  e.preventDefault();
+  try {
+    await api('POST', '/ipam/addresses', {
+      address: document.getElementById('ipam-addr-ip').value.trim(),
+      vlan_id: document.getElementById('ipam-addr-vlan').value || null,
+      mac_address: document.getElementById('ipam-addr-mac').value.trim() || null,
+      hostname: document.getElementById('ipam-addr-hostname').value.trim() || null,
+      owner: document.getElementById('ipam-addr-owner').value.trim() || null,
+      description: document.getElementById('ipam-addr-desc').value.trim() || null,
+      status: 'assigned',
+      source: 'manual',
+    });
+    closeIpamAddressModal();
+    showToast('Dirección IP registrada.', 'success');
+    loadIpamAddresses();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function deleteIpamAddress(id) {
+  if (!confirm('¿Eliminar esta dirección IP?')) return;
+  try {
+    await api('DELETE', `/ipam/addresses/${id}`);
+    showToast('Dirección eliminada.', 'success');
+    loadIpamAddresses();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+// ── IPAM VLANs ──────────────────────────────────────────────────────────────
+async function loadIpamVlans() {
+  try {
+    const vlans = await api('GET', '/ipam/vlans');
+    ipamVlansList = vlans;
+    const tbody = document.getElementById('ipam-vlans-tbody');
+    if (!vlans.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">No hay VLAN configuradas.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = vlans.map(v => `
+      <tr class="hover:bg-gray-50/50">
+        <td class="px-4 py-3 font-mono font-bold text-blue-600">${v.vlan_id}</td>
+        <td class="px-4 py-3 font-medium">${esc(v.name || '—')}</td>
+        <td class="px-4 py-3 font-mono text-xs">${esc(v.network || '—')}</td>
+        <td class="px-4 py-3 font-mono text-xs">${esc(v.gateway || '—')}</td>
+        <td class="px-4 py-3 text-xs">${esc(v.dhcp_source || '—')}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${v.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">
+            ${v.enabled ? 'Activa' : 'Inactiva'}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-right space-x-2">
+          <button onclick="editIpamVlan(${v.id})" class="text-blue-500 hover:text-blue-700 text-xs font-medium">Editar</button>
+          <button onclick="deleteIpamVlan(${v.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    showToast('Error cargando VLANs: ' + err.message, 'error');
+  }
+}
+
+function openIpamVlanModal() {
+  document.getElementById('ipam-vlan-modal-title').textContent = 'Nueva VLAN';
+  document.getElementById('ipam-vlan-db-id').value = '';
+  document.getElementById('ipam-vlan-id').value = '';
+  document.getElementById('ipam-vlan-name').value = '';
+  document.getElementById('ipam-vlan-network').value = '';
+  document.getElementById('ipam-vlan-gateway').value = '';
+  document.getElementById('ipam-vlan-dhcp').value = '';
+  document.getElementById('ipam-vlan-desc').value = '';
+  document.getElementById('modal-ipam-vlan').classList.remove('hidden');
+  document.getElementById('modal-ipam-vlan').classList.add('flex');
+}
+
+function closeIpamVlanModal() {
+  document.getElementById('modal-ipam-vlan').classList.add('hidden');
+  document.getElementById('modal-ipam-vlan').classList.remove('flex');
+}
+
+async function editIpamVlan(id) {
+  const v = ipamVlansList.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('ipam-vlan-modal-title').textContent = 'Editar VLAN';
+  document.getElementById('ipam-vlan-db-id').value = v.id;
+  document.getElementById('ipam-vlan-id').value = v.vlan_id;
+  document.getElementById('ipam-vlan-name').value = v.name || '';
+  document.getElementById('ipam-vlan-network').value = v.network || '';
+  document.getElementById('ipam-vlan-gateway').value = v.gateway || '';
+  document.getElementById('ipam-vlan-dhcp').value = v.dhcp_source || '';
+  document.getElementById('ipam-vlan-desc').value = v.description || '';
+  document.getElementById('modal-ipam-vlan').classList.remove('hidden');
+  document.getElementById('modal-ipam-vlan').classList.add('flex');
+}
+
+async function submitIpamVlan(e) {
+  e.preventDefault();
+  const dbId = document.getElementById('ipam-vlan-db-id').value;
+  const data = {
+    vlan_id: parseInt(document.getElementById('ipam-vlan-id').value),
+    name: document.getElementById('ipam-vlan-name').value.trim() || null,
+    network: document.getElementById('ipam-vlan-network').value.trim() || null,
+    gateway: document.getElementById('ipam-vlan-gateway').value.trim() || null,
+    dhcp_source: document.getElementById('ipam-vlan-dhcp').value.trim() || null,
+    description: document.getElementById('ipam-vlan-desc').value.trim() || null,
+  };
+  try {
+    if (dbId) {
+      await api('PUT', `/ipam/vlans/${dbId}`, data);
+    } else {
+      await api('POST', '/ipam/vlans', data);
+    }
+    closeIpamVlanModal();
+    showToast('VLAN guardada.', 'success');
+    loadIpamVlans();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function deleteIpamVlan(id) {
+  if (!confirm('¿Eliminar esta VLAN y todas sus direcciones?')) return;
+  try {
+    await api('DELETE', `/ipam/vlans/${id}`);
+    showToast('VLAN eliminada.', 'success');
+    loadIpamVlans();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+// ── IPAM Devices ────────────────────────────────────────────────────────────
+async function loadIpamDevices() {
+  try {
+    const [devices, credentials] = await Promise.all([
+      api('GET', '/ipam/devices'),
+      ipamCredentialsList.length ? Promise.resolve(ipamCredentialsList) : api('GET', '/ipam/credentials'),
+    ]);
+    ipamDevicesList = devices;
+    ipamCredentialsList = credentials;
+
+    const tbody = document.getElementById('ipam-devices-tbody');
+    if (!devices.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">No hay dispositivos registrados.</td></tr>';
+      return;
+    }
+
+    const statusColors = {
+      success: 'bg-green-100 text-green-700',
+      warning: 'bg-yellow-100 text-yellow-700',
+      error: 'bg-red-100 text-red-700',
+    };
+
+    tbody.innerHTML = devices.map(d => `
+      <tr class="hover:bg-gray-50/50">
+        <td class="px-4 py-3 font-medium">${esc(d.name)}</td>
+        <td class="px-4 py-3 font-mono text-xs">${esc(d.management_ip)}</td>
+        <td class="px-4 py-3 text-xs capitalize">${esc(d.vendor)}</td>
+        <td class="px-4 py-3 text-xs capitalize">${esc(d.device_type)}</td>
+        <td class="px-4 py-3 text-xs text-gray-400">${fmtDate(d.last_poll_at)}</td>
+        <td class="px-4 py-3">
+          ${d.last_poll_status ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[d.last_poll_status] || 'bg-gray-100'}">${esc(d.last_poll_status)}</span>` : '<span class="text-gray-400 text-xs">Sin consultar</span>'}
+        </td>
+        <td class="px-4 py-3 text-right space-x-2">
+          <button onclick="testIpamDevice(${d.id})" class="text-purple-500 hover:text-purple-700 text-xs font-medium">Probar SNMP</button>
+          <button onclick="pollIpamDevice(${d.id})" class="text-blue-500 hover:text-blue-700 text-xs font-medium">Consultar</button>
+          <button onclick="editIpamDevice(${d.id})" class="text-gray-500 hover:text-gray-700 text-xs font-medium">Editar</button>
+          <button onclick="deleteIpamDevice(${d.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    showToast('Error cargando dispositivos: ' + err.message, 'error');
+  }
+}
+
+function openIpamDeviceModal() {
+  document.getElementById('ipam-device-modal-title').textContent = 'Agregar Dispositivo de Red';
+  document.getElementById('ipam-device-id').value = '';
+  document.getElementById('ipam-device-name').value = '';
+  document.getElementById('ipam-device-ip').value = '';
+  document.getElementById('ipam-device-vendor').value = 'generic';
+  document.getElementById('ipam-device-type').value = 'switch';
+  document.getElementById('ipam-device-model').value = '';
+  document.getElementById('ipam-device-hostname').value = '';
+  document.getElementById('ipam-device-port').value = '161';
+  document.getElementById('ipam-device-timeout').value = '5000';
+  document.getElementById('ipam-device-retries').value = '2';
+  populateIpamDeviceSelects();
+  document.getElementById('modal-ipam-device').classList.remove('hidden');
+  document.getElementById('modal-ipam-device').classList.add('flex');
+}
+
+function closeIpamDeviceModal() {
+  document.getElementById('modal-ipam-device').classList.add('hidden');
+  document.getElementById('modal-ipam-device').classList.remove('flex');
+}
+
+async function populateIpamDeviceSelects() {
+  if (!ipamCredentialsList.length) {
+    try { ipamCredentialsList = await api('GET', '/ipam/credentials'); } catch {}
+  }
+  const credSelect = document.getElementById('ipam-device-credential');
+  credSelect.innerHTML = '<option value="">Seleccionar...</option>';
+  ipamCredentialsList.forEach(c => {
+    credSelect.innerHTML += `<option value="${c.id}">${esc(c.name)} (${c.snmp_version})</option>`;
+  });
+}
+
+async function editIpamDevice(id) {
+  const d = ipamDevicesList.find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('ipam-device-modal-title').textContent = 'Editar Dispositivo';
+  document.getElementById('ipam-device-id').value = d.id;
+  document.getElementById('ipam-device-name').value = d.name;
+  document.getElementById('ipam-device-ip').value = d.management_ip;
+  document.getElementById('ipam-device-vendor').value = d.vendor;
+  document.getElementById('ipam-device-type').value = d.device_type;
+  document.getElementById('ipam-device-model').value = d.model || '';
+  document.getElementById('ipam-device-hostname').value = d.hostname || '';
+  document.getElementById('ipam-device-port').value = d.snmp_port || 161;
+  document.getElementById('ipam-device-timeout').value = d.snmp_timeout_ms || 5000;
+  document.getElementById('ipam-device-retries').value = d.snmp_retries || 2;
+  await populateIpamDeviceSelects();
+  document.getElementById('ipam-device-credential').value = d.snmp_credential_id || '';
+  document.getElementById('modal-ipam-device').classList.remove('hidden');
+  document.getElementById('modal-ipam-device').classList.add('flex');
+}
+
+async function submitIpamDevice(e) {
+  e.preventDefault();
+  const dbId = document.getElementById('ipam-device-id').value;
+  const data = {
+    name: document.getElementById('ipam-device-name').value.trim(),
+    management_ip: document.getElementById('ipam-device-ip').value.trim(),
+    vendor: document.getElementById('ipam-device-vendor').value,
+    device_type: document.getElementById('ipam-device-type').value,
+    model: document.getElementById('ipam-device-model').value.trim() || null,
+    hostname: document.getElementById('ipam-device-hostname').value.trim() || null,
+    snmp_port: parseInt(document.getElementById('ipam-device-port').value) || 161,
+    snmp_timeout_ms: parseInt(document.getElementById('ipam-device-timeout').value) || 5000,
+    snmp_retries: parseInt(document.getElementById('ipam-device-retries').value) || 2,
+    snmp_credential_id: document.getElementById('ipam-device-credential').value || null,
+  };
+  try {
+    if (dbId) {
+      await api('PUT', `/ipam/devices/${dbId}`, data);
+    } else {
+      await api('POST', '/ipam/devices', data);
+    }
+    closeIpamDeviceModal();
+    showToast('Dispositivo guardado.', 'success');
+    loadIpamDevices();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function testIpamDevice(id) {
+  try {
+    showToast('Probando SNMP...', 'success');
+    const result = await api('POST', `/ipam/devices/${id}/test-snmp`);
+    if (result.ok) {
+      showToast(`SNMP OK: ${result.sysName} (${result.sysDescr.substring(0, 60)})`, 'success');
+    } else {
+      showToast('SNMP Error: ' + result.error, 'error');
+    }
+    loadIpamDevices();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function pollIpamDevice(id) {
+  try {
+    showToast('Consultando dispositivo...', 'success');
+    const result = await api('POST', `/ipam/devices/${id}/poll`);
+    showToast(`Poll completado: ${result.records} registros encontrados.`, 'success');
+    loadIpamDevices();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function deleteIpamDevice(id) {
+  if (!confirm('¿Eliminar este dispositivo de red?')) return;
+  try {
+    await api('DELETE', `/ipam/devices/${id}`);
+    showToast('Dispositivo eliminado.', 'success');
+    loadIpamDevices();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+// ── IPAM Credentials ────────────────────────────────────────────────────────
+function openIpamCredentialModal() {
+  document.getElementById('ipam-cred-modal-title').textContent = 'Agregar Credencial SNMP';
+  document.getElementById('ipam-cred-id').value = '';
+  document.getElementById('ipam-cred-name').value = '';
+  document.getElementById('ipam-cred-version').value = '3';
+  document.getElementById('ipam-cred-community').value = 'public';
+  document.getElementById('ipam-cred-level').value = 'authPriv';
+  document.getElementById('ipam-cred-username').value = '';
+  document.getElementById('ipam-cred-auth-proto').value = '';
+  document.getElementById('ipam-cred-auth-secret').value = '';
+  document.getElementById('ipam-cred-priv-proto').value = '';
+  document.getElementById('ipam-cred-priv-secret').value = '';
+  toggleSnmpV3Fields();
+  document.getElementById('modal-ipam-credential').classList.remove('hidden');
+  document.getElementById('modal-ipam-credential').classList.add('flex');
+}
+
+function closeIpamCredentialModal() {
+  document.getElementById('modal-ipam-credential').classList.add('hidden');
+  document.getElementById('modal-ipam-credential').classList.remove('flex');
+}
+
+function toggleSnmpV3Fields() {
+  const version = document.getElementById('ipam-cred-version').value;
+  document.getElementById('snmpv2c-fields').classList.toggle('hidden', version !== '2c');
+  document.getElementById('snmpv3-fields').classList.toggle('hidden', version !== '3');
+}
+
+async function submitIpamCredential(e) {
+  e.preventDefault();
+  const data = {
+    name: document.getElementById('ipam-cred-name').value.trim(),
+    snmp_version: document.getElementById('ipam-cred-version').value,
+    community: document.getElementById('ipam-cred-community').value.trim() || null,
+    security_level: document.getElementById('ipam-cred-level').value || null,
+    username: document.getElementById('ipam-cred-username').value.trim() || null,
+    auth_protocol: document.getElementById('ipam-cred-auth-proto').value || null,
+    auth_secret: document.getElementById('ipam-cred-auth-secret').value || null,
+    priv_protocol: document.getElementById('ipam-cred-priv-proto').value || null,
+    priv_secret: document.getElementById('ipam-cred-priv-secret').value || null,
+  };
+  try {
+    await api('POST', '/ipam/credentials', data);
+    closeIpamCredentialModal();
+    showToast('Credencial guardada.', 'success');
+    ipamCredentialsList = await api('GET', '/ipam/credentials');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+// ── IPAM Conflicts ──────────────────────────────────────────────────────────
+async function loadIpamConflicts() {
+  try {
+    const conflicts = await api('GET', '/ipam/addresses/conflicts');
+    const tbody = document.getElementById('ipam-conflicts-tbody');
+    if (!conflicts.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">No hay conflictos detectados.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = conflicts.map(c => `
+      <tr class="hover:bg-gray-50/50">
+        <td class="px-4 py-3 font-mono font-semibold text-red-600">${esc(c.address)}</td>
+        <td class="px-4 py-3 text-xs">VLAN ${c.vlan_id}</td>
+        <td class="px-4 py-3 font-mono text-xs">${(c.macs || []).join(', ')}</td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="resolveIpamConflict('${esc(c.address)}', ${c.vlan_id})" class="text-green-600 hover:text-green-800 text-xs font-medium">Marcar Resuelto</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    showToast('Error cargando conflictos: ' + err.message, 'error');
+  }
+}
+
+async function resolveIpamConflict(address, vlanId) {
+  try {
+    const addrs = await api('GET', `/ipam/addresses?search=${address}&vlan_id=${vlanId}`);
+    for (const a of addrs.filter(x => x.status === 'conflict')) {
+      await api('PUT', `/ipam/addresses/${a.id}`, { ...a, status: 'observed' });
+    }
+    showToast('Conflicto marcado como resuelto.', 'success');
+    loadIpamConflicts();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+// ── IPAM Discovery ──────────────────────────────────────────────────────────
+async function loadIpamPollRuns() {
+  try {
+    const runs = await api('GET', '/ipam/poll-runs');
+    const tbody = document.getElementById('ipam-pollruns-tbody');
+    if (!runs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">No hay ejecuciones registradas.</td></tr>';
+      return;
+    }
+
+    const statusColors = {
+      success: 'bg-green-100 text-green-700',
+      warning: 'bg-yellow-100 text-yellow-700',
+      error: 'bg-red-100 text-red-700',
+      running: 'bg-blue-100 text-blue-700',
+    };
+
+    tbody.innerHTML = runs.map(r => `
+      <tr class="hover:bg-gray-50/50">
+        <td class="px-4 py-3 font-medium">${esc(r.device_name || '—')}</td>
+        <td class="px-4 py-3 text-xs">${fmtDate(r.started_at)}</td>
+        <td class="px-4 py-3 text-xs">${fmtDate(r.finished_at)}</td>
+        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[r.status] || 'bg-gray-100'}">${esc(r.status)}</span></td>
+        <td class="px-4 py-3 text-xs">${r.records_found}</td>
+        <td class="px-4 py-3 text-xs text-red-500">${esc(r.error || '—')}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    showToast('Error cargando historial: ' + err.message, 'error');
+  }
+}
+
+async function runIpamDiscovery() {
+  try {
+    showToast('Descubrimiento SNMP iniciado en segundo plano...', 'success');
+    await api('POST', '/ipam/discovery/run');
+    setTimeout(loadIpamPollRuns, 5000);
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
 }
 </script>
 </body>

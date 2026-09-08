@@ -7,10 +7,12 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const routes = require('./routes/index');
 const adminRoutes = require('./routes/admin');
+const ipamRoutes = require('./routes/ipam');
 const db = require('./services/database');
 const statsWorker = require('./services/statsWorker');
 const maintenanceWorker = require('./services/maintenanceWorker');
 const dhcpSyncWorker = require('./services/dhcpSyncWorker');
+const ipamDiscoveryWorker = require('./services/ipamDiscoveryWorker');
 const { setupSwagger } = require('./swagger');
 
 
@@ -131,6 +133,7 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 app.use('/admin', adminRoutes);
+app.use('/admin/api/ipam', ipamRoutes);
 app.use('/', routes);
 
 // ─── Manejo de errores ────────────────────────────────────────────────────────
@@ -159,6 +162,9 @@ async function start() {
 
       // Iniciar el sincronizador de DHCP leases MikroTik ↔ MAC Bypass
       dhcpSyncWorker.startDhcpSyncWorker();
+
+      // Iniciar el worker de descubrimiento SNMP IPAM
+      ipamDiscoveryWorker.startIpamWorker();
     });
   }
 }

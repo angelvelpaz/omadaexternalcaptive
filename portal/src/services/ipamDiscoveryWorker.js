@@ -2,7 +2,7 @@
 
 const ipamDb = require('./db/ipam');
 const { buildSession, getTarget, closeSession, OIDS } = require('./snmpClient');
-const { poll: genericPoll } = require('./snmpAdapters/generic');
+const { poll: genericPoll, pollArpOnly: genericArpOnly, pollFdbOnly: genericFdbOnly } = require('./snmpAdapters/generic');
 const { poll: mikrotikPoll } = require('./snmpAdapters/mikrotik');
 const { poll: ciscoPoll } = require('./snmpAdapters/cisco');
 const { poll: hpePoll } = require('./snmpAdapters/hpe');
@@ -158,4 +158,100 @@ async function testSnmp(deviceConfig) {
   }
 }
 
-module.exports = { runDiscovery, startIpamWorker, stopIpamWorker, pollDevice, testSnmp };
+function buildDeviceConfig(device, credential) {
+  return {
+    host: device.management_ip,
+    port: device.snmp_port || 161,
+    timeout: device.snmp_timeout_ms || 5000,
+    retries: device.snmp_retries || 2,
+    snmp_version: credential?.snmp_version || '2c',
+    community: credential?.community || 'public',
+    username: credential?.username || '',
+    security_level: credential?.security_level || 'authPriv',
+    auth_protocol: credential?.auth_protocol || '',
+    auth_secret: credential?.auth_secret || '',
+    priv_protocol: credential?.priv_protocol || '',
+    priv_secret: credential?.priv_secret || '',
+    trunk_ports: device.trunk_ports || [],
+  };
+}
+
+async function queryArpFromDevice(deviceId) {
+  const device = await ipamDb.getNetworkDeviceById(deviceId);
+  if (!device) throw new Error('Dispositivo no encontrado');
+
+  const credential = device.snmp_credential_id
+    ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
+    : {};
+
+  const deviceConfig = buildDeviceConfig(device, credential);
+  return await genericArpOnly(deviceConfig);
+}
+
+async function queryFdbFromDevice(deviceId) {
+  const device = await ipamDb.getNetworkDeviceById(deviceId);
+  if (!device) throw new Error('Dispositivo no encontrado');
+
+  const credential = device.snmp_credential_id
+    ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
+    : {};
+
+  const deviceConfig = buildDeviceConfig(device, credential);
+  return await genericFdbOnly(deviceConfig);
+}
+
+async function crossReferenceArpFdb(routerId, switchIds) {
+  const routerResult = await queryArpFromDevice(routerId);
+
+  const switchResults = [];
+  for (const switchId of switchIds) {
+    try {
+      const result = await queryFdbFromDevice(switchId);
+      switchResults.push({ deviceId: switchId, ...result });
+    } catch (err) {
+      switchResults.push({ deviceId: switchId, identity: null, interfaces: [], macTable: [], errors: [err.message] });
+    }
+  }
+
+  const arpEntries = routerResult.arp || [];
+  const mapping = [];
+
+  for (const arp of arpEntries) {
+    if (!arp.ip || !arp.mac) continue;
+
+    const entry = {
+      ip: arp.ip,
+      mac: arp.mac,
+      routerIfIndex: arp.ifIndex,
+      ports: [],
+    };
+
+    for (const sw of switchResults) {
+      if (!sw.macTable) continue;
+
+      const fdbMatch = sw.macTable.find(f => f.mac === arp.mac);
+      if (fdbMatch) {
+        const iface = (sw.interfaces || []).find(i => i.ifIndex === fdbMatch.ifIndex);
+        entry.ports.push({
+          deviceId: sw.deviceId,
+          deviceName: sw.identity?.sysName || '',
+          ifIndex: fdbMatch.ifIndex,
+          portName: iface?.descr || '',
+          portAlias: iface?.alias || '',
+        });
+      }
+    }
+
+    mapping.push(entry);
+  }
+
+  return {
+    router: routerResult.identity,
+    switches: switchResults.map(s => ({ deviceId: s.deviceId, identity: s.identity, errors: s.errors })),
+    arpCount: arpEntries.length,
+    mappedCount: mapping.filter(m => m.ports.length > 0).length,
+    mapping,
+  };
+}
+
+module.exports = { runDiscovery, startIpamWorker, stopIpamWorker, pollDevice, testSnmp, queryArpFromDevice, queryFdbFromDevice, crossReferenceArpFdb };

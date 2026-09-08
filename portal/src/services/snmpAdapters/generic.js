@@ -171,4 +171,57 @@ async function poll(deviceConfig) {
   return pollRun;
 }
 
-module.exports = { poll, getIdentity, getInterfaces, getArpTable, getMacTable, formatMac };
+async function pollArpOnly(deviceConfig) {
+  const session = buildSession(deviceConfig);
+  const result = { identity: null, arp: [], errors: [] };
+
+  try {
+    result.identity = await getIdentity(session);
+  } catch (err) {
+    result.errors.push('identity: ' + err.message);
+  }
+
+  try {
+    result.arp = await getArpTable(session);
+  } catch (err) {
+    result.errors.push('arp: ' + err.message);
+  }
+
+  closeSession(session);
+  return result;
+}
+
+async function pollFdbOnly(deviceConfig) {
+  const session = buildSession(deviceConfig);
+  const trunkPorts = deviceConfig.trunk_ports || [];
+  const result = { identity: null, interfaces: [], macTable: [], errors: [] };
+
+  try {
+    result.identity = await getIdentity(session);
+  } catch (err) {
+    result.errors.push('identity: ' + err.message);
+  }
+
+  try {
+    result.interfaces = await getInterfaces(session);
+  } catch (err) {
+    result.errors.push('interfaces: ' + err.message);
+  }
+
+  try {
+    let trunkIfIndexes = [];
+    if (trunkPorts.length > 0 && result.interfaces.length > 0) {
+      trunkIfIndexes = result.interfaces
+        .filter(i => trunkPorts.includes(i.descr) || trunkPorts.includes(String(i.ifIndex)))
+        .map(i => i.ifIndex);
+    }
+    result.macTable = await getMacTable(session, trunkIfIndexes);
+  } catch (err) {
+    result.errors.push('macTable: ' + err.message);
+  }
+
+  closeSession(session);
+  return result;
+}
+
+module.exports = { poll, pollArpOnly, pollFdbOnly, getIdentity, getInterfaces, getArpTable, getMacTable, formatMac };

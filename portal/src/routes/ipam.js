@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const ipamDb = require('../services/db/ipam');
-const { testSnmp, runDiscovery, pollDevice } = require('../services/ipamDiscoveryWorker');
+const { testSnmp, runDiscovery, pollDevice, queryArpFromDevice, queryFdbFromDevice, crossReferenceArpFdb } = require('../services/ipamDiscoveryWorker');
 const db = require('../services/database');
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
@@ -157,6 +157,31 @@ router.post('/devices/:id/poll', async (req, res, next) => {
     const dev = await ipamDb.getNetworkDeviceById(req.params.id);
     if (!dev) return res.status(404).json({ error: 'Dispositivo no encontrado.' });
     const result = await pollDevice(dev);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+router.post('/devices/:id/query-arp', async (req, res, next) => {
+  try {
+    const result = await queryArpFromDevice(req.params.id);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+router.post('/devices/:id/query-fdb', async (req, res, next) => {
+  try {
+    const result = await queryFdbFromDevice(req.params.id);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+router.post('/cross-reference', async (req, res, next) => {
+  try {
+    const { router_id, switch_ids } = req.body;
+    if (!router_id || !switch_ids || !Array.isArray(switch_ids) || switch_ids.length === 0) {
+      return res.status(400).json({ error: 'Se requiere router_id y switch_ids (array).' });
+    }
+    const result = await crossReferenceArpFdb(router_id, switch_ids);
     res.json(result);
   } catch (err) { next(err); }
 });

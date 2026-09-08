@@ -2516,6 +2516,9 @@
             <p class="text-sm text-gray-500">Inventario de routers y switches gestionados por SNMP.</p>
           </div>
           <div class="flex gap-2">
+            <button onclick="crossReferenceArpFdb()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              🔗 Mapeo ARP↔FDB
+            </button>
             <button onclick="openIpamCredentialModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
               🔑 Credenciales SNMP
             </button>
@@ -10719,6 +10722,8 @@ async function loadIpamDevices() {
         <td class="px-4 py-3 text-right space-x-2">
           <button onclick="testIpamDevice(${d.id})" class="text-purple-500 hover:text-purple-700 text-xs font-medium">Probar SNMP</button>
           <button onclick="pollIpamDevice(${d.id})" class="text-blue-500 hover:text-blue-700 text-xs font-medium">Consultar</button>
+          <button onclick="queryArpFromDevice(${d.id})" class="text-green-500 hover:text-green-700 text-xs font-medium">ARP</button>
+          <button onclick="queryFdbFromDevice(${d.id})" class="text-orange-500 hover:text-orange-700 text-xs font-medium">FDB</button>
           <button onclick="editIpamDevice(${d.id})" class="text-gray-500 hover:text-gray-700 text-xs font-medium">Editar</button>
           <button onclick="deleteIpamDevice(${d.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
         </td>
@@ -10837,6 +10842,54 @@ async function pollIpamDevice(id) {
     const result = await api('POST', `/ipam/devices/${id}/poll`);
     showToast(`Poll completado: ${result.records} registros encontrados.`, 'success');
     loadIpamDevices();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function queryArpFromDevice(id) {
+  try {
+    showToast('Consultando tabla ARP...', 'success');
+    const result = await api('POST', `/ipam/devices/${id}/query-arp`);
+    const arpCount = result.arp ? result.arp.length : 0;
+    showToast(`ARP consultado: ${arpCount} entradas encontradas.`, 'success');
+    loadIpamDevices();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function queryFdbFromDevice(id) {
+  try {
+    showToast('Consultando tabla FDB...', 'success');
+    const result = await api('POST', `/ipam/devices/${id}/query-fdb`);
+    const fdbCount = result.macTable ? result.macTable.length : 0;
+    showToast(`FDB consultado: ${fdbCount} entradas encontradas.`, 'success');
+    loadIpamDevices();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function crossReferenceArpFdb() {
+  const routerId = prompt('ID del router (para ARP):');
+  if (!routerId) return;
+  const switchIdsStr = prompt('IDs de switches (separados por coma, para FDB):');
+  if (!switchIdsStr) return;
+  const switchIds = switchIdsStr.split(',').map(s => parseInt(s.trim())).filter(Boolean);
+  if (switchIds.length === 0) {
+    showToast('Debe especificar al menos un switch.', 'error');
+    return;
+  }
+
+  try {
+    showToast('Realizando mapeo cruzado ARP↔FDB...', 'success');
+    const result = await api('POST', '/ipam/cross-reference', {
+      router_id: parseInt(routerId),
+      switch_ids: switchIds,
+    });
+    showToast(`Mapeo completado: ${result.mappedCount} de ${result.arpCount} hosts con puerto identificado.`, 'success');
+    console.log('Cross-reference result:', result);
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
   }

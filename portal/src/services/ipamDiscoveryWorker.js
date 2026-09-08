@@ -2,7 +2,7 @@
 
 const ipamDb = require('./db/ipam');
 const { buildSession, getTarget, closeSession, OIDS } = require('./snmpClient');
-const { poll: genericPoll, pollArpOnly: genericArpOnly, pollFdbOnly: genericFdbOnly } = require('./snmpAdapters/generic');
+const { poll: genericPoll, pollArpOnly: genericArpOnly, pollFdbOnly: genericFdbOnly, getInterfaces: genericGetInterfaces } = require('./snmpAdapters/generic');
 const { poll: mikrotikPoll } = require('./snmpAdapters/mikrotik');
 const { poll: ciscoPoll } = require('./snmpAdapters/cisco');
 const { poll: hpePoll } = require('./snmpAdapters/hpe');
@@ -30,6 +30,10 @@ async function pollDevice(device) {
     ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
     : {};
 
+  const selectedIfIndexes = device.device_type === 'switch'
+    ? await ipamDb.getSelectedSwitchPortIndexes(device.id)
+    : undefined;
+
   const deviceConfig = {
     host: device.management_ip,
     port: device.snmp_port || 161,
@@ -44,6 +48,8 @@ async function pollDevice(device) {
     priv_protocol: credential?.priv_protocol || '',
     priv_secret: credential?.priv_secret || '',
     trunk_ports: device.trunk_ports || [],
+    include_trunks: device.device_type === 'switch',
+    selected_if_indexes: selectedIfIndexes,
   };
 
   const adapter = getAdapter(device.vendor);
@@ -59,6 +65,18 @@ async function pollDevice(device) {
     ifMap[iface.ifIndex] = iface.descr || iface.alias || ('if' + iface.ifIndex);
   }
 
+  const trunkIfIndexes = (result.interfaces || [])
+    .filter(i => (device.trunk_ports || []).includes(i.descr) || (device.trunk_ports || []).includes(String(i.ifIndex)))
+    .map(i => i.ifIndex);
+
+  if (device.device_type === 'switch' && result.macTable) {
+    const fdbEntries = result.macTable.map(entry => ({
+      ...entry,
+      interfaceName: ifMap[entry.ifIndex] || null,
+    }));
+    await ipamDb.replaceFdbEntries(device.id, fdbEntries, trunkIfIndexes);
+  }
+
   // If device is a router with related_switches, query switches for FDB to get physical ports
   const macToSwitchPort = {};
   const relatedSwitchIds = device.related_switches || [];
@@ -72,7 +90,8 @@ async function pollDevice(device) {
           ? await ipamDb.getSnmpCredentialById(swDevice.snmp_credential_id)
           : {};
 
-        const swConfig = buildDeviceConfig(swDevice, swCredential);
+        const selectedIfIndexes = await ipamDb.getSelectedSwitchPortIndexes(swDevice.id);
+        const swConfig = buildDeviceConfig(swDevice, swCredential, selectedIfIndexes);
         const swResult = await genericFdbOnly(swConfig);
 
         // Build ifIndex -> name map for this switch
@@ -102,6 +121,11 @@ async function pollDevice(device) {
 
   for (const entry of result.arp) {
     if (!entry.ip || !entry.mac) continue;
+
+    // Para routers asociados a switches, solo se aceptan MAC presentes en la FDB.
+    if (device.device_type === 'router' && relatedSwitchIds.length > 0 && !macToSwitchPort[entry.mac]) {
+      continue;
+    }
     await ipamDb.upsertAddress({
       address: entry.ip,
       mac_address: entry.mac,
@@ -158,7 +182,15 @@ async function runDiscovery() {
 
   try {
     const devices = await ipamDb.listNetworkDevices();
-    const enabled = devices.filter(d => d.enabled);
+    // Import FDB de switches antes de consultar routers para que el mapeo
+    // ARP -> puerto físico esté disponible cuanto antes.
+    const enabled = devices
+      .filter(d => d.enabled)
+      .sort((a, b) => {
+        const aIsSwitch = a.device_type === 'switch' ? 0 : 1;
+        const bIsSwitch = b.device_type === 'switch' ? 0 : 1;
+        return aIsSwitch - bIsSwitch;
+      });
 
     for (const device of enabled) {
       try {
@@ -212,7 +244,7 @@ async function testSnmp(deviceConfig) {
   }
 }
 
-function buildDeviceConfig(device, credential) {
+function buildDeviceConfig(device, credential, selectedIfIndexes) {
   return {
     host: device.management_ip,
     port: device.snmp_port || 161,
@@ -227,6 +259,7 @@ function buildDeviceConfig(device, credential) {
     priv_protocol: credential?.priv_protocol || '',
     priv_secret: credential?.priv_secret || '',
     trunk_ports: device.trunk_ports || [],
+    selected_if_indexes: selectedIfIndexes,
   };
 }
 
@@ -238,7 +271,8 @@ async function queryArpFromDevice(deviceId) {
     ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
     : {};
 
-  const deviceConfig = buildDeviceConfig(device, credential);
+  const selectedIfIndexes = await ipamDb.getSelectedSwitchPortIndexes(device.id);
+  const deviceConfig = buildDeviceConfig(device, credential, selectedIfIndexes);
   return await genericArpOnly(deviceConfig);
 }
 
@@ -250,7 +284,8 @@ async function queryFdbFromDevice(deviceId) {
     ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
     : {};
 
-  const deviceConfig = buildDeviceConfig(device, credential);
+  const selectedIfIndexes = await ipamDb.getSelectedSwitchPortIndexes(device.id);
+  const deviceConfig = buildDeviceConfig(device, credential, selectedIfIndexes);
   return await genericFdbOnly(deviceConfig);
 }
 
@@ -296,7 +331,7 @@ async function crossReferenceArpFdb(routerId, switchIds) {
       }
     }
 
-    mapping.push(entry);
+    if (entry.ports.length > 0) mapping.push(entry);
   }
 
   return {
@@ -308,4 +343,18 @@ async function crossReferenceArpFdb(routerId, switchIds) {
   };
 }
 
-module.exports = { runDiscovery, startIpamWorker, stopIpamWorker, pollDevice, testSnmp, queryArpFromDevice, queryFdbFromDevice, crossReferenceArpFdb };
+async function queryInterfacesFromDevice(deviceId) {
+  const device = await ipamDb.getNetworkDeviceById(deviceId);
+  if (!device) throw new Error('Dispositivo no encontrado');
+  const credential = device.snmp_credential_id
+    ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
+    : {};
+  const session = buildSession(buildDeviceConfig(device, credential));
+  try {
+    return await genericGetInterfaces(session);
+  } finally {
+    closeSession(session);
+  }
+}
+
+module.exports = { runDiscovery, startIpamWorker, stopIpamWorker, pollDevice, testSnmp, queryArpFromDevice, queryFdbFromDevice, crossReferenceArpFdb, queryInterfacesFromDevice };

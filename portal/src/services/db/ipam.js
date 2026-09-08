@@ -182,8 +182,20 @@ async function deleteVlan(id) {
 
 // ─── Addresses ──────────────────────────────────────────────────────────────
 async function listAddresses(filters) {
-  let q = `SELECT a.*, v.vlan_id AS vlan_number, v.name AS vlan_name
-           FROM ipam_addresses a LEFT JOIN ipam_vlans v ON a.vlan_id = v.id`;
+  let q = `SELECT a.*, v.vlan_id AS vlan_number, v.name AS vlan_name,
+                  o.interface_name AS router_interface,
+                  o.vlan_id AS observed_vlan_id,
+                  o.switch_name,
+                  o.switch_port_name
+           FROM ipam_addresses a
+           LEFT JOIN ipam_vlans v ON a.vlan_id = v.id
+           LEFT JOIN LATERAL (
+             SELECT interface_name, vlan_id, switch_name, switch_port_name
+             FROM ipam_observations
+             WHERE ip_address = a.address AND source = 'arp'
+             ORDER BY observed_at DESC
+             LIMIT 1
+           ) o ON TRUE`;
   const conds = [];
   const params = [];
 
@@ -197,7 +209,7 @@ async function listAddresses(filters) {
   if (filters.search) {
     params.push(`%${filters.search}%`);
     const idx = params.length;
-    conds.push(`(a.address::text ILIKE $${idx} OR a.hostname ILIKE $${idx} OR a.owner ILIKE $${idx} OR a.mac_address ILIKE $${idx} OR a.description ILIKE $${idx})`);
+    conds.push(`(a.address::text ILIKE $${idx} OR a.hostname ILIKE $${idx} OR a.owner ILIKE $${idx} OR a.mac_address ILIKE $${idx} OR a.description ILIKE $${idx} OR o.interface_name ILIKE $${idx} OR o.switch_name ILIKE $${idx} OR o.switch_port_name ILIKE $${idx})`);
   }
 
   if (conds.length) q += ' WHERE ' + conds.join(' AND ');
@@ -325,6 +337,106 @@ async function listObservations(filters) {
   return r.rows;
 }
 
+async function replaceFdbEntries(deviceId, entries, trunkIfIndexes = []) {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM ipam_fdb_entries WHERE device_id = $1', [deviceId]);
+    for (const entry of entries || []) {
+      if (!entry.mac) continue;
+      await client.query(
+        `INSERT INTO ipam_fdb_entries
+          (device_id, mac_address, bridge_port, if_index, interface_name, vlan_id, is_trunk)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [deviceId, entry.mac.toUpperCase(), entry.port || null, entry.ifIndex || null,
+         entry.interfaceName || null, entry.vlanId || null,
+         trunkIfIndexes.includes(entry.ifIndex)]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function listFdbEntries(filters = {}) {
+  let q = `SELECT f.*, d.name AS device_name, d.management_ip,
+                  arp.ip_address AS associated_ip,
+                  arp.interface_name AS router_interface,
+                  arp.switch_name AS correlated_switch_name,
+                  arp.switch_port_name AS correlated_switch_port
+           FROM ipam_fdb_entries f
+           JOIN ipam_network_devices d ON d.id = f.device_id
+           LEFT JOIN LATERAL (
+             SELECT ip_address, interface_name, switch_name, switch_port_name
+             FROM ipam_observations
+             WHERE mac_address = f.mac_address AND source = 'arp' AND ip_address IS NOT NULL
+             ORDER BY observed_at DESC
+             LIMIT 1
+           ) arp ON TRUE`;
+  const conds = [];
+  const params = [];
+  if (filters.device_id) { params.push(filters.device_id); conds.push(`f.device_id=$${params.length}`); }
+  if (filters.search) {
+    params.push(`%${filters.search}%`);
+    const idx = params.length;
+    conds.push(`(f.mac_address ILIKE $${idx} OR f.interface_name ILIKE $${idx} OR d.name ILIKE $${idx})`);
+  }
+  if (filters.include_trunks === 'false') conds.push('f.is_trunk = FALSE');
+  if (conds.length) q += ' WHERE ' + conds.join(' AND ');
+  q += ' ORDER BY d.name, f.interface_name, f.mac_address';
+  params.push(filters.limit || 5000);
+  q += ` LIMIT $${params.length}`;
+  const r = await getPool().query(q, params);
+  return r.rows;
+}
+
+async function listSwitchPorts(deviceId) {
+  const r = await getPool().query(
+    `SELECT * FROM ipam_switch_ports
+     WHERE switch_device_id = $1
+     ORDER BY if_index`, [deviceId]
+  );
+  return r.rows;
+}
+
+async function getSelectedSwitchPortIndexes(deviceId) {
+  const r = await getPool().query(
+    'SELECT if_index FROM ipam_switch_ports WHERE switch_device_id=$1 AND selected=TRUE ORDER BY if_index',
+    [deviceId]
+  );
+  return r.rows.map(row => row.if_index);
+}
+
+async function saveSwitchPorts(deviceId, ports) {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM ipam_switch_ports WHERE switch_device_id=$1', [deviceId]);
+    for (const port of ports || []) {
+      if (!Number.isInteger(Number(port.if_index)) || !port.interface_name) continue;
+      await client.query(
+        `INSERT INTO ipam_switch_ports
+          (switch_device_id, if_index, interface_name, interface_alias, selected, is_trunk)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [deviceId, Number(port.if_index), port.interface_name, port.interface_alias || null,
+         port.selected === true, port.is_trunk === true]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  return listSwitchPorts(deviceId);
+}
+
 // ─── Poll Runs ──────────────────────────────────────────────────────────────
 async function createPollRun(deviceId) {
   const r = await getPool().query(
@@ -356,6 +468,7 @@ module.exports = {
   updateNetworkDevicePollStatus, updateNetworkDeviceInfo, deleteNetworkDevice,
   listVlans, getVlanById, createVlan, updateVlan, deleteVlan,
   listAddresses, getAddressById, upsertAddress, updateAddress, deleteAddress, getConflicts, detectConflicts, getIpamStats,
-  insertObservation, listObservations,
+  insertObservation, listObservations, replaceFdbEntries, listFdbEntries,
+  listSwitchPorts, getSelectedSwitchPortIndexes, saveSwitchPorts,
   createPollRun, finishPollRun, listPollRuns,
 };

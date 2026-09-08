@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS ipam_network_devices (
     sys_descr         TEXT,
     sys_uptime        BIGINT,
     trunk_ports       TEXT[],
+    related_switches  INTEGER[],
     created_at        TIMESTAMPTZ DEFAULT NOW(),
     updated_at        TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(management_ip)
@@ -119,6 +120,41 @@ CREATE INDEX IF NOT EXISTS idx_ipam_obs_address ON ipam_observations(address_id)
 CREATE INDEX IF NOT EXISTS idx_ipam_obs_device ON ipam_observations(device_id);
 CREATE INDEX IF NOT EXISTS idx_ipam_obs_mac ON ipam_observations(mac_address);
 CREATE INDEX IF NOT EXISTS idx_ipam_obs_time ON ipam_observations(observed_at);
+
+-- ─── Tabla FDB actual por switch ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ipam_fdb_entries (
+    id               SERIAL PRIMARY KEY,
+    device_id        INTEGER NOT NULL REFERENCES ipam_network_devices(id) ON DELETE CASCADE,
+    mac_address      VARCHAR(17) NOT NULL,
+    bridge_port      INTEGER,
+    if_index         INTEGER,
+    interface_name   VARCHAR(100),
+    vlan_id          INTEGER,
+    is_trunk         BOOLEAN NOT NULL DEFAULT FALSE,
+    first_seen_at    TIMESTAMPTZ DEFAULT NOW(),
+    last_seen_at     TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(device_id, mac_address, bridge_port, vlan_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ipam_fdb_device ON ipam_fdb_entries(device_id);
+CREATE INDEX IF NOT EXISTS idx_ipam_fdb_mac ON ipam_fdb_entries(mac_address);
+CREATE INDEX IF NOT EXISTS idx_ipam_fdb_last_seen ON ipam_fdb_entries(last_seen_at);
+
+-- ─── Puertos seleccionados para descubrimiento FDB ───────────────────────────
+CREATE TABLE IF NOT EXISTS ipam_switch_ports (
+    id               SERIAL PRIMARY KEY,
+    switch_device_id INTEGER NOT NULL REFERENCES ipam_network_devices(id) ON DELETE CASCADE,
+    if_index         INTEGER NOT NULL,
+    interface_name   VARCHAR(100) NOT NULL,
+    interface_alias  VARCHAR(255),
+    selected         BOOLEAN NOT NULL DEFAULT FALSE,
+    is_trunk         BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at       TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(switch_device_id, if_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ipam_switch_ports_device ON ipam_switch_ports(switch_device_id);
+CREATE INDEX IF NOT EXISTS idx_ipam_switch_ports_selected ON ipam_switch_ports(switch_device_id, selected);
 
 -- ─── Ejecuciones de descubrimiento ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS ipam_poll_runs (

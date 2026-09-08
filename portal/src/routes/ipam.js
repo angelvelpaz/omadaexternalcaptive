@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const ipamDb = require('../services/db/ipam');
-const { testSnmp, runDiscovery, pollDevice, queryArpFromDevice, queryFdbFromDevice, crossReferenceArpFdb } = require('../services/ipamDiscoveryWorker');
+const { testSnmp, runDiscovery, pollDevice, queryArpFromDevice, queryFdbFromDevice, crossReferenceArpFdb, queryInterfacesFromDevice } = require('../services/ipamDiscoveryWorker');
 const db = require('../services/database');
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
@@ -175,6 +175,24 @@ router.post('/devices/:id/query-fdb', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/devices/:id/interfaces', async (req, res, next) => {
+  try {
+    const interfaces = await queryInterfacesFromDevice(req.params.id);
+    res.json(interfaces);
+  } catch (err) { next(err); }
+});
+
+router.get('/devices/:id/fdb-ports', async (req, res, next) => {
+  try { res.json(await ipamDb.listSwitchPorts(req.params.id)); } catch (err) { next(err); }
+});
+
+router.put('/devices/:id/fdb-ports', async (req, res, next) => {
+  try {
+    const ports = Array.isArray(req.body.ports) ? req.body.ports : [];
+    res.json(await ipamDb.saveSwitchPorts(req.params.id, ports));
+  } catch (err) { next(err); }
+});
+
 router.post('/cross-reference', async (req, res, next) => {
   try {
     const { router_id, switch_ids } = req.body;
@@ -246,6 +264,13 @@ router.get('/observations', async (req, res, next) => {
   try {
     const { device_id, mac_address, ip_address, source, limit } = req.query;
     res.json(await ipamDb.listObservations({ device_id, mac_address, ip_address, source, limit: parseInt(limit) || 100 }));
+  } catch (err) { next(err); }
+});
+
+router.get('/fdb', async (req, res, next) => {
+  try {
+    const { device_id, search, include_trunks, limit } = req.query;
+    res.json(await ipamDb.listFdbEntries({ device_id, search, include_trunks, limit: parseInt(limit) || 5000 }));
   } catch (err) { next(err); }
 });
 

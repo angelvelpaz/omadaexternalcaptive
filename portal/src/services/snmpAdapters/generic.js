@@ -91,7 +91,7 @@ async function getArpTable(session) {
   return Object.values(map);
 }
 
-async function getMacTable(session, trunkIfIndexes = []) {
+async function getMacTable(session, trunkIfIndexes = [], includeTrunks = false, selectedIfIndexes) {
   const [macs, ports, statuses] = await Promise.all([
     walkTarget(session, OIDS.dot1dTpFdbAddress).catch(() => []),
     walkTarget(session, OIDS.dot1dTpFdbPort).catch(() => []),
@@ -127,7 +127,8 @@ async function getMacTable(session, trunkIfIndexes = []) {
 
   return Object.values(map).filter(e => {
     if (!e.mac || e.status !== 3) return false;
-    if (trunkIfIndexes.length > 0 && trunkIfIndexes.includes(e.ifIndex)) return false;
+    if (Array.isArray(selectedIfIndexes) && !selectedIfIndexes.includes(e.ifIndex)) return false;
+    if (!includeTrunks && trunkIfIndexes.length > 0 && trunkIfIndexes.includes(e.ifIndex)) return false;
     return true;
   });
 }
@@ -162,7 +163,7 @@ async function poll(deviceConfig) {
         .filter(i => trunkPorts.includes(i.descr) || trunkPorts.includes(String(i.ifIndex)))
         .map(i => i.ifIndex);
     }
-    pollRun.macTable = await getMacTable(session, trunkIfIndexes);
+    pollRun.macTable = await getMacTable(session, trunkIfIndexes, Boolean(deviceConfig.include_trunks), deviceConfig.selected_if_indexes);
   } catch (err) {
     pollRun.errors.push(`macTable: ${err.message}`);
   }
@@ -215,7 +216,7 @@ async function pollFdbOnly(deviceConfig) {
         .filter(i => trunkPorts.includes(i.descr) || trunkPorts.includes(String(i.ifIndex)))
         .map(i => i.ifIndex);
     }
-    result.macTable = await getMacTable(session, trunkIfIndexes);
+    result.macTable = await getMacTable(session, trunkIfIndexes, Boolean(deviceConfig.include_trunks), deviceConfig.selected_if_indexes);
   } catch (err) {
     result.errors.push('macTable: ' + err.message);
   }

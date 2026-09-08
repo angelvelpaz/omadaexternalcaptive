@@ -53,6 +53,12 @@ async function pollDevice(device) {
     await ipamDb.updateNetworkDeviceInfo(device.id, result.identity.sysDescr, result.identity.sysUptime);
   }
 
+  // Build interface index -> name map
+  const ifMap = {};
+  for (const iface of (result.interfaces || [])) {
+    ifMap[iface.ifIndex] = iface.descr || iface.alias || ('if' + iface.ifIndex);
+  }
+
   let recordCount = 0;
 
   for (const entry of result.arp) {
@@ -69,6 +75,7 @@ async function pollDevice(device) {
       ip_address: entry.ip,
       mac_address: entry.mac,
       interface_index: entry.ifIndex,
+      interface_name: ifMap[entry.ifIndex] || null,
       device_id: device.id,
       source: 'arp',
     });
@@ -80,6 +87,7 @@ async function pollDevice(device) {
     await ipamDb.insertObservation({
       mac_address: entry.mac,
       interface_index: entry.ifIndex,
+      interface_name: ifMap[entry.ifIndex] || null,
       device_id: device.id,
       source: 'fdb',
     });

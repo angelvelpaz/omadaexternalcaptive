@@ -2693,6 +2693,11 @@
           <input type="number" id="ipam-device-retries" value="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
         </div>
       </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Puertos Troncales (excluir del mapeo)</label>
+        <textarea id="ipam-device-trunk-ports" rows="2" placeholder="sfp-sfpplus1, ether1, ether2 (separados por coma)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <p class="text-gray-400 text-[11px] mt-1">Nombres de interfaces o ifIndex separados por coma. Estos puertos no se mostrarán en el mapeo MAC→Puerto.</p>
+      </div>
       <p id="ipam-device-error" class="text-red-500 text-xs hidden"></p>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" onclick="closeIpamDeviceModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
@@ -10736,6 +10741,7 @@ function openIpamDeviceModal() {
   document.getElementById('ipam-device-port').value = '161';
   document.getElementById('ipam-device-timeout').value = '5000';
   document.getElementById('ipam-device-retries').value = '2';
+  document.getElementById('ipam-device-trunk-ports').value = '';
   populateIpamDeviceSelects();
   document.getElementById('modal-ipam-device').classList.remove('hidden');
   document.getElementById('modal-ipam-device').classList.add('flex');
@@ -10771,6 +10777,7 @@ async function editIpamDevice(id) {
   document.getElementById('ipam-device-port').value = d.snmp_port || 161;
   document.getElementById('ipam-device-timeout').value = d.snmp_timeout_ms || 5000;
   document.getElementById('ipam-device-retries').value = d.snmp_retries || 2;
+  document.getElementById('ipam-device-trunk-ports').value = (d.trunk_ports || []).join(', ');
   await populateIpamDeviceSelects();
   document.getElementById('ipam-device-credential').value = d.snmp_credential_id || '';
   document.getElementById('modal-ipam-device').classList.remove('hidden');
@@ -10780,6 +10787,8 @@ async function editIpamDevice(id) {
 async function submitIpamDevice(e) {
   e.preventDefault();
   const dbId = document.getElementById('ipam-device-id').value;
+  const trunkPortsStr = document.getElementById('ipam-device-trunk-ports').value.trim();
+  const trunkPorts = trunkPortsStr ? trunkPortsStr.split(',').map(s => s.trim()).filter(Boolean) : [];
   const data = {
     name: document.getElementById('ipam-device-name').value.trim(),
     management_ip: document.getElementById('ipam-device-ip').value.trim(),
@@ -10791,6 +10800,7 @@ async function submitIpamDevice(e) {
     snmp_timeout_ms: parseInt(document.getElementById('ipam-device-timeout').value) || 5000,
     snmp_retries: parseInt(document.getElementById('ipam-device-retries').value) || 2,
     snmp_credential_id: document.getElementById('ipam-device-credential').value || null,
+    trunk_ports: trunkPorts,
   };
   try {
     if (dbId) {

@@ -92,26 +92,28 @@ async function getNetworkDeviceById(id) {
 }
 
 async function createNetworkDevice(data) {
+  const trunkPorts = Array.isArray(data.trunk_ports) ? data.trunk_ports : null;
   const r = await getPool().query(
-    `INSERT INTO ipam_network_devices (site_id, name, hostname, management_ip, vendor, model, device_type, enabled, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    `INSERT INTO ipam_network_devices (site_id, name, hostname, management_ip, vendor, model, device_type, enabled, snmp_port, snmp_timeout_ms, snmp_retries, snmp_credential_id, trunk_ports)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
     [data.site_id || null, data.name, data.hostname || null, data.management_ip,
      data.vendor || 'generic', data.model || null, data.device_type || 'switch',
      data.enabled !== false, data.snmp_port || 161, data.snmp_timeout_ms || 5000,
-     data.snmp_retries || 2, data.snmp_credential_id || null]
+     data.snmp_retries || 2, data.snmp_credential_id || null, trunkPorts]
   );
   return r.rows[0];
 }
 
 async function updateNetworkDevice(id, data) {
+  const trunkPorts = Array.isArray(data.trunk_ports) ? data.trunk_ports : null;
   const r = await getPool().query(
     `UPDATE ipam_network_devices SET site_id=$2, name=$3, hostname=$4, management_ip=$5, vendor=$6,
      model=$7, device_type=$8, enabled=$9, snmp_port=$10, snmp_timeout_ms=$11, snmp_retries=$12,
-     snmp_credential_id=$13, updated_at=NOW() WHERE id=$1 RETURNING *`,
+     snmp_credential_id=$13, trunk_ports=$14, updated_at=NOW() WHERE id=$1 RETURNING *`,
     [id, data.site_id || null, data.name, data.hostname || null, data.management_ip,
      data.vendor || 'generic', data.model || null, data.device_type || 'switch',
      data.enabled !== false, data.snmp_port || 161, data.snmp_timeout_ms || 5000,
-     data.snmp_retries || 2, data.snmp_credential_id || null]
+     data.snmp_retries || 2, data.snmp_credential_id || null, trunkPorts]
   );
   return r.rows[0];
 }

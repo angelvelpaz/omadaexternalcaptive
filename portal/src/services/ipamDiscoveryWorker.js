@@ -43,6 +43,7 @@ async function pollDevice(device) {
     auth_secret: credential?.auth_secret || '',
     priv_protocol: credential?.priv_protocol || '',
     priv_secret: credential?.priv_secret || '',
+    trunk_ports: device.trunk_ports || [],
   };
 
   const adapter = getAdapter(device.vendor);

@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS ipam_network_devices (
     last_poll_error   TEXT,
     sys_descr         TEXT,
     sys_uptime        BIGINT,
+    trunk_ports       TEXT[],
     created_at        TIMESTAMPTZ DEFAULT NOW(),
     updated_at        TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(management_ip)

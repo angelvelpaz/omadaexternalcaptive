@@ -1,6 +1,10 @@
 'use strict';
 
-const { getPool } = require('./pool');
+const db = require('../database');
+
+function getPool() {
+  return db.getPool();
+}
 
 // ─── Sites ──────────────────────────────────────────────────────────────────
 async function listSites() {

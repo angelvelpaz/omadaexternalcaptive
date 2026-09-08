@@ -79,19 +79,29 @@ function getTarget(session, oid) {
   });
 }
 
-function walkTarget(session, oid) {
-  return new Promise((resolve, reject) => {
+function walkTarget(session, oid, maxEntries = 2000) {
+  return new Promise((resolve) => {
     const results = [];
-    session.walk(oid, (varbinds) => {
-      for (const vb of varbinds) {
-        if (!snmp.isVarbindError(vb)) {
-          results.push({ oid: vb.oid, value: vb.value, type: vb.type });
+    let currentOid = oid;
+    let count = 0;
+
+    function next() {
+      if (++count > maxEntries) { resolve(results); return; }
+      session.getNext([currentOid], (err, varbinds) => {
+        if (err || !varbinds || !varbinds[0] || snmp.isVarbindError(varbinds[0])) {
+          resolve(results);
+          return;
         }
-      }
-    }, (err) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
+        const newOid = varbinds[0].oid;
+        if (!newOid.startsWith(oid + '.') && newOid !== oid + '.0') {
+          if (!newOid.startsWith(oid)) { resolve(results); return; }
+        }
+        results.push({ oid: newOid, value: varbinds[0].value, type: varbinds[0].type });
+        currentOid = newOid;
+        next();
+      });
+    }
+    next();
   });
 }
 

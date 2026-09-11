@@ -30,3 +30,7 @@ freecerts/
 /ca.pem
 /server.crt
 /server.key
+
+# Artefactos generados por Jest (cobertura de pruebas)
+coverage/
+portal/coverage/

@@ -120,6 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_ipam_obs_address ON ipam_observations(address_id)
 CREATE INDEX IF NOT EXISTS idx_ipam_obs_device ON ipam_observations(device_id);
 CREATE INDEX IF NOT EXISTS idx_ipam_obs_mac ON ipam_observations(mac_address);
 CREATE INDEX IF NOT EXISTS idx_ipam_obs_time ON ipam_observations(observed_at);
+CREATE INDEX IF NOT EXISTS idx_ipam_obs_ip_source_time ON ipam_observations(ip_address, source, observed_at DESC);
 
 -- ─── Tabla FDB actual por switch ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS ipam_fdb_entries (

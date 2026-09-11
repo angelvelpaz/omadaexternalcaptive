@@ -1,8 +1,9 @@
 'use strict';
 
 const ipamDb = require('./db/ipam');
+const { resolveHostnames } = require('./reverseDns');
 const { buildSession, getTarget, closeSession, OIDS } = require('./snmpClient');
-const { poll: genericPoll, pollArpOnly: genericArpOnly, pollFdbOnly: genericFdbOnly, getInterfaces: genericGetInterfaces } = require('./snmpAdapters/generic');
+const { poll: genericPoll, pollArpOnly: genericArpOnly, pollFdbOnly: genericFdbOnly, getInterfaces: genericGetInterfaces, getInterfacesPhysical: genericGetInterfacesPhysical } = require('./snmpAdapters/generic');
 const { poll: mikrotikPoll } = require('./snmpAdapters/mikrotik');
 const { poll: ciscoPoll } = require('./snmpAdapters/cisco');
 const { poll: hpePoll } = require('./snmpAdapters/hpe');
@@ -30,10 +31,6 @@ async function pollDevice(device) {
     ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
     : {};
 
-  const selectedIfIndexes = device.device_type === 'switch'
-    ? await ipamDb.getSelectedSwitchPortIndexes(device.id)
-    : undefined;
-
   const deviceConfig = {
     host: device.management_ip,
     port: device.snmp_port || 161,
@@ -49,7 +46,6 @@ async function pollDevice(device) {
     priv_secret: credential?.priv_secret || '',
     trunk_ports: device.trunk_ports || [],
     include_trunks: device.device_type === 'switch',
-    selected_if_indexes: selectedIfIndexes,
   };
 
   const adapter = getAdapter(device.vendor);
@@ -77,42 +73,27 @@ async function pollDevice(device) {
     await ipamDb.replaceFdbEntries(device.id, fdbEntries, trunkIfIndexes);
   }
 
-  // If device is a router with related_switches, query switches for FDB to get physical ports
+  // B′: mapear MAC → puerto de acceso considerando TODOS los switches habilitados,
+  // usando su FDB almacenada (solo puertos de acceso seleccionados y no troncales).
+  // Reemplaza la lógica por related_switches y ya no descarta hosts por no estar en la FDB.
   const macToSwitchPort = {};
-  const relatedSwitchIds = device.related_switches || [];
-  if (device.device_type === 'router' && relatedSwitchIds.length > 0) {
-    for (const switchId of relatedSwitchIds) {
+  if (device.device_type === 'router') {
+    const arpMacs = (result.arp || []).map(a => a.mac).filter(Boolean);
+    if (arpMacs.length > 0) {
       try {
-        const swDevice = await ipamDb.getNetworkDeviceById(switchId);
-        if (!swDevice || !swDevice.enabled) continue;
-
-        const swCredential = swDevice.snmp_credential_id
-          ? await ipamDb.getSnmpCredentialById(swDevice.snmp_credential_id)
-          : {};
-
-        const selectedIfIndexes = await ipamDb.getSelectedSwitchPortIndexes(swDevice.id);
-        const swConfig = buildDeviceConfig(swDevice, swCredential, selectedIfIndexes);
-        const swResult = await genericFdbOnly(swConfig);
-
-        // Build ifIndex -> name map for this switch
-        const swIfMap = {};
-        for (const iface of (swResult.interfaces || [])) {
-          swIfMap[iface.ifIndex] = iface.descr || iface.alias || ('if' + iface.ifIndex);
-        }
-
-        // Map MAC -> switch port
-        for (const entry of (swResult.macTable || [])) {
-          if (entry.mac) {
-            macToSwitchPort[entry.mac] = {
-              switchId: swDevice.id,
-              switchName: swDevice.name,
-              ifIndex: entry.ifIndex,
-              portName: swIfMap[entry.ifIndex] || ('if' + entry.ifIndex),
+        const rows = await ipamDb.listSwitchPortMapForMacs(arpMacs);
+        for (const row of rows) {
+          if (!macToSwitchPort[row.mac_address]) {
+            macToSwitchPort[row.mac_address] = {
+              switchId: row.switch_device_id,
+              switchName: row.switch_name,
+              ifIndex: row.if_index,
+              portName: row.switch_port_name,
             };
           }
         }
       } catch (err) {
-        console.error(`[IPAM-WORKER] Error consultando switch ${switchId}:`, err.message);
+        console.error('[IPAM-WORKER] Error mapeando MACs a puertos de switch:', err.message);
       }
     }
   }
@@ -122,12 +103,11 @@ async function pollDevice(device) {
   for (const entry of result.arp) {
     if (!entry.ip || !entry.mac) continue;
 
-    // Para routers asociados a switches, solo se aceptan MAC presentes en la FDB.
-    if (device.device_type === 'router' && relatedSwitchIds.length > 0 && !macToSwitchPort[entry.mac]) {
-      continue;
-    }
+    const vlanId = await ipamDb.findVlanIdByIp(entry.ip);
+
     await ipamDb.upsertAddress({
       address: entry.ip,
+      vlan_id: vlanId,
       mac_address: entry.mac,
       status: 'observed',
       source: 'arp',
@@ -135,12 +115,13 @@ async function pollDevice(device) {
       last_seen_at: new Date(),
     });
 
-    // Look up switch port for this MAC
-    const swPort = macToSwitchPort[entry.mac] || null;
+    // Look up switch port for this MAC (B′: todos los switches, solo puertos de acceso)
+    const swPort = macToSwitchPort[String(entry.mac).toUpperCase()] || null;
 
     await ipamDb.insertObservation({
       ip_address: entry.ip,
       mac_address: entry.mac,
+      vlan_id: vlanId,
       interface_index: entry.ifIndex,
       interface_name: ifMap[entry.ifIndex] || null,
       device_id: device.id,
@@ -175,6 +156,25 @@ async function pollDevice(device) {
   return { deviceId: device.id, records: recordCount, errors: result.errors };
 }
 
+// Enriquecimiento incremental de hostnames vía reverse DNS (PTR).
+// Solo toca IPs sin hostname (nunca resueltas o con reintento tras cooldown);
+// no pisa nombres manuales. Se llama al final de cada descubrimiento.
+async function enrichHostnames({ cap = 150, cooldownDays = 7 } = {}) {
+  try {
+    const ips = await ipamDb.getIpsMissingHostname({ cooldownDays, limit: cap });
+    if (!ips.length) return 0;
+    const map = await resolveHostnames(ips, { concurrency: 10, timeoutMs: 2000 });
+    const results = [...map.entries()].map(([ip, hostname]) => ({ ip, hostname }));
+    await ipamDb.recordHostnameResolution(results);
+    const named = results.filter(r => r.hostname).length;
+    console.log(`[IPAM-WORKER] Hostnames PTR: ${named}/${results.length} resueltos (pendientes consultados: ${ips.length}).`);
+    return named;
+  } catch (err) {
+    console.error('[IPAM-WORKER] Error resolviendo hostnames PTR:', err.message);
+    return 0;
+  }
+}
+
 async function runDiscovery() {
   if (running) return;
   running = true;
@@ -203,6 +203,9 @@ async function runDiscovery() {
     }
 
     await ipamDb.detectConflicts();
+    const purged = await ipamDb.pruneStaleArpAddresses();
+    if (purged) console.log(`[IPAM-WORKER] Purga ARP: ${purged} IPs sin actividad >90d eliminadas.`);
+    await enrichHostnames();
     console.log('[IPAM-WORKER] Descubrimiento completado.');
   } catch (err) {
     console.error('[IPAM-WORKER] Error general:', err.message);
@@ -244,7 +247,7 @@ async function testSnmp(deviceConfig) {
   }
 }
 
-function buildDeviceConfig(device, credential, selectedIfIndexes) {
+function buildDeviceConfig(device, credential) {
   return {
     host: device.management_ip,
     port: device.snmp_port || 161,
@@ -259,7 +262,6 @@ function buildDeviceConfig(device, credential, selectedIfIndexes) {
     priv_protocol: credential?.priv_protocol || '',
     priv_secret: credential?.priv_secret || '',
     trunk_ports: device.trunk_ports || [],
-    selected_if_indexes: selectedIfIndexes,
   };
 }
 
@@ -271,8 +273,7 @@ async function queryArpFromDevice(deviceId) {
     ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
     : {};
 
-  const selectedIfIndexes = await ipamDb.getSelectedSwitchPortIndexes(device.id);
-  const deviceConfig = buildDeviceConfig(device, credential, selectedIfIndexes);
+  const deviceConfig = buildDeviceConfig(device, credential);
   return await genericArpOnly(deviceConfig);
 }
 
@@ -284,8 +285,7 @@ async function queryFdbFromDevice(deviceId) {
     ? await ipamDb.getSnmpCredentialById(device.snmp_credential_id)
     : {};
 
-  const selectedIfIndexes = await ipamDb.getSelectedSwitchPortIndexes(device.id);
-  const deviceConfig = buildDeviceConfig(device, credential, selectedIfIndexes);
+  const deviceConfig = buildDeviceConfig(device, credential);
   return await genericFdbOnly(deviceConfig);
 }
 
@@ -351,7 +351,7 @@ async function queryInterfacesFromDevice(deviceId) {
     : {};
   const session = buildSession(buildDeviceConfig(device, credential));
   try {
-    return await genericGetInterfaces(session);
+    return await genericGetInterfacesPhysical(session);
   } finally {
     closeSession(session);
   }

@@ -40,7 +40,7 @@ read -p "Ingrese el nombre de usuario administrador [admin]: " ADMIN_USER
 ADMIN_USER=${ADMIN_USER:-admin}
 
 # Validar si el usuario existe en la base de datos
-USER_EXISTS=$(docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -v admin_user="$ADMIN_USER" -t -A -c "SELECT COUNT(1) FROM administradores WHERE username = :'admin_user';")
+USER_EXISTS=$(docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -t -A -c "SELECT COUNT(1) FROM administradores WHERE username = '${ADMIN_USER}';")
 
 if [ "$USER_EXISTS" != "1" ]; then
   echo -e "${RED}Error: El usuario administrador '${ADMIN_USER}' no existe en la base de datos.${NC}"

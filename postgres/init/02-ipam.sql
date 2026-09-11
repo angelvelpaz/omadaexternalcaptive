@@ -78,21 +78,21 @@ CREATE INDEX IF NOT EXISTS idx_ipam_vlans_vlan_id ON ipam_vlans(vlan_id);
 -- ─── Direcciones IP ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS ipam_addresses (
     id               SERIAL PRIMARY KEY,
-    vlan_id          INTEGER REFERENCES ipam_vlans(id) ON DELETE CASCADE,
-    address          INET NOT NULL,
+    vlan_id          INTEGER REFERENCES ipam_vlans(id) ON DELETE SET NULL,
+    address          INET NOT NULL UNIQUE,
     status           VARCHAR(20) NOT NULL DEFAULT 'available',
     hostname         VARCHAR(255),
     description      TEXT,
     owner            VARCHAR(200),
     mac_address      VARCHAR(17),
     source           VARCHAR(20) DEFAULT 'manual',
+    hostname_checked_at TIMESTAMPTZ,
     device_id        INTEGER REFERENCES ipam_network_devices(id) ON DELETE SET NULL,
     last_seen_at     TIMESTAMPTZ,
     first_seen_at    TIMESTAMPTZ DEFAULT NOW(),
     lease_expires_at TIMESTAMPTZ,
     created_at       TIMESTAMPTZ DEFAULT NOW(),
-    updated_at       TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(vlan_id, address)
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_ipam_addresses_mac ON ipam_addresses(mac_address);
@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS ipam_fdb_entries (
     interface_name   VARCHAR(100),
     vlan_id          INTEGER,
     is_trunk         BOOLEAN NOT NULL DEFAULT FALSE,
+    description      VARCHAR(255),
     first_seen_at    TIMESTAMPTZ DEFAULT NOW(),
     last_seen_at     TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(device_id, mac_address, bridge_port, vlan_id)
@@ -139,6 +140,19 @@ CREATE TABLE IF NOT EXISTS ipam_fdb_entries (
 CREATE INDEX IF NOT EXISTS idx_ipam_fdb_device ON ipam_fdb_entries(device_id);
 CREATE INDEX IF NOT EXISTS idx_ipam_fdb_mac ON ipam_fdb_entries(mac_address);
 CREATE INDEX IF NOT EXISTS idx_ipam_fdb_last_seen ON ipam_fdb_entries(last_seen_at);
+-- Dedupe clave real (NULL bridge_port/vlan_id tratados como 0)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ipam_fdb_key
+    ON ipam_fdb_entries(device_id, mac_address, COALESCE(bridge_port, 0), COALESCE(vlan_id, 0));
+
+-- ─── Alertas ARP spoofing resueltas ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS resolved_arp_alerts (
+    id              SERIAL PRIMARY KEY,
+    ip_address      INET NOT NULL,
+    resolved_at     TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(ip_address)
+);
+
+CREATE INDEX IF NOT EXISTS idx_resolved_arp_ip ON resolved_arp_alerts(ip_address);
 
 -- ─── Puertos seleccionados para descubrimiento FDB ───────────────────────────
 CREATE TABLE IF NOT EXISTS ipam_switch_ports (

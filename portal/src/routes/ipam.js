@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const ipamDb = require('../services/db/ipam');
-const { testSnmp, runDiscovery, pollDevice, queryArpFromDevice, queryFdbFromDevice, crossReferenceArpFdb, queryInterfacesFromDevice } = require('../services/ipamDiscoveryWorker');
+const { testSnmp, runDiscovery, pollDevice, queryArpFromDevice, queryFdbFromDevice, queryInterfacesFromDevice } = require('../services/ipamDiscoveryWorker');
 const db = require('../services/database');
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
@@ -193,20 +193,13 @@ router.put('/devices/:id/fdb-ports', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/cross-reference', async (req, res, next) => {
-  try {
-    const { router_id, switch_ids } = req.body;
-    if (!router_id || !switch_ids || !Array.isArray(switch_ids) || switch_ids.length === 0) {
-      return res.status(400).json({ error: 'Se requiere router_id y switch_ids (array).' });
-    }
-    const result = await crossReferenceArpFdb(router_id, switch_ids);
-    res.json(result);
-  } catch (err) { next(err); }
-});
-
 // ─── VLANs ──────────────────────────────────────────────────────────────────
 router.get('/vlans', async (req, res, next) => {
   try { res.json(await ipamDb.listVlans(req.query.site_id)); } catch (err) { next(err); }
+});
+
+router.get('/vlans/utilization', async (req, res, next) => {
+  try { res.json(await ipamDb.getSubnetUtilization()); } catch (err) { next(err); }
 });
 
 router.post('/vlans', async (req, res, next) => {
@@ -231,13 +224,35 @@ router.delete('/vlans/:id', async (req, res, next) => {
 // ─── Addresses ──────────────────────────────────────────────────────────────
 router.get('/addresses', async (req, res, next) => {
   try {
-    const { vlan_id, status, source, mac_address, search, limit, offset } = req.query;
-    res.json(await ipamDb.listAddresses({ vlan_id, status, source, mac_address, search, limit: parseInt(limit) || 200, offset: parseInt(offset) || 0 }));
+    const { vlan_id, status, source, mac_address, search, network, limit, offset } = req.query;
+    res.json(await ipamDb.listAddresses({ vlan_id, status, source, mac_address, search, network, limit: parseInt(limit) || 200, offset: parseInt(offset) || 0 }));
+  } catch (err) { next(err); }
+});
+
+router.get('/subnet-addresses', async (req, res, next) => {
+  try {
+    const { vlan_id, usage, search, limit, offset } = req.query;
+    res.json(await ipamDb.getSubnetAddresses({
+      vlan_id, usage, search,
+      limit: parseInt(limit) || 50,
+      offset: parseInt(offset) || 0,
+    }));
   } catch (err) { next(err); }
 });
 
 router.get('/addresses/conflicts', async (req, res, next) => {
   try { res.json(await ipamDb.getConflicts()); } catch (err) { next(err); }
+});
+
+router.get('/arp-alerts', async (req, res, next) => {
+  try { res.json(await ipamDb.getArpSpoofingAlerts()); } catch (err) { next(err); }
+});
+
+router.post('/arp-alerts/:ip/resolve', async (req, res, next) => {
+  try {
+    await ipamDb.resolveArpAlert(req.params.ip);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 router.post('/addresses', async (req, res, next) => {
@@ -269,8 +284,20 @@ router.get('/observations', async (req, res, next) => {
 
 router.get('/fdb', async (req, res, next) => {
   try {
-    const { device_id, search, include_trunks, limit } = req.query;
-    res.json(await ipamDb.listFdbEntries({ device_id, search, include_trunks, limit: parseInt(limit) || 5000 }));
+    const { device_id, search, ip_status, type, limit, offset } = req.query;
+    res.json(await ipamDb.listFdbEntries({
+      device_id, search, ip_status, type,
+      limit: parseInt(limit) || 10,
+      offset: parseInt(offset) || 0,
+    }));
+  } catch (err) { next(err); }
+});
+
+router.patch('/fdb/:id', async (req, res, next) => {
+  try {
+    const entry = await ipamDb.updateFdbDescription(req.params.id, req.body.description);
+    if (!entry) return res.status(404).json({ error: 'Entrada no encontrada.' });
+    res.json(entry);
   } catch (err) { next(err); }
 });
 

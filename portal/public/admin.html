@@ -18,6 +18,12 @@
     .tab-active { @apply border-b-2 border-blue-600 text-blue-600; }
     html.is-auth #login-screen { display: none !important; }
     html.is-auth #admin-panel { display: block !important; }
+    /* Sidebar colapsable (Opción B: ocultar por completo) */
+    #main-wrap { transition: margin-left .2s ease; }
+    #admin-panel.nav-collapsed #sidebar { transform: translateX(-100%) !important; }
+    #admin-panel.nav-collapsed #main-wrap { margin-left: 0 !important; }
+    #admin-panel.nav-collapsed #sidebar-collapse svg { transform: rotate(180deg); }
+    #sidebar-collapse svg { transition: transform .2s ease; }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -82,235 +88,220 @@
 <!-- ── PANEL PRINCIPAL ── -->
 <div id="admin-panel" class="hidden min-h-screen">
 
-  <!-- Header -->
-  <header class="bg-white shadow-sm sticky top-0 z-10">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <img src="/static/logo_upload.png" class="h-7 opacity-80" onerror="this.style.display='none'">
-        <div>
-          <h1 class="font-bold text-gray-800 text-lg leading-tight">Panel de Administración</h1>
-          <p id="header-portal-name" class="text-xs text-gray-400"></p>
-        </div>
+  <!-- Sidebar (Desktop: always visible, Mobile: overlay) -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform -translate-x-full md:translate-x-0 transition-transform duration-200 flex flex-col">
+    <!-- Logo -->
+    <div class="p-4 border-b border-gray-100 flex items-center gap-3">
+      <img src="/static/logo_upload.png" class="h-7 opacity-80" onerror="this.style.display='none'">
+      <div>
+        <h1 class="font-bold text-gray-800 text-sm leading-tight">Panel de Administración</h1>
+        <p id="sidebar-portal-name" class="text-[11px] text-gray-400"></p>
       </div>
-      <div class="flex items-center gap-4">
-        <div class="hidden sm:flex flex-col items-end text-right">
-          <span class="text-xs text-gray-400">Sesión iniciada</span>
-          <span id="header-admin-nombres" class="text-sm font-semibold text-gray-600"></span>
-          <div class="flex items-center gap-1.5 mt-0.5">
-            <span id="header-admin-rol" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"></span>
-            <button id="btn-my-security" class="text-[10px] text-blue-600 hover:text-blue-800 font-bold px-1.5 py-0.5 rounded border border-blue-200 hover:bg-blue-50 transition-colors">2FA</button>
+    </div>
+
+    <!-- Buscador de menú -->
+    <div class="px-3 pt-3">
+      <div class="relative">
+        <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"/></svg>
+        <input id="menu-search" oninput="sidebarSearch(this.value)" placeholder="Buscar en el menú…" class="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+      </div>
+    </div>
+
+    <!-- Menu -->
+    <nav class="flex-1 overflow-y-auto py-3 px-3 space-y-1" aria-label="Navegación Principal">
+
+      <!-- Inicio -->
+      <button class="tab-btn sidebar-btn w-full text-left flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="dashboard">
+        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11V11a1 1 0 00-1-1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+        <span>Inicio</span>
+      </button>
+
+      <!-- ── Operación ── -->
+      <div class="sidebar-section" data-section="operacion">
+        <button class="sidebar-section-toggle w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-gray-500 rounded-lg hover:bg-gray-50 transition-colors">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+            Operación
+          </span>
+          <svg class="w-3.5 h-3.5 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="sidebar-section-items hidden pl-4 mt-0.5 space-y-0.5">
+          <!-- Acceso Inalámbrico -->
+          <div class="sidebar-subsection" data-subsection="acceso">
+            <button class="sidebar-subsection-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider rounded hover:text-gray-600 transition-colors">
+              <span>Acceso Inalámbrico</span>
+              <svg class="w-3 h-3 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-subsection-items hidden pl-3 space-y-0.5">
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="users">Portal Autoregistro</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ldap-portal-users">Portal LDAP</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="devices">Dispositivos Wi-Fi</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ldap-users">WPA Enterprise</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="mac-bypass">PPSK / MAC Bypass</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="groups">Grupos RADIUS</button>
+            </div>
+          </div>
+          <!-- Hospitalidad -->
+          <div class="sidebar-subsection" data-subsection="hospitalidad">
+            <button class="sidebar-subsection-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider rounded hover:text-gray-600 transition-colors">
+              <span>Hospitalidad</span>
+              <svg class="w-3 h-3 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-subsection-items hidden pl-3 space-y-0.5">
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="hotel-guests">Huéspedes (Hotel)</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="restaurant-pins">PINs (Restaurante)</button>
+            </div>
+          </div>
+          <!-- Redes LAN -->
+          <div class="sidebar-subsection" data-subsection="op-ipam">
+            <button class="sidebar-subsection-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider rounded hover:text-gray-600 transition-colors">
+              <span>Redes LAN</span>
+              <svg class="w-3 h-3 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-subsection-items hidden pl-3 space-y-0.5">
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-vlans">Subredes y VLAN</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-addresses">Direcciones IP</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-fdb">Tabla MAC / Puertos</button>
+              <button class="tab-btn sidebar-btn w-full flex items-center justify-between gap-2 text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-conflicts"><span>Conflictos IP y ARP</span><span id="badge-arp-alerts" class="hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">0</span></button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-discovery">Descubrimiento SNMP</button>
+            </div>
+          </div>
+          <!-- Monitoreo -->
+          <div class="sidebar-subsection" data-subsection="op-monitoreo">
+            <button class="sidebar-subsection-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider rounded hover:text-gray-600 transition-colors">
+              <span>Monitoreo</span>
+              <svg class="w-3 h-3 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-subsection-items hidden pl-3 space-y-0.5">
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="live-sessions">Sesiones Activas</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="reports">Reportes</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="audit">Auditoría</button>
+            </div>
           </div>
         </div>
-        <button id="btn-logout" class="text-sm text-gray-500 hover:text-red-600 transition-colors flex items-center gap-1 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">
+      </div>
+
+      <!-- ── Configuración ── -->
+      <div class="sidebar-section" data-section="configuracion">
+        <button class="sidebar-section-toggle w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-gray-500 rounded-lg hover:bg-gray-50 transition-colors">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            Configuración
+          </span>
+          <svg class="w-3.5 h-3.5 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="sidebar-section-items hidden pl-4 mt-0.5 space-y-0.5">
+          <!-- Portal -->
+          <div class="sidebar-subsection" data-subsection="cf-portal">
+            <button class="sidebar-subsection-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider rounded hover:text-gray-600 transition-colors">
+              <span>Portal</span>
+              <svg class="w-3 h-3 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-subsection-items hidden pl-3 space-y-0.5">
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="branding">Personalización</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="bandwidth">Ancho de Banda</button>
+            </div>
+          </div>
+          <!-- Red e IPAM -->
+          <div class="sidebar-subsection" data-subsection="cf-red">
+            <button class="sidebar-subsection-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider rounded hover:text-gray-600 transition-colors">
+              <span>Red e IPAM</span>
+              <svg class="w-3 h-3 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-subsection-items hidden pl-3 space-y-0.5">
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-devices">Dispositivos de Red</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-credentials">Credenciales SNMP</button>
+            </div>
+          </div>
+          <!-- Integraciones -->
+          <div class="sidebar-subsection" data-subsection="cf-infra">
+            <button class="sidebar-subsection-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider rounded hover:text-gray-600 transition-colors">
+              <span>Integraciones</span>
+              <svg class="w-3 h-3 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-subsection-items hidden pl-3 space-y-0.5">
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="controllers">Conexiones</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="winbind">Winbind / NTLM</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ssl">Certificado SSL</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="external-db">Base de Datos Externa</button>
+            </div>
+          </div>
+          <!-- Administración -->
+          <div class="sidebar-subsection" data-subsection="cf-admin">
+            <button class="sidebar-subsection-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider rounded hover:text-gray-600 transition-colors">
+              <span>Administración</span>
+              <svg class="w-3 h-3 text-gray-400 transition-transform duration-200 sidebar-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-subsection-items hidden pl-3 space-y-0.5">
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="admins">Administradores</button>
+              <button class="tab-btn sidebar-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="maintenance">Mantenimiento</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- User info at bottom -->
+    <div class="p-3 border-t border-gray-100">
+      <div class="flex items-center gap-3 px-2">
+        <div class="flex-1 min-w-0">
+          <p id="sidebar-admin-nombres" class="text-xs font-semibold text-gray-600 truncate"></p>
+          <span id="sidebar-admin-rol" class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600"></span>
+        </div>
+        <button id="btn-logout-sidebar" class="text-gray-400 hover:text-red-500 transition-colors" title="Cerrar sesión">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
           </svg>
-          Salir
         </button>
       </div>
     </div>
+  </aside>
 
-    <!-- Tabs/Nav -->
-    <div class="border-t border-gray-100 bg-white">
-      <div class="max-w-7xl mx-auto px-4">
-        <!-- Desktop Nav -->
-        <nav class="hidden md:flex items-center gap-2" aria-label="Navegación Principal">
-          <!-- Inicio (Direct Link) -->
-          <button class="nav-item tab-btn flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 border-transparent transition-colors hover:text-gray-800" data-tab="dashboard">
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11V11a1 1 0 00-1-1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-            </svg>
-            <span>Inicio</span>
-          </button>
+  <!-- Sidebar overlay (mobile) -->
+  <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden" onclick="toggleSidebar()"></div>
 
-          <!-- Gestión (Dropdown) -->
-          <div class="relative nav-dropdown">
-            <button class="dropdown-trigger flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 border-transparent transition-colors hover:text-gray-800" aria-haspopup="true" aria-expanded="false">
-              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-              </svg>
-              <span>Gestión</span>
-              <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
-            <div class="dropdown-menu absolute left-0 mt-0.5 w-52 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-20" role="menu">
-              <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cautivo</div>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="users" role="menuitem">Portal Autoregistro</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ldap-portal-users" role="menuitem">Portal LDAP</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="devices" role="menuitem">Dispositivos</button>
-              <div class="border-t border-gray-50 my-1"></div>
-              <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">WPA / Red</div>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ldap-users" role="menuitem">WPA Enterprise</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="mac-bypass" role="menuitem">PPSK / MAC Bypass</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="groups" role="menuitem">Grupos RADIUS</button>
-              <div class="border-t border-gray-50 my-1"></div>
-              <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">IPAM</div>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam" role="menuitem">Resumen IPAM</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-vlans" role="menuitem">Subredes y VLAN</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-devices" role="menuitem">Dispositivos de Red</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-fdb" role="menuitem">Tabla MAC / Puertos</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-conflicts" role="menuitem">Conflictos IP</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ipam-discovery" role="menuitem">Descubrimiento SNMP</button>
-              <div class="border-t border-gray-50 my-1"></div>
-              <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Hospitalidad</div>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="hotel-guests" role="menuitem">Huéspedes (Hotel)</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="restaurant-pins" role="menuitem">PINs (Restaurante)</button>
-            </div>
-          </div>
-
-          <!-- Monitoreo (Dropdown) -->
-          <div class="relative nav-dropdown">
-            <button class="dropdown-trigger flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 border-transparent transition-colors hover:text-gray-800" aria-haspopup="true" aria-expanded="false">
-              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-              </svg>
-              <span>Monitoreo</span>
-              <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
-            <div class="dropdown-menu absolute left-0 mt-0.5 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-20" role="menu">
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="live-sessions" role="menuitem">Sesiones Activas</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="reports" role="menuitem">Reportes</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="audit" role="menuitem">Auditoría</button>
-            </div>
-          </div>
-
-          <!-- Sistema (Dropdown) -->
-          <div class="relative nav-dropdown">
-            <button class="dropdown-trigger flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 border-transparent transition-colors hover:text-gray-800" aria-haspopup="true" aria-expanded="false">
-              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-              </svg>
-              <span>Sistema</span>
-              <svg class="w-3 h-3 text-gray-400 dropdown-arrow transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
-            <div class="dropdown-menu absolute left-0 mt-0.5 w-52 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-20" role="menu">
-              <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Portal</div>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="branding" role="menuitem">Personalización</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="bandwidth" role="menuitem">Ancho de Banda</button>
-              <div class="border-t border-gray-50 my-1"></div>
-              <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Infraestructura</div>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="controllers" role="menuitem">Conexiones</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="winbind" role="menuitem">Winbind / NTLM</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="ssl" role="menuitem">Certificado SSL</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="external-db" role="menuitem">Base de Datos Externa</button>
-              <div class="border-t border-gray-50 my-1"></div>
-              <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Acceso</div>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="admins" role="menuitem">Administradores</button>
-              <button class="tab-btn w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="maintenance" role="menuitem">Mantenimiento</button>
-            </div>
-          </div>
-        </nav>
-
-        <!-- Mobile Nav Bar (Visible on mobile only) -->
-        <div class="flex md:hidden items-center justify-between py-2.5">
-          <button id="mobile-menu-toggle" class="text-gray-500 hover:text-gray-800 focus:outline-none flex items-center gap-2 py-1 px-2 rounded-lg border border-gray-200 text-sm font-medium" aria-expanded="false" aria-label="Abrir Menú">
-            <svg id="mobile-menu-icon" class="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-            </svg>
-            <span>Navegación</span>
-          </button>
-          <span id="mobile-active-tab" class="text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Conexiones</span>
-        </div>
-
-        <!-- Mobile Expandable Content -->
-        <div id="mobile-menu" class="hidden md:hidden border-t border-gray-100 py-3 space-y-1">
-          <!-- Inicio -->
-          <button class="tab-btn w-full text-left flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors" data-tab="dashboard">
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11V11a1 1 0 00-1-1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-            </svg>
-            Inicio
-          </button>
-
-          <!-- Gestión -->
-          <div class="mobile-section" data-section="gestion">
-            <button class="mobile-section-toggle w-full flex items-center justify-between px-3 py-2.5 text-sm font-bold text-gray-500 uppercase tracking-wider rounded-lg hover:bg-gray-50 transition-colors">
-              <span class="flex items-center gap-2">
-                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-                </svg>
-                Gestión
-              </span>
-              <svg class="w-4 h-4 text-gray-400 transition-transform duration-200 mobile-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div class="mobile-section-items hidden pl-5 space-y-0.5 mt-0.5">
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-1 pb-0.5">Cautivo</div>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="users">Portal Autoregistro</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ldap-portal-users">Portal LDAP</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="devices">Dispositivos</button>
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-2 pb-0.5">WPA / Red</div>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ldap-users">WPA Enterprise</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="mac-bypass">PPSK / MAC Bypass</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="groups">Grupos RADIUS</button>
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-2 pb-0.5">IPAM</div>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam">Resumen IPAM</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-vlans">Subredes y VLAN</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-devices">Dispositivos de Red</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-fdb">Tabla MAC / Puertos</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-conflicts">Conflictos IP</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ipam-discovery">Descubrimiento SNMP</button>
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-2 pb-0.5">Hospitalidad</div>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="hotel-guests">Huéspedes (Hotel)</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="restaurant-pins">PINs (Restaurante)</button>
-            </div>
-          </div>
-
-          <!-- Monitoreo -->
-          <div class="mobile-section" data-section="monitoreo">
-            <button class="mobile-section-toggle w-full flex items-center justify-between px-3 py-2.5 text-sm font-bold text-gray-500 uppercase tracking-wider rounded-lg hover:bg-gray-50 transition-colors">
-              <span class="flex items-center gap-2">
-                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                </svg>
-                Monitoreo
-              </span>
-              <svg class="w-4 h-4 text-gray-400 transition-transform duration-200 mobile-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div class="mobile-section-items hidden pl-5 space-y-0.5 mt-0.5">
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="live-sessions">Sesiones Activas</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="reports">Reportes</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="audit">Auditoría</button>
-            </div>
-          </div>
-
-          <!-- Sistema -->
-          <div class="mobile-section" data-section="sistema">
-            <button class="mobile-section-toggle w-full flex items-center justify-between px-3 py-2.5 text-sm font-bold text-gray-500 uppercase tracking-wider rounded-lg hover:bg-gray-50 transition-colors">
-              <span class="flex items-center gap-2">
-                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31"/>
-                </svg>
-                Sistema
-              </span>
-              <svg class="w-4 h-4 text-gray-400 transition-transform duration-200 mobile-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div class="mobile-section-items hidden pl-5 space-y-0.5 mt-0.5">
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-1 pb-0.5">Portal</div>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="branding">Personalización</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="bandwidth">Ancho de Banda</button>
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-2 pb-0.5">Infraestructura</div>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="controllers">Conexiones</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="winbind">Winbind / NTLM</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="ssl">Certificado SSL</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="external-db">Base de Datos Externa</button>
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pt-2 pb-0.5">Acceso</div>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="admins">Administradores</button>
-              <button class="tab-btn w-full text-left px-3 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors" data-tab="maintenance">Mantenimiento</button>
-            </div>
-          </div>
+  <!-- Main content area -->
+  <div id="main-wrap" class="flex-1 md:ml-64 flex flex-col min-h-screen">
+    <!-- Top bar -->
+    <header class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+      <div class="flex items-center gap-3">
+        <button id="sidebar-toggle" class="md:hidden text-gray-500 hover:text-gray-800 p-1.5 rounded-lg border border-gray-200" onclick="toggleSidebar()">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <button id="sidebar-collapse" class="hidden md:inline-flex text-gray-400 hover:text-gray-800 hover:bg-gray-100 p-1.5 rounded-lg transition-colors" title="Ocultar/mostrar menú" onclick="toggleSidebarCollapse()">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7M18 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <div class="flex flex-col">
+          <nav id="breadcrumb" class="text-[11px] text-gray-400 leading-tight truncate"></nav>
+          <h2 id="page-title" class="text-sm font-bold text-gray-700">Inicio</h2>
         </div>
       </div>
-    </div>
-  </header>
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex flex-col items-end text-right">
+          <span id="header-admin-nombres" class="text-xs font-semibold text-gray-600"></span>
+          <span id="header-admin-rol" class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600"></span>
+        </div>
+        <button id="btn-my-security" class="hidden sm:inline-flex text-[10px] text-blue-600 hover:text-blue-800 font-bold px-1.5 py-0.5 rounded border border-blue-200 hover:bg-blue-50 transition-colors">2FA</button>
+        <button id="btn-logout" class="text-sm text-gray-400 hover:text-red-500 transition-colors" title="Cerrar sesión">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </header>
 
-  <main class="max-w-7xl mx-auto px-4 py-6">
+    <main class="flex-1 overflow-auto px-4 py-6 max-w-7xl w-full mx-auto">
 
     <!-- ── TAB DASHBOARD ── -->
     <div id="tab-dashboard" class="tab-content hidden">
@@ -2415,9 +2406,12 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 class="text-lg font-bold text-gray-800">Direcciones IP</h2>
-            <p class="text-sm text-gray-500">Inventario de direcciones IP registradas y observadas.</p>
+            <p class="text-sm text-gray-500">Ocupadas y libres dentro de las subredes de las VLANs registradas.</p>
           </div>
           <div class="flex gap-2">
+            <button onclick="refreshAddressesArp()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
+              ⟳ Actualizar
+            </button>
             <button onclick="openIpamAddressModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
               + Registrar IP
             </button>
@@ -2425,20 +2419,19 @@
         </div>
         <!-- Filtros -->
         <div class="flex flex-col sm:flex-row gap-3">
-          <input type="text" id="ipam-addr-search" placeholder="Buscar IP, MAC, hostname o propietario..." oninput="loadIpamAddresses()"
+          <input type="text" id="ipam-addr-search" placeholder="Buscar IP, MAC, hostname o propietario..." oninput="ipamAddrFilterChanged()"
             class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-          <select id="ipam-addr-vlan-filter" onchange="loadIpamAddresses()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value="">Todas las VLAN</option>
+          <select id="ipam-addr-vlan-filter" onchange="ipamAddrFilterChanged()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Todas las subredes</option>
           </select>
-          <select id="ipam-addr-status-filter" onchange="loadIpamAddresses()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value="">Todos los estados</option>
-            <option value="available">Disponible</option>
-            <option value="assigned">Asignada</option>
-            <option value="observed">Observada</option>
-            <option value="conflict">Conflicto</option>
-            <option value="reserved">Reservada</option>
+          <select id="ipam-addr-usage" onchange="ipamAddrFilterChanged()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Todas (Ocupadas + Libres)</option>
+            <option value="used">Solo Ocupadas</option>
+            <option value="free">Solo Libres</option>
           </select>
         </div>
+        <!-- Resumen -->
+        <div id="addr-summary" class="flex flex-wrap gap-2 text-xs"></div>
         <!-- Tabla -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div class="overflow-x-auto">
@@ -2446,24 +2439,24 @@
               <thead>
                 <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold bg-gray-50/50">
                   <th class="py-3 px-4">Dirección IP</th>
-                  <th class="py-3 px-4">VLAN / Interfaz Router</th>
+                  <th class="py-3 px-4">Red (VLAN)</th>
+                  <th class="py-3 px-4">Uso</th>
+                  <th class="py-3 px-4">Estado</th>
                   <th class="py-3 px-4">MAC</th>
-                  <th class="py-3 px-4">Interfaz Switch</th>
                   <th class="py-3 px-4">Hostname</th>
                   <th class="py-3 px-4">Propietario</th>
-                  <th class="py-3 px-4">Estado</th>
-                  <th class="py-3 px-4">Fuente</th>
                   <th class="py-3 px-4">Última vez</th>
                   <th class="py-3 px-4 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody id="ipam-addresses-tbody" class="divide-y divide-gray-50 text-gray-600">
-                <tr><td colspan="10" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+                <tr><td colspan="9" class="p-8 text-center text-gray-400">Cargando...</td></tr>
               </tbody>
             </table>
           </div>
-          <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+          <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-between gap-3">
             <span id="ipam-addr-count" class="text-xs text-gray-500">0 direcciones</span>
+            <div id="addr-pager" class="flex items-center gap-1"></div>
           </div>
         </div>
       </div>
@@ -2493,12 +2486,13 @@
                   <th class="py-3 px-4">Red/CIDR</th>
                   <th class="py-3 px-4">Gateway</th>
                   <th class="py-3 px-4">DHCP</th>
+                  <th class="py-3 px-4">Uso</th>
                   <th class="py-3 px-4">Estado</th>
                   <th class="py-3 px-4 text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody id="ipam-vlans-tbody" class="divide-y divide-gray-50 text-gray-600">
-                <tr><td colspan="7" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+               <tbody id="ipam-vlans-tbody" class="divide-y divide-gray-50 text-gray-600">
+                 <tr><td colspan="8" class="p-8 text-center text-gray-400">Cargando...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2517,9 +2511,6 @@
             <p class="text-sm text-gray-500">Inventario de routers y switches gestionados por SNMP.</p>
           </div>
           <div class="flex gap-2">
-            <button onclick="crossReferenceArpFdb()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-              🔗 Mapeo ARP↔FDB
-            </button>
             <button onclick="openIpamCredentialModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
               🔑 Credenciales SNMP
             </button>
@@ -2554,6 +2545,37 @@
     <!-- ═══════════════════════════════════════════════════════════════════════ -->
     <!-- IPAM — Conflictos IP                                                  -->
     <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-ipam-credentials" class="tab-content hidden">
+      <div class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Credenciales SNMP</h2>
+            <p class="text-sm text-gray-500">Administre comunidades SNMPv2c y usuarios SNMPv3.</p>
+          </div>
+          <button onclick="openIpamCredentialModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">+ Nueva credencial</button>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-xs font-semibold bg-gray-50/50">
+                  <th class="py-3 px-4">Nombre</th>
+                  <th class="py-3 px-4">Versión</th>
+                  <th class="py-3 px-4">Usuario</th>
+                  <th class="py-3 px-4">Nivel seguridad</th>
+                  <th class="py-3 px-4">Creada</th>
+                  <th class="py-3 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ipam-credentials-tbody" class="divide-y divide-gray-50 text-gray-600">
+                <tr><td colspan="6" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="tab-ipam-fdb" class="tab-content hidden">
       <div class="space-y-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2561,17 +2583,23 @@
             <h2 class="text-lg font-bold text-gray-800">Tabla MAC / Puertos</h2>
             <p class="text-sm text-gray-500">FDB importada automáticamente desde los switches configurados.</p>
           </div>
-          <button onclick="loadIpamFdb()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Actualizar FDB</button>
+          <button onclick="loadIpamFdb(true)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Actualizar ARP + FDB</button>
         </div>
-        <div class="flex flex-col sm:flex-row gap-3">
-          <input type="text" id="ipam-fdb-search" placeholder="Buscar MAC, switch o puerto..." oninput="loadIpamFdb()" class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm">
-          <select id="ipam-fdb-device" onchange="loadIpamFdb()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <input type="text" id="ipam-fdb-search" placeholder="Buscar MAC, IP, puerto o desc..." oninput="fdbSearchChanged()" class="px-4 py-2.5 border border-gray-300 rounded-lg text-sm">
+          <select id="ipam-fdb-device" onchange="fdbFilterChanged()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
             <option value="">Todos los switches</option>
           </select>
-          <label class="flex items-center gap-2 px-3 text-sm text-gray-600">
-            <input type="checkbox" id="ipam-fdb-show-trunks" onchange="loadIpamFdb()">
-            Mostrar troncales
-          </label>
+          <select id="ipam-fdb-ipstatus" onchange="fdbFilterChanged()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">IP: Todas</option>
+            <option value="with">Con IP asociada</option>
+            <option value="without">Sin IP asociada</option>
+          </select>
+          <select id="ipam-fdb-type" onchange="fdbFilterChanged()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Tipo: Todos</option>
+            <option value="access">Acceso</option>
+            <option value="trunk">Troncal</option>
+          </select>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div class="overflow-x-auto">
@@ -2582,18 +2610,19 @@
                   <th class="py-3 px-4">MAC</th>
                   <th class="py-3 px-4">Switch</th>
                   <th class="py-3 px-4">Puerto físico</th>
-                  <th class="py-3 px-4">ifIndex</th>
+                  <th class="py-3 px-4">Descripción</th>
                   <th class="py-3 px-4">Tipo</th>
                   <th class="py-3 px-4">Última vez</th>
                 </tr>
               </thead>
               <tbody id="ipam-fdb-tbody" class="divide-y divide-gray-50 text-gray-600">
-                <tr><td colspan="6" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+                <tr><td colspan="7" class="p-8 text-center text-gray-400">Cargando...</td></tr>
               </tbody>
             </table>
           </div>
-          <div class="px-4 py-3 border-t border-gray-100">
+          <div class="px-4 py-3 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
             <span id="ipam-fdb-count" class="text-xs text-gray-500">0 entradas</span>
+            <div id="ipam-fdb-pager" class="flex items-center gap-1"></div>
           </div>
         </div>
       </div>
@@ -2601,6 +2630,32 @@
 
     <div id="tab-ipam-conflicts" class="tab-content hidden">
       <div class="space-y-6">
+        <!-- Alertas ARP Spoofing -->
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">Alertas ARP Spoofing</h2>
+          <p class="text-sm text-gray-500">IPs cuya MAC cambió respecto al histórico. Posible suplantación.</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-red-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-red-100 text-red-400 uppercase tracking-wider text-xs font-semibold bg-red-50/50">
+                  <th class="py-3 px-4">IP</th>
+                  <th class="py-3 px-4">MAC Actual</th>
+                  <th class="py-3 px-4">MAC Legítima</th>
+                  <th class="py-3 px-4">Puerto Switch</th>
+                  <th class="py-3 px-4">Última vez</th>
+                  <th class="py-3 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ipam-arp-alerts-tbody" class="divide-y divide-gray-50 text-gray-600">
+                <tr><td colspan="5" class="p-8 text-center text-gray-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Conflictos IP clásicos -->
         <div>
           <h2 class="text-lg font-bold text-gray-800">Conflictos IP</h2>
           <p class="text-sm text-gray-500">Direcciones IP detectadas con múltiples MAC asociadas.</p>
@@ -2662,6 +2717,7 @@
     </div>
 
   </main>
+  </div>
 </div>
 
 <!-- ── MODAL DISPOSITIVO IPAM ── -->
@@ -2834,6 +2890,33 @@
         <button type="submit" class="px-5 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium">Guardar</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ── MODAL PUERTOS FDB ── -->
+<div id="modal-ipam-fdb-ports" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[85vh]">
+    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-indigo-700 to-purple-800 text-white">
+      <h3 class="font-bold text-lg leading-tight" id="fdb-ports-modal-title">Puertos FDB</h3>
+      <button onclick="closeFdbPortsModal()" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-4 border-b border-gray-100 space-y-3">
+      <div class="flex gap-2">
+        <button type="button" onclick="fdbPortsSelectAll(true)" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">Seleccionar todos</button>
+        <button type="button" onclick="fdbPortsSelectAll(false)" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">Deseleccionar todos</button>
+      </div>
+      <input type="text" id="fdb-ports-search" oninput="fdbPortsFilter()" placeholder="Buscar puerto..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    </div>
+    <div id="fdb-ports-list" class="flex-1 overflow-y-auto p-4 space-y-1">
+      <p class="text-gray-400 text-sm text-center">Cargando...</p>
+    </div>
+    <div class="p-4 border-t border-gray-100 flex justify-between items-center">
+      <span id="fdb-ports-count" class="text-xs text-gray-500">0 seleccionados</span>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeFdbPortsModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
+        <button type="button" onclick="submitFdbPorts()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">Guardar selección</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3554,7 +3637,7 @@ document.getElementById('btn-my-security').addEventListener('click', async () =>
   }
 });
 
-document.getElementById('btn-logout').addEventListener('click', async () => {
+async function handleLogout() {
   try {
     await fetch('/admin/api/logout', {
       method: 'POST',
@@ -3570,7 +3653,9 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
   document.documentElement.classList.remove('is-auth');
   document.getElementById('admin-panel').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
-});
+}
+document.getElementById('btn-logout').addEventListener('click', handleLogout);
+document.getElementById('btn-logout-sidebar').addEventListener('click', handleLogout);
 
 window._authMethods = [];
 
@@ -3582,6 +3667,8 @@ async function showPanel() {
   const adminNombres = localStorage.getItem('admin_nombres') || 'Administrador';
   const nameEl = document.getElementById('header-admin-nombres');
   if (nameEl) nameEl.textContent = adminNombres;
+  const sidebarNameEl = document.getElementById('sidebar-admin-nombres');
+  if (sidebarNameEl) sidebarNameEl.textContent = adminNombres;
 
   // Cargar métodos de autenticación antes de aplicar visibilidades
   try {
@@ -3592,7 +3679,8 @@ async function showPanel() {
   }
 
   fetch('/auth/config').then(r => r.json()).then(cfg => {
-    document.getElementById('header-portal-name').textContent = cfg.name || '';
+    const portalNameEl = document.getElementById('sidebar-portal-name');
+    if (portalNameEl) portalNameEl.textContent = cfg.name || '';
     if (cfg.timezone) APP_TIMEZONE = cfg.timezone;
   }).catch(() => {});
 
@@ -3611,14 +3699,16 @@ async function showPanel() {
 function applyRBAC() {
   adminRol = localStorage.getItem('admin_rol') || 'operador';
 
-  // Mostrar badge de rol en header
-  const rolBadge = document.getElementById('header-admin-rol');
-  if (rolBadge) {
-    const labels = { operador: 'Operador', administrador: 'Administrador', superadministrador: 'Superadmin' };
-    const colors = { operador: 'bg-gray-100 text-gray-600', administrador: 'bg-blue-100 text-blue-700', superadministrador: 'bg-purple-100 text-purple-700' };
-    rolBadge.textContent = labels[adminRol] || adminRol;
-    rolBadge.className = `text-xs font-semibold px-2 py-0.5 rounded-full ${colors[adminRol] || 'bg-gray-100 text-gray-600'}`;
-  }
+  // Mostrar badge de rol en header y sidebar
+  const labels = { operador: 'Operador', administrador: 'Administrador', superadministrador: 'Superadmin' };
+  const colors = { operador: 'bg-gray-100 text-gray-600', administrador: 'bg-blue-100 text-blue-700', superadministrador: 'bg-purple-100 text-purple-700' };
+  ['header-admin-rol', 'sidebar-admin-rol'].forEach(id => {
+    const rolBadge = document.getElementById(id);
+    if (rolBadge) {
+      rolBadge.textContent = labels[adminRol] || adminRol;
+      rolBadge.className = `text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${colors[adminRol] || 'bg-gray-100 text-gray-600'}`;
+    }
+  });
 
   // Ocultar/mostrar tabs de navegación según rol y métodos activos
   const tabRules = {
@@ -3642,6 +3732,13 @@ function applyRBAC() {
     'ssl':              'superadministrador',
     'external-db':      'superadministrador',
     'maintenance':      'superadministrador',
+    'ipam-vlans':       'operador',
+    'ipam-addresses':   'operador',
+    'ipam-fdb':         'operador',
+    'ipam-conflicts':   'operador',
+    'ipam-discovery':   'operador',
+    'ipam-devices':     'administrador',
+    'ipam-credentials': 'administrador',
   };
 
   const tabToMethodId = {
@@ -3668,19 +3765,17 @@ function applyRBAC() {
       }
     }
 
-    btn.closest('li') ? btn.closest('li').classList.toggle('hidden', !visible)
-                      : btn.classList.toggle('hidden', !visible);
+    btn.classList.toggle('hidden', !visible);
   });
 
-  // Ocultar dropdown triggers vacíos (monitoreo, configuración) si todos sus items están ocultos
-  document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
-    const visibleItems = [...dropdown.querySelectorAll('.tab-btn')].filter(b => !b.closest('li')?.classList.contains('hidden') && !b.classList.contains('hidden'));
-    const trigger = dropdown.querySelector('.dropdown-trigger');
-    if (trigger) trigger.classList.toggle('hidden', visibleItems.length === 0);
+  // Ocultar sidebar subsections vacías
+  document.querySelectorAll('.sidebar-subsection').forEach(sub => {
+    const visibleItems = [...sub.querySelectorAll('.tab-btn')].filter(b => !b.classList.contains('hidden'));
+    sub.classList.toggle('hidden', visibleItems.length === 0);
   });
 
-  // Ocultar secciones móviles vacías
-  document.querySelectorAll('.mobile-section').forEach(section => {
+  // Ocultar sidebar sections vacías
+  document.querySelectorAll('.sidebar-section').forEach(section => {
     const visibleItems = [...section.querySelectorAll('.tab-btn')].filter(b => !b.classList.contains('hidden'));
     section.classList.toggle('hidden', visibleItems.length === 0);
   });
@@ -3697,28 +3792,6 @@ if (token) {
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset.tab));
 });
-
-function highlightActiveTrigger(tab) {
-  // Resetear todos los triggers de dropdowns
-  document.querySelectorAll('.dropdown-trigger').forEach(trigger => {
-    trigger.classList.remove('text-blue-600', 'border-blue-600');
-    trigger.classList.add('text-gray-500', 'border-transparent');
-  });
-
-  // Encontrar el botón activo
-  const tabBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
-  if (!tabBtn) return;
-
-  // Si está dentro de un dropdown de escritorio, iluminar el trigger correspondiente
-  const parentDropdown = tabBtn.closest('.nav-dropdown');
-  if (parentDropdown) {
-    const trigger = parentDropdown.querySelector('.dropdown-trigger');
-    if (trigger) {
-      trigger.classList.add('text-blue-600', 'border-blue-600');
-      trigger.classList.remove('text-gray-500', 'border-transparent');
-    }
-  }
-}
 
 function switchTab(tab) {
   currentTab = tab;
@@ -3744,30 +3817,28 @@ function switchTab(tab) {
 
   document.getElementById('tab-' + tab).classList.remove('hidden');
 
-  // Cerrar todos los menús dropdowns abiertos de escritorio
-  document.querySelectorAll('.dropdown-menu').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('.dropdown-trigger').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
-  document.querySelectorAll('.dropdown-arrow').forEach(el => el.classList.remove('rotate-180'));
+  // Page title + breadcrumb (clean label, sin badge)
+  const activeBtn = document.querySelector(`.sidebar-btn[data-tab="${tab}"]`);
+  const pageTitle = document.getElementById('page-title');
+  const cleanLabel = activeBtn ? (activeBtn.querySelector('span') ? activeBtn.querySelector('span').textContent.trim() : activeBtn.textContent.trim()) : tab;
+  if (pageTitle) pageTitle.textContent = cleanLabel;
+  setBreadcrumb(activeBtn, cleanLabel);
+  if (activeBtn) expandAncestorsFor(activeBtn);
 
-  // Resaltar el trigger del dropdown padre
-  highlightActiveTrigger(tab);
+  // Highlight active sidebar button
+  document.querySelectorAll('.sidebar-btn').forEach(btn => {
+    const on = btn.dataset.tab === tab;
+    btn.classList.toggle('bg-blue-50', on);
+    btn.classList.toggle('text-blue-700', on);
+    btn.classList.toggle('font-semibold', on);
+  });
 
-  // Actualizar indicador del tab activo en móvil
-  const mobileActiveTabSpan = document.getElementById('mobile-active-tab');
-  if (mobileActiveTabSpan) {
-    const activeBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]:not([role="menuitem"])`) || document.querySelector(`.tab-btn[data-tab="${tab}"]`);
-    mobileActiveTabSpan.textContent = activeBtn ? activeBtn.textContent.trim() : tab;
-  }
-
-  // Ocultar el menú móvil si está desplegado
-  const mobileMenu = document.getElementById('mobile-menu');
-  if (mobileMenu) {
-    mobileMenu.classList.add('hidden');
-    const mobileToggle = document.getElementById('mobile-menu-toggle');
-    if (mobileToggle) {
-      mobileToggle.setAttribute('aria-expanded', 'false');
-      document.getElementById('mobile-menu-icon').innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
-    }
+  // Close sidebar on mobile after selecting
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (sidebar && !sidebar.classList.contains('-translate-x-full') && window.innerWidth < 768) {
+    sidebar.classList.add('-translate-x-full');
+    overlay.classList.add('hidden');
   }
 
   if (tab === 'dashboard') loadDashboard();
@@ -3804,79 +3875,62 @@ function switchTab(tab) {
   else if (tab === 'audit') loadAuditLogs(0);
   else if (tab === 'ipam') loadIpamDashboard();
   else if (tab === 'ipam-vlans') loadIpamVlans();
+  else if (tab === 'ipam-addresses') loadIpamAddresses();
   else if (tab === 'ipam-devices') loadIpamDevices();
   else if (tab === 'ipam-fdb') loadIpamFdb();
+  else if (tab === 'ipam-credentials') loadIpamCredentials();
   else if (tab === 'ipam-conflicts') loadIpamConflicts();
   else if (tab === 'ipam-discovery') loadIpamPollRuns();
 }
 
-// ── Controladores e Interacción de Dropdowns ──────────────────────────────────
+// ── Controladores e Interacción de Sidebar ──────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Manejo de Dropdowns de escritorio
-  document.querySelectorAll('.dropdown-trigger').forEach(trigger => {
-    trigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const parent = trigger.closest('.nav-dropdown');
-      const menu = parent.querySelector('.dropdown-menu');
-      const arrow = parent.querySelector('.dropdown-arrow');
-      const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
-
-      // Cerrar los otros dropdowns
-      closeAllDropdowns();
-
-      if (!isExpanded) {
-        trigger.setAttribute('aria-expanded', 'true');
-        menu.classList.remove('hidden');
-        if (arrow) arrow.classList.add('rotate-180');
-      }
-    });
-  });
-
-  // Cerrar al hacer click fuera
-  document.addEventListener('click', () => {
-    closeAllDropdowns();
-  });
-
-  // Cerrar con Escape
+  // Cerrar sidebar con Escape en mobile
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      closeAllDropdowns();
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      if (sidebar && !sidebar.classList.contains('-translate-x-full')) {
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+      }
     }
   });
 
-  function closeAllDropdowns() {
-    document.querySelectorAll('.dropdown-menu').forEach(el => el.classList.add('hidden'));
-    document.querySelectorAll('.dropdown-trigger').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
-    document.querySelectorAll('.dropdown-arrow').forEach(el => el.classList.remove('rotate-180'));
+  // Sidebar toggle (mobile)
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar.classList.contains('-translate-x-full')) {
+      sidebar.classList.remove('-translate-x-full');
+      overlay.classList.remove('hidden');
+    } else {
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+    }
   }
+  window.toggleSidebar = toggleSidebar;
 
-  // Hamburguesa / Menú Móvil
-  const mobileToggle = document.getElementById('mobile-menu-toggle');
-  const mobileMenu = document.getElementById('mobile-menu');
-  const mobileMenuIcon = document.getElementById('mobile-menu-icon');
-
-  if (mobileToggle && mobileMenu) {
-    mobileToggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isExpanded = mobileToggle.getAttribute('aria-expanded') === 'true';
-      if (isExpanded) {
-        mobileToggle.setAttribute('aria-expanded', 'false');
-        mobileMenu.classList.add('hidden');
-        mobileMenuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>';
-      } else {
-        mobileToggle.setAttribute('aria-expanded', 'true');
-        mobileMenu.classList.remove('hidden');
-        mobileMenuIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>';
+  // Sidebar collapsible sections
+  document.querySelectorAll('.sidebar-section-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const section = btn.closest('.sidebar-section');
+      const items = section.querySelector('.sidebar-section-items');
+      const chevron = section.querySelector(':scope > .sidebar-section-toggle .sidebar-chevron');
+      if (items) {
+        const isHidden = items.classList.contains('hidden');
+        items.classList.toggle('hidden', !isHidden);
+        if (chevron) chevron.classList.toggle('rotate-180', isHidden);
       }
     });
-  }
+  });
 
-  // Mobile collapsible sections
-  document.querySelectorAll('.mobile-section-toggle').forEach(btn => {
+  // Sidebar collapsible subsections
+  document.querySelectorAll('.sidebar-subsection-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
-      const section = btn.closest('.mobile-section');
-      const items = section.querySelector('.mobile-section-items');
-      const chevron = section.querySelector('.mobile-chevron');
+      const subsection = btn.closest('.sidebar-subsection');
+      const items = subsection.querySelector('.sidebar-subsection-items');
+      const chevron = subsection.querySelector(':scope > .sidebar-subsection-toggle .sidebar-chevron');
       if (items) {
         const isHidden = items.classList.contains('hidden');
         items.classList.toggle('hidden', !isHidden);
@@ -3892,6 +3946,96 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 30000);
 });
+
+// ── Menú: breadcrumb, expansión y búsqueda ──────────────────────────────────
+function setBreadcrumb(activeBtn, cleanLabel) {
+  const bc = document.getElementById('breadcrumb');
+  if (!bc) return;
+  if (activeBtn && activeBtn.dataset.tab === 'dashboard') { bc.textContent = ''; return; }
+  const parts = [];
+  if (activeBtn) {
+    const sub = activeBtn.closest('.sidebar-subsection');
+    if (sub) {
+      const t = sub.querySelector(':scope > .sidebar-subsection-toggle span');
+      if (t) parts.push(t.textContent.trim());
+    }
+    const sec = activeBtn.closest('.sidebar-section');
+    if (sec) {
+      const s = sec.querySelector(':scope > .sidebar-section-toggle span');
+      if (s) parts.push(s.textContent.trim());
+    }
+  }
+  parts.push(cleanLabel);
+  bc.textContent = parts.join('  ›  ');
+}
+
+function expandAncestorsFor(activeBtn) {
+  const sub = activeBtn.closest('.sidebar-subsection');
+  if (sub) {
+    const items = sub.querySelector(':scope > .sidebar-subsection-items');
+    const chev = sub.querySelector(':scope > .sidebar-subsection-toggle .sidebar-chevron');
+    if (items) items.classList.remove('hidden');
+    if (chev) chev.classList.add('rotate-180');
+  }
+  const sec = activeBtn.closest('.sidebar-section');
+  if (sec) {
+    const items = sec.querySelector(':scope > .sidebar-section-items');
+    const chev = sec.querySelector(':scope > .sidebar-section-toggle .sidebar-chevron');
+    if (items) items.classList.remove('hidden');
+    if (chev) chev.classList.add('rotate-180');
+  }
+}
+
+function sidebarSearch(q) {
+  q = (q || '').trim().toLowerCase();
+  const clean = b => (b.querySelector('span') ? b.querySelector('span').textContent : b.textContent).toLowerCase();
+  document.querySelectorAll('#sidebar .sidebar-btn').forEach(btn => {
+    const match = !q || clean(btn).includes(q);
+    btn.classList.toggle('hidden', !match);
+  });
+  if (!q) { applyRBAC(); return; }
+  // Expand grupos/secciones que contengan coincidencias y ocultar los que no
+  document.querySelectorAll('#sidebar .sidebar-subsection').forEach(sub => {
+    const vis = [...sub.querySelectorAll('.sidebar-btn')].some(b => !b.classList.contains('hidden'));
+    sub.classList.toggle('hidden', !vis);
+    const items = sub.querySelector(':scope > .sidebar-subsection-items');
+    if (items && vis) items.classList.remove('hidden');
+  });
+  document.querySelectorAll('#sidebar .sidebar-section').forEach(sec => {
+    const vis = [...sec.querySelectorAll('.sidebar-btn')].some(b => !b.classList.contains('hidden'));
+    sec.classList.toggle('hidden', !vis);
+    const items = sec.querySelector(':scope > .sidebar-section-items');
+    if (items && vis) items.classList.remove('hidden');
+    const dash = sec.querySelector(':scope > .sidebar-btn'); // (Inicio no está dentro de sección)
+    void dash;
+  });
+}
+
+function updateArpBadge(n) {
+  const b = document.getElementById('badge-arp-alerts');
+  if (!b) return;
+  if (n > 0) { b.textContent = String(n); b.classList.remove('hidden'); }
+  else b.classList.add('hidden');
+}
+
+function setSidebarCollapsed(collapsed) {
+  const panel = document.getElementById('admin-panel');
+  if (panel) panel.classList.toggle('nav-collapsed', collapsed);
+  try { localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0'); } catch {}
+}
+
+function toggleSidebarCollapse() {
+  const panel = document.getElementById('admin-panel');
+  const now = !(panel && panel.classList.contains('nav-collapsed'));
+  setSidebarCollapsed(now);
+}
+
+function applySidebarCollapse() {
+  let saved = '0';
+  try { saved = localStorage.getItem('sidebar_collapsed') || '0'; } catch {}
+  setSidebarCollapsed(saved === '1');
+}
+document.addEventListener('DOMContentLoaded', applySidebarCollapse);
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
@@ -10486,6 +10630,11 @@ const IPAM_API = '/admin/api/ipam';
 let ipamVlansList = [];
 let ipamDevicesList = [];
 let ipamCredentialsList = [];
+let addrNetworkFilter = '';
+let addrPage = 0;
+const ADDR_PAGE_SIZE = 50;
+let addrTotal = 0;
+let addrSummary = { total: 0, ocupadas: 0, libres: 0, reservadas: 0 };
 
 // ── IPAM Dashboard ──────────────────────────────────────────────────────────
 async function loadIpamDashboard() {
@@ -10521,82 +10670,145 @@ async function loadIpamDashboard() {
   }
 }
 
-// ── IPAM Addresses ──────────────────────────────────────────────────────────
+// ── IPAM Addresses (subredes) ─────────────────────────────────────────────────
+function viewSubnetIps(vlanDbId) {
+  addrPage = 0;
+  document.getElementById('ipam-addr-search').value = '';
+  const usageSel = document.getElementById('ipam-addr-usage');
+  if (usageSel) usageSel.value = '';
+  const vlanSelect = document.getElementById('ipam-addr-vlan-filter');
+  if (vlanDbId != null && vlanSelect) vlanSelect.value = String(vlanDbId);
+  switchTab('ipam-addresses');
+}
+
+function ipamAddrFilterChanged() { addrPage = 0; loadIpamAddresses(); }
+function addrGoPage(p) { addrPage = p; loadIpamAddresses(); }
+
+async function refreshAddressesArp() {
+  try {
+    showToast('Actualizando ARP desde los routers...', 'success');
+    const devs = await api('GET', '/ipam/devices');
+    const routers = devs.filter(d => d.enabled && d.device_type === 'router');
+    await Promise.allSettled(routers.map(d => api('POST', `/ipam/devices/${d.id}/poll`)));
+    showToast('ARP actualizado.', 'success');
+    loadIpamAddresses();
+  } catch (err) {
+    showToast('Error al actualizar ARP: ' + err.message, 'error');
+  }
+}
+
+async function reserveSubnetIp(address, vlanDbId) {
+  const owner = prompt(`Propietario/etiqueta para ${address} (opcional):`, '') || null;
+  try {
+    await api('POST', '/ipam/addresses', { address, vlan_id: vlanDbId, status: 'reserved', source: 'manual', owner });
+    showToast('IP reservada.', 'success');
+    loadIpamAddresses();
+  } catch (err) {
+    showToast('Error al reservar: ' + err.message, 'error');
+  }
+}
+
 async function loadIpamAddresses() {
   try {
     const search = document.getElementById('ipam-addr-search').value.trim();
     const vlan = document.getElementById('ipam-addr-vlan-filter').value;
-    const status = document.getElementById('ipam-addr-status-filter').value;
-    const params = new URLSearchParams();
+    const usage = document.getElementById('ipam-addr-usage').value;
+    const params = new URLSearchParams({ limit: String(ADDR_PAGE_SIZE), offset: String(addrPage * ADDR_PAGE_SIZE) });
     if (search) params.set('search', search);
     if (vlan) params.set('vlan_id', vlan);
-    if (status) params.set('status', status);
-    params.set('limit', '200');
+    if (usage) params.set('usage', usage);
 
-    const [addresses, vlans] = await Promise.all([
-      api('GET', `/ipam/addresses?${params}`),
-      ipamVlansList.length ? Promise.resolve(ipamVlansList) : api('GET', '/ipam/vlans'),
+    const [resp, vlans] = await Promise.all([
+      api('GET', `/ipam/subnet-addresses?${params}`),
+      api('GET', '/ipam/vlans'),
     ]);
     ipamVlansList = vlans;
 
-    // Populate VLAN filter
     const vlanSelect = document.getElementById('ipam-addr-vlan-filter');
     const currentVlan = vlanSelect.value;
-    if (vlanSelect.options.length <= 1) {
-      vlans.forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v.id;
-        opt.textContent = `VLAN ${v.vlan_id}${v.name ? ' - ' + v.name : ''}`;
-        vlanSelect.appendChild(opt);
-      });
-      vlanSelect.value = currentVlan;
-    }
+    vlanSelect.innerHTML = '<option value="">Todas las subredes</option>';
+    vlans.filter(v => v.network).forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = `${v.network}${v.vlan_id ? ` · VLAN ${v.vlan_id}` : ''}${v.name ? ' - ' + v.name : ''}`;
+      vlanSelect.appendChild(opt);
+    });
+    vlanSelect.value = currentVlan;
 
-    const tbody = document.getElementById('ipam-addresses-tbody');
-    if (!addresses.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="p-8 text-center text-gray-400">No hay direcciones IP registradas.</td></tr>';
-      document.getElementById('ipam-addr-count').textContent = '0 direcciones';
-      return;
-    }
-
-    const statusColors = {
-      available: 'bg-gray-100 text-gray-600',
-      assigned: 'bg-green-100 text-green-700',
-      observed: 'bg-blue-100 text-blue-700',
-      conflict: 'bg-red-100 text-red-700',
-      reserved: 'bg-yellow-100 text-yellow-700',
-    };
-
-    tbody.innerHTML = addresses.map(a => {
-      const vlanFromInterface = (a.router_interface || '').match(/^VLAN(\d+)/i)?.[1] || null;
-      const vlanNumber = a.vlan_number || a.observed_vlan_id || vlanFromInterface;
-      const vlanHtml = vlanNumber
-        ? `<span class="font-mono font-semibold">VLAN ${esc(vlanNumber)}</span>${a.router_interface ? `<div class="text-[11px] text-gray-400">${esc(a.router_interface)}</div>` : ''}`
-        : '<span class="text-gray-400">—</span>';
-      const switchHtml = a.switch_port_name
-        ? `<span class="font-medium text-green-700">${esc(a.switch_name || 'Switch')}</span><div class="font-mono text-xs">${esc(a.switch_port_name)}</div>`
-        : '<span class="text-gray-400">No identificado</span>';
-
-      return `
-        <tr class="hover:bg-gray-50/50">
-          <td class="px-4 py-3 font-mono font-semibold text-sm">${esc(a.address)}</td>
-          <td class="px-4 py-3 text-xs">${vlanHtml}</td>
-          <td class="px-4 py-3 font-mono text-xs">${esc(a.mac_address || '—')}</td>
-          <td class="px-4 py-3 text-xs">${switchHtml}</td>
-          <td class="px-4 py-3 text-xs">${esc(a.hostname || '—')}</td>
-          <td class="px-4 py-3 text-xs">${esc(a.owner || '—')}</td>
-          <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[a.status] || 'bg-gray-100'}">${esc(a.status)}</span></td>
-          <td class="px-4 py-3 text-xs">${esc(a.source)}</td>
-          <td class="px-4 py-3 text-xs text-gray-400">${fmtDate(a.last_seen_at)}</td>
-          <td class="px-4 py-3 text-right">
-            <button onclick="deleteIpamAddress(${a.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
-          </td>
-        </tr>
-      `;
-    }).join('');
-    document.getElementById('ipam-addr-count').textContent = `${addresses.length} direcciones`;
+    addrTotal = resp.total || 0;
+    addrSummary = resp.summary || addrSummary;
+    renderAddrSummary();
+    renderAddrRows(resp.data || []);
   } catch (err) {
     showToast('Error cargando direcciones: ' + err.message, 'error');
+  }
+}
+
+function renderAddrSummary() {
+  const el = document.getElementById('addr-summary');
+  if (!el) return;
+  const s = addrSummary || {};
+  el.innerHTML =
+    `<span class="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-medium">Ocupadas: ${s.ocupadas ?? 0}</span>` +
+    `<span class="px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-100 font-medium">Libres: ${s.libres ?? 0}</span>` +
+    (s.reservadas ? `<span class="px-2.5 py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-100 font-medium">Reservadas: ${s.reservadas}</span>` : '') +
+    `<span class="px-2.5 py-1 rounded-full bg-gray-50 text-gray-600 border border-gray-100">Total: ${s.total ?? 0}</span>`;
+}
+
+function renderAddrRows(rows) {
+  const tbody = document.getElementById('ipam-addresses-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-400">No hay direcciones en las subredes registradas. Defina la red (CIDR) en "Subredes y VLAN".</td></tr>';
+    document.getElementById('ipam-addr-count').textContent = '0 direcciones';
+    const p = document.getElementById('addr-pager'); if (p) p.innerHTML = '';
+    return;
+  }
+  const usageBadge = {
+    free: 'bg-green-100 text-green-700',
+    occupied: 'bg-blue-100 text-blue-700',
+    reserved: 'bg-yellow-100 text-yellow-700',
+  };
+  const usageText = { free: 'Libre', occupied: 'Ocupada', reserved: 'Reservada' };
+  const statusColors = { available: 'bg-gray-100 text-gray-600', assigned: 'bg-green-100 text-green-700', observed: 'bg-blue-100 text-blue-700', conflict: 'bg-red-100 text-red-700', reserved: 'bg-yellow-100 text-yellow-700' };
+
+  tbody.innerHTML = rows.map(a => {
+    const red = a.vlan_id ? `VLAN ${esc(a.vlan_id)}${a.vlan_name ? `<div class="text-[11px] text-gray-400">${esc(a.vlan_name)}</div>` : ''}` : '—';
+    const uso = `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${usageBadge[a.usage_state] || 'bg-gray-100'}">${usageText[a.usage_state] || a.usage_state}</span>` +
+      (a.is_stale ? ` <span class="text-[10px] text-amber-600 font-medium" title="Sin actividad >24h">inactiva</span>` : '');
+    const estado = a.status ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[a.status] || 'bg-gray-100'}">${esc(a.status)}</span>` : '<span class="text-gray-300">—</span>';
+    let accion;
+    if (a.usage_state === 'free') {
+      accion = `<button onclick="reserveSubnetIp('${esc(a.address)}', ${a.vlan_db})" class="text-indigo-500 hover:text-indigo-700 text-xs font-medium">Reservar</button>`;
+    } else if (a.address_id) {
+      accion = `<button onclick="deleteIpamAddress(${a.address_id})" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>`;
+    } else { accion = '<span class="text-gray-300 text-xs">—</span>'; }
+    return `
+      <tr class="hover:bg-gray-50/50 ${a.usage_state === 'free' ? 'bg-green-50/30' : ''}">
+        <td class="px-4 py-3 font-mono font-semibold text-sm">${esc(a.address)}</td>
+        <td class="px-4 py-3 text-xs font-medium">${red}</td>
+        <td class="px-4 py-3 text-xs">${uso}</td>
+        <td class="px-4 py-3 text-xs">${estado}</td>
+        <td class="px-4 py-3 font-mono text-xs">${esc(a.mac_address || '—')}</td>
+        <td class="px-4 py-3 text-xs">${esc(a.hostname || '—')}</td>
+        <td class="px-4 py-3 text-xs">${esc(a.owner || '—')}</td>
+        <td class="px-4 py-3 text-xs text-gray-400">${a.last_seen_at ? fmtDate(a.last_seen_at) : '—'}</td>
+        <td class="px-4 py-3 text-right">${accion}</td>
+      </tr>`;
+  }).join('');
+
+  const start = addrPage * ADDR_PAGE_SIZE;
+  document.getElementById('ipam-addr-count').textContent =
+    `Mostrando ${start + 1}–${start + rows.length} de ${addrTotal} direcciones`;
+
+  const totalPages = Math.max(1, Math.ceil(addrTotal / ADDR_PAGE_SIZE));
+  const pager = document.getElementById('addr-pager');
+  if (pager) {
+    if (totalPages <= 1) { pager.innerHTML = ''; return; }
+    const btn = 'px-2.5 py-1 rounded border border-gray-300 text-sm text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50';
+    pager.innerHTML =
+      `<button class="${btn}" onclick="addrGoPage(${addrPage - 1})" ${addrPage === 0 ? 'disabled' : ''}>‹ Anterior</button>` +
+      `<span class="px-3 text-xs text-gray-500">Pág. <b class="text-gray-700">${addrPage + 1}</b> / ${totalPages}</span>` +
+      `<button class="${btn}" onclick="addrGoPage(${addrPage + 1})" ${addrPage >= totalPages - 1 ? 'disabled' : ''}>Siguiente ›</button>`;
   }
 }
 
@@ -10651,31 +10863,51 @@ async function deleteIpamAddress(id) {
 // ── IPAM VLANs ──────────────────────────────────────────────────────────────
 async function loadIpamVlans() {
   try {
-    const vlans = await api('GET', '/ipam/vlans');
+    const [vlans, util] = await Promise.all([
+      api('GET', '/ipam/vlans'),
+      api('GET', '/ipam/vlans/utilization'),
+    ]);
     ipamVlansList = vlans;
+    const utilMap = {};
+    (util || []).forEach(u => { utilMap[u.id] = u; });
     const tbody = document.getElementById('ipam-vlans-tbody');
     if (!vlans.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">No hay VLAN configuradas.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400">No hay VLAN configuradas.</td></tr>';
       return;
     }
-    tbody.innerHTML = vlans.map(v => `
+    tbody.innerHTML = vlans.map(v => {
+      const u = utilMap[v.id];
+      let uso = '<span class="text-gray-400 text-xs">—</span>';
+      let verBtn = '';
+      if (u && Number(u.usables) > 0) {
+        const pct = Math.min(100, Math.round((u.usadas / u.usables) * 100));
+        const color = pct > 85 ? 'bg-red-500' : pct > 65 ? 'bg-amber-500' : 'bg-green-500';
+        uso = `<div class="flex flex-col gap-1 min-w-[120px]">
+          <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden"><div class="h-2 rounded-full ${color}" style="width:${pct}%"></div></div>
+          <span class="text-[11px] text-gray-500"><b class="text-gray-700">${u.usadas}</b>/${u.usables} · <b class="text-green-700">${u.disponibles} libres</b>${u.inactivas > 0 ? ` <span class="text-gray-400">(${u.inactivas} inact.)</span>` : ''}</span>
+        </div>`;
+        verBtn = `<button onclick="viewSubnetIps(${v.id})" class="text-indigo-500 hover:text-indigo-700 text-xs font-medium">Ver IPs</button>`;
+      }
+      return `
       <tr class="hover:bg-gray-50/50">
         <td class="px-4 py-3 font-mono font-bold text-blue-600">${v.vlan_id}</td>
         <td class="px-4 py-3 font-medium">${esc(v.name || '—')}</td>
         <td class="px-4 py-3 font-mono text-xs">${esc(v.network || '—')}</td>
         <td class="px-4 py-3 font-mono text-xs">${esc(v.gateway || '—')}</td>
         <td class="px-4 py-3 text-xs">${esc(v.dhcp_source || '—')}</td>
+        <td class="px-4 py-3">${uso}</td>
         <td class="px-4 py-3">
           <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${v.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">
             ${v.enabled ? 'Activa' : 'Inactiva'}
           </span>
         </td>
         <td class="px-4 py-3 text-right space-x-2">
+          ${verBtn}
           <button onclick="editIpamVlan(${v.id})" class="text-blue-500 hover:text-blue-700 text-xs font-medium">Editar</button>
           <button onclick="deleteIpamVlan(${v.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   } catch (err) {
     showToast('Error cargando VLANs: ' + err.message, 'error');
   }
@@ -10940,107 +11172,155 @@ async function queryFdbFromDevice(id) {
   }
 }
 
+let fdbPortsDeviceId = null;
+let fdbPortsInterfaces = [];
+let fdbPortsSelected = new Set();
+
 async function configureIpamFdbPorts(id) {
   try {
+    fdbPortsDeviceId = id;
     const [interfaces, current] = await Promise.all([
       api('GET', `/ipam/devices/${id}/interfaces`),
       api('GET', `/ipam/devices/${id}/fdb-ports`),
     ]);
-    const selected = new Set(current.filter(p => p.selected).map(p => p.if_index));
-    const list = interfaces
-      .filter(i => i.ifIndex && i.descr)
-      .map(i => `${i.ifIndex}: ${i.descr}${i.alias ? ' [' + i.alias + ']' : ''}${selected.has(i.ifIndex) ? ' *' : ''}`)
-      .join('\n');
-    const input = prompt('Puertos FDB a consultar. Use ifIndex individuales o rangos con guion.\nEjemplo: 1-10, 12, 15-18\n* = actualmente seleccionado\n\n' + list);
-    if (input === null) return;
-    const indexes = new Set();
-    for (const token of input.split(',')) {
-      const value = token.trim();
-      const range = value.match(/^(\d+)\s*-\s*(\d+)$/);
-      if (range) {
-        const start = parseInt(range[1], 10);
-        const end = parseInt(range[2], 10);
-        const lower = Math.min(start, end);
-        const upper = Math.max(start, end);
-        for (let index = lower; index <= upper; index++) indexes.add(index);
-      } else if (/^\d+$/.test(value)) {
-        indexes.add(parseInt(value, 10));
-      }
-    }
-    const trunkNames = new Set((ipamDevicesList.find(d => d.id === id)?.trunk_ports || []));
-    const ports = interfaces
-      .filter(i => i.ifIndex && i.descr)
-      .map(i => ({
-        if_index: i.ifIndex,
-        interface_name: i.descr,
-        interface_alias: i.alias || null,
-        selected: indexes.has(i.ifIndex),
-        is_trunk: trunkNames.has(i.descr) || trunkNames.has(String(i.ifIndex)),
-      }));
-    await api('PUT', `/ipam/devices/${id}/fdb-ports`, { ports });
-    showToast('Puertos FDB guardados. Ejecute Consultar o espere el próximo polling.', 'success');
+    fdbPortsInterfaces = interfaces.filter(i => i.ifIndex && i.descr);
+    fdbPortsSelected = new Set(current.filter(p => p.selected).map(p => p.if_index));
+    renderFdbPortsList();
+    updateFdbPortsCount();
+    document.getElementById('fdb-ports-search').value = '';
+    document.getElementById('fdb-ports-modal-title').textContent = `Puertos FDB — ${ipamDevicesList.find(d => d.id === id)?.name || ''}`;
+    document.getElementById('modal-ipam-fdb-ports').classList.remove('hidden');
+    document.getElementById('modal-ipam-fdb-ports').classList.add('flex');
   } catch (err) {
-    showToast('Error configurando puertos FDB: ' + err.message, 'error');
+    showToast('Error cargando puertos: ' + err.message, 'error');
   }
 }
 
-async function crossReferenceArpFdb() {
-  // Get available devices
-  let devices;
+function closeFdbPortsModal() {
+  document.getElementById('modal-ipam-fdb-ports').classList.add('hidden');
+  document.getElementById('modal-ipam-fdb-ports').classList.remove('flex');
+  fdbPortsDeviceId = null;
+}
+
+function renderFdbPortsList() {
+  const container = document.getElementById('fdb-ports-list');
+  const trunkPorts = ipamDevicesList.find(d => d.id === fdbPortsDeviceId)?.trunk_ports || [];
+  const trunkSet = new Set(trunkPorts.map(String));
+  const search = (document.getElementById('fdb-ports-search').value || '').toLowerCase();
+
+  const groups = { access: [], trunk: [], aggregate: [] };
+  for (const iface of fdbPortsInterfaces) {
+    const name = iface.descr || '';
+    const alias = iface.alias ? ` [${iface.alias}]` : '';
+    const isTrunk = trunkSet.has(name) || trunkSet.has(String(iface.ifIndex));
+    const isAggregate = /^aggregate/i.test(name);
+    const label = `${iface.ifIndex}: ${name}${alias}`;
+    if (search && !label.toLowerCase().includes(search)) continue;
+    const item = { ...iface, label, isTrunk };
+    if (isAggregate) groups.aggregate.push(item);
+    else if (isTrunk) groups.trunk.push(item);
+    else groups.access.push(item);
+  }
+
+  const meta = {
+    access: { title: 'Puertos de acceso', color: 'text-green-700' },
+    trunk: { title: 'Uplinks / Troncales', color: 'text-yellow-700' },
+    aggregate: { title: 'Agregados', color: 'text-purple-700' },
+  };
+
+  let html = '';
+  const renderGroup = (group, items) => {
+    if (!items.length) return;
+    const selCount = items.filter(i => fdbPortsSelected.has(i.ifIndex)).length;
+    const m = meta[group];
+    html += `<div class="flex items-center gap-2 px-2 pt-3 pb-1 mb-0.5 border-b border-gray-100">
+      <input type="checkbox" class="group-master w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer" data-group="${group}" onchange="fdbPortsGroupToggle('${group}', this.checked)" title="Alternar todos: ${m.title}">
+      <span class="text-[10px] font-bold uppercase tracking-wider ${m.color} flex-1">${m.title}</span>
+      <span class="text-[10px] text-gray-400">${selCount}/${items.length}</span>
+    </div>`;
+    for (const item of items) {
+      const checked = fdbPortsSelected.has(item.ifIndex) ? 'checked' : '';
+      const trunkBadge = item.isTrunk ? '<span class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-100 text-yellow-700">troncal</span>' : '';
+      html += `<label class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+        <input type="checkbox" ${checked} data-ifindex="${item.ifIndex}" data-group="${group}" onchange="fdbPortsToggle(${item.ifIndex}, this.checked)" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+        <span class="text-sm text-gray-700 font-mono">${esc(item.label)}</span>${trunkBadge}
+      </label>`;
+    }
+  };
+  renderGroup('access', groups.access);
+  renderGroup('trunk', groups.trunk);
+  renderGroup('aggregate', groups.aggregate);
+  if (!html) html = '<p class="text-gray-400 text-sm text-center py-4">Sin puertos disponibles</p>';
+  container.innerHTML = html;
+  refreshGroupHeaderStates();
+}
+
+function refreshGroupHeaderStates() {
+  document.querySelectorAll('#fdb-ports-list .group-master').forEach(master => {
+    const group = master.dataset.group;
+    const boxes = [...document.querySelectorAll(`#fdb-ports-list input[data-ifindex][data-group="${group}"]`)];
+    const checked = boxes.filter(b => b.checked).length;
+    master.checked = boxes.length > 0 && checked === boxes.length;
+    master.indeterminate = checked > 0 && checked < boxes.length;
+  });
+}
+
+function fdbPortsToggle(ifIndex, checked) {
+  if (checked) fdbPortsSelected.add(ifIndex);
+  else fdbPortsSelected.delete(ifIndex);
+  refreshGroupHeaderStates();
+  updateFdbPortsCount();
+}
+
+function fdbPortsGroupToggle(group, checked) {
+  const boxes = [...document.querySelectorAll(`#fdb-ports-list input[data-ifindex][data-group="${group}"]`)];
+  boxes.forEach(cb => {
+    const idx = parseInt(cb.dataset.ifindex);
+    cb.checked = checked;
+    if (checked) fdbPortsSelected.add(idx);
+    else fdbPortsSelected.delete(idx);
+  });
+  refreshGroupHeaderStates();
+  updateFdbPortsCount();
+}
+
+function fdbPortsSelectAll(selectAll) {
+  const boxes = [...document.querySelectorAll('#fdb-ports-list input[data-ifindex]')];
+  boxes.forEach(cb => {
+    const idx = parseInt(cb.dataset.ifindex);
+    cb.checked = selectAll;
+    if (selectAll) fdbPortsSelected.add(idx);
+    else fdbPortsSelected.delete(idx);
+  });
+  refreshGroupHeaderStates();
+  updateFdbPortsCount();
+}
+
+function fdbPortsFilter() {
+  renderFdbPortsList();
+}
+
+function updateFdbPortsCount() {
+  document.getElementById('fdb-ports-count').textContent = `${fdbPortsSelected.size} seleccionados`;
+}
+
+async function submitFdbPorts() {
+  if (!fdbPortsDeviceId) return;
+  const trunkPorts = ipamDevicesList.find(d => d.id === fdbPortsDeviceId)?.trunk_ports || [];
+  const trunkSet = new Set(trunkPorts.map(String));
+  const ports = fdbPortsInterfaces.map(i => ({
+    if_index: i.ifIndex,
+    interface_name: i.descr,
+    interface_alias: i.alias || null,
+    selected: fdbPortsSelected.has(i.ifIndex),
+    is_trunk: trunkSet.has(i.descr) || trunkSet.has(String(i.ifIndex)),
+  }));
   try {
-    devices = await api('GET', '/ipam/devices');
+    await api('PUT', `/ipam/devices/${fdbPortsDeviceId}/fdb-ports`, { ports });
+    closeFdbPortsModal();
+    showToast('Puertos FDB guardados. Ejecute Consultar o espere el próximo polling.', 'success');
   } catch (err) {
-    showToast('Error cargando dispositivos: ' + err.message, 'error');
-    return;
-  }
-
-  if (!devices || devices.length < 2) {
-    showToast('Se necesitan al menos 2 dispositivos (1 router + 1 switch).', 'error');
-    return;
-  }
-
-  const routers = devices.filter(d => d.device_type === 'router');
-  const switches = devices.filter(d => d.device_type === 'switch');
-
-  if (routers.length === 0) {
-    showToast('No hay routers configurados. Agregue un router primero.', 'error');
-    return;
-  }
-  if (switches.length === 0) {
-    showToast('No hay switches configurados. Agregue un switch primero.', 'error');
-    return;
-  }
-
-  // Build router options
-  let routerOptions = routers.map(r => `${r.id}: ${r.name} (${r.management_ip})`).join('\n');
-  const routerIdStr = prompt('Seleccione el router (para ARP):\n\n' + routerOptions + '\n\nIngrese el ID:');
-  if (!routerIdStr) return;
-  const routerId = parseInt(routerIdStr.trim());
-  if (isNaN(routerId)) {
-    showToast('ID de router inválido.', 'error');
-    return;
-  }
-
-  // Build switch options
-  let switchOptions = switches.map(s => `${s.id}: ${s.name} (${s.management_ip})`).join('\n');
-  const switchIdsStr = prompt('Seleccione los switches (para FDB):\n\n' + switchOptions + '\n\nIngrese IDs separados por coma:');
-  if (!switchIdsStr) return;
-  const switchIds = switchIdsStr.split(',').map(s => parseInt(s.trim())).filter(id => !isNaN(id) && id > 0);
-  if (switchIds.length === 0) {
-    showToast('Debe especificar al menos un switch válido.', 'error');
-    return;
-  }
-
-  try {
-    showToast('Realizando mapeo cruzado ARP↔FDB...', 'success');
-    const result = await api('POST', '/ipam/cross-reference', {
-      router_id: routerId,
-      switch_ids: switchIds,
-    });
-    showToast('Mapeo completado: ' + result.mappedCount + ' de ' + result.arpCount + ' hosts con puerto identificado.', 'success');
-    console.log('Cross-reference result:', result);
-  } catch (err) {
-    showToast('Error: ' + err.message, 'error');
+    showToast('Error guardando puertos: ' + err.message, 'error');
   }
 }
 
@@ -11056,31 +11336,100 @@ async function deleteIpamDevice(id) {
 }
 
 // ── IPAM FDB ────────────────────────────────────────────────────────────────
-async function loadIpamFdb() {
+async function loadIpamCredentials() {
   try {
+    ipamCredentialsList = await api('GET', '/ipam/credentials');
+    const tbody = document.getElementById('ipam-credentials-tbody');
+    if (!ipamCredentialsList.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">No hay credenciales SNMP configuradas.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = ipamCredentialsList.map(c => `
+      <tr class="hover:bg-gray-50/50">
+        <td class="px-4 py-3 font-medium">${esc(c.name)}</td>
+        <td class="px-4 py-3 text-xs">SNMP${esc(c.snmp_version)}</td>
+        <td class="px-4 py-3 text-xs">${esc(c.username || '—')}</td>
+        <td class="px-4 py-3 text-xs">${esc(c.security_level || (c.snmp_version === '2c' ? 'Community' : '—'))}</td>
+        <td class="px-4 py-3 text-xs text-gray-400">${fmtDate(c.created_at)}</td>
+        <td class="px-4 py-3 text-right space-x-2">
+          <button onclick="editIpamCredential(${c.id})" class="text-gray-500 hover:text-gray-700 text-xs font-medium">Editar</button>
+          <button onclick="deleteIpamCredential(${c.id})" class="text-red-500 hover:text-red-700 text-xs font-medium">Eliminar</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    showToast('Error cargando credenciales: ' + err.message, 'error');
+  }
+}
+
+let fdbPage = 0;
+let fdbTotal = 0;
+const FDB_PAGE_SIZE = 10;
+let fdbSearchTimer = null;
+
+function fdbFilterChanged() { fdbPage = 0; loadIpamFdb(); }
+
+function fdbSearchChanged() { fdbPage = 0; clearTimeout(fdbSearchTimer); fdbSearchTimer = setTimeout(loadIpamFdb, 350); }
+
+function fdbGoPage(p) { fdbPage = p; loadIpamFdb(); }
+
+function renderFdbPager(totalPages) {
+  const pager = document.getElementById('ipam-fdb-pager');
+  if (!pager) return;
+  if (totalPages <= 1) { pager.innerHTML = ''; return; }
+  const btn = 'px-2.5 py-1 rounded border border-gray-300 text-sm text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50';
+  pager.innerHTML =
+    `<button class="${btn}" onclick="fdbGoPage(0)" ${fdbPage === 0 ? 'disabled' : ''}>«</button>` +
+    `<button class="${btn}" onclick="fdbGoPage(${fdbPage - 1})" ${fdbPage === 0 ? 'disabled' : ''}>Anterior</button>` +
+    `<span class="px-3 text-xs text-gray-500">Página <b class="text-gray-700">${fdbPage + 1}</b> de ${totalPages}</span>` +
+    `<button class="${btn}" onclick="fdbGoPage(${fdbPage + 1})" ${fdbPage >= totalPages - 1 ? 'disabled' : ''}>Siguiente</button>` +
+    `<button class="${btn}" onclick="fdbGoPage(${totalPages - 1})" ${fdbPage >= totalPages - 1 ? 'disabled' : ''}>»</button>`;
+}
+
+async function loadIpamFdb(triggerPoll) {
+  try {
+    if (triggerPoll) {
+      fdbPage = 0;
+      showToast('Actualizando ARP y FDB de todos los dispositivos...', 'success');
+      const devs = await api('GET', '/ipam/devices');
+      const enabled = devs.filter(d => d.enabled);
+      const results = await Promise.allSettled(enabled.map(d => api('POST', `/ipam/devices/${d.id}/poll`)));
+      const ok = results.filter(r => r.status === 'fulfilled').length;
+      const fail = results.filter(r => r.status === 'rejected').length;
+      showToast(`Polling completado: ${ok} OK, ${fail} errores.`, fail ? 'error' : 'success');
+    }
     const search = document.getElementById('ipam-fdb-search').value.trim();
     const deviceId = document.getElementById('ipam-fdb-device').value;
-    const showTrunks = document.getElementById('ipam-fdb-show-trunks').checked;
-    const params = new URLSearchParams({ limit: '5000', include_trunks: String(showTrunks) });
+    const ipStatus = document.getElementById('ipam-fdb-ipstatus').value;
+    const type = document.getElementById('ipam-fdb-type').value;
+
+    const params = new URLSearchParams({ limit: String(FDB_PAGE_SIZE), offset: String(fdbPage * FDB_PAGE_SIZE) });
     if (search) params.set('search', search);
     if (deviceId) params.set('device_id', deviceId);
+    if (ipStatus) params.set('ip_status', ipStatus);
+    if (type) params.set('type', type);
 
-    const [entries, devices] = await Promise.all([
+    const [page, devices] = await Promise.all([
       api('GET', `/ipam/fdb?${params}`),
-      ipamDevicesList.length ? Promise.resolve(ipamDevicesList) : api('GET', '/ipam/devices'),
+      api('GET', '/ipam/devices'),
     ]);
     ipamDevicesList = devices;
 
     const deviceSelect = document.getElementById('ipam-fdb-device');
-    if (deviceSelect.options.length === 1) {
-      devices.filter(d => d.device_type === 'switch').forEach(d => {
-        deviceSelect.innerHTML += `<option value="${d.id}">${esc(d.name)} (${esc(d.management_ip)})</option>`;
-      });
-    }
+    const currentVal = deviceSelect.value;
+    deviceSelect.innerHTML = '<option value="">Todos los switches</option>';
+    devices.filter(d => d.device_type === 'switch').forEach(d => {
+      deviceSelect.innerHTML += `<option value="${d.id}">${esc(d.name)} (${esc(d.management_ip)})</option>`;
+    });
+    deviceSelect.value = currentVal;
+
+    const entries = page.data || [];
+    fdbTotal = page.total || 0;
     const tbody = document.getElementById('ipam-fdb-tbody');
     if (!entries.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">No hay entradas FDB importadas. Verifique el polling SNMP.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">No hay entradas que coincidan con los filtros.</td></tr>';
       document.getElementById('ipam-fdb-count').textContent = '0 entradas';
+      renderFdbPager(0);
       return;
     }
     tbody.innerHTML = entries.map(e => `
@@ -11089,14 +11438,27 @@ async function loadIpamFdb() {
         <td class="px-4 py-3 font-mono text-xs font-semibold">${esc(e.mac_address)}</td>
         <td class="px-4 py-3 text-xs font-medium">${esc(e.device_name)}<div class="text-[11px] text-gray-400">${esc(e.management_ip)}</div></td>
         <td class="px-4 py-3 font-mono text-xs">${esc(e.interface_name || '—')}</td>
-        <td class="px-4 py-3 text-xs">${esc(e.if_index || '—')}</td>
+        <td class="px-4 py-3"><input type="text" value="${esc(e.description || '')}" placeholder="—" onchange="updateFdbDescription(${e.id}, this.value)" class="w-full px-2 py-1 text-xs border border-transparent hover:border-gray-300 focus:border-blue-500 rounded bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors" title="Editar descripción"></td>
         <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${e.is_trunk ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">${e.is_trunk ? 'Troncal' : 'Acceso'}</span></td>
         <td class="px-4 py-3 text-xs text-gray-400">${fmtDate(e.last_seen_at)}</td>
       </tr>
     `).join('');
-    document.getElementById('ipam-fdb-count').textContent = `${entries.length} entradas`;
+    const totalPages = Math.max(1, Math.ceil(fdbTotal / FDB_PAGE_SIZE));
+    if (fdbPage > totalPages - 1) { fdbPage = totalPages - 1; }
+    const from = fdbPage * FDB_PAGE_SIZE + 1;
+    const to = Math.min(fdbTotal, fdbPage * FDB_PAGE_SIZE + entries.length);
+    document.getElementById('ipam-fdb-count').textContent = `Mostrando ${from}–${to} de ${fdbTotal} entradas`;
+    renderFdbPager(totalPages);
   } catch (err) {
     showToast('Error cargando FDB: ' + err.message, 'error');
+  }
+}
+
+async function updateFdbDescription(id, description) {
+  try {
+    await api('PATCH', `/ipam/fdb/${id}`, { description: description.trim() || null });
+  } catch (err) {
+    showToast('Error guardando descripción: ' + err.message, 'error');
   }
 }
 
@@ -11123,6 +11485,36 @@ function closeIpamCredentialModal() {
   document.getElementById('modal-ipam-credential').classList.remove('flex');
 }
 
+function editIpamCredential(id) {
+  const c = ipamCredentialsList.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('ipam-cred-modal-title').textContent = 'Editar Credencial SNMP';
+  document.getElementById('ipam-cred-id').value = c.id;
+  document.getElementById('ipam-cred-name').value = c.name;
+  document.getElementById('ipam-cred-version').value = c.snmp_version;
+  document.getElementById('ipam-cred-community').value = c.community || '';
+  document.getElementById('ipam-cred-level').value = c.security_level || 'authPriv';
+  document.getElementById('ipam-cred-username').value = c.username || '';
+  document.getElementById('ipam-cred-auth-proto').value = c.auth_protocol || '';
+  document.getElementById('ipam-cred-auth-secret').value = '';
+  document.getElementById('ipam-cred-priv-proto').value = c.priv_protocol || '';
+  document.getElementById('ipam-cred-priv-secret').value = '';
+  toggleSnmpV3Fields();
+  document.getElementById('modal-ipam-credential').classList.remove('hidden');
+  document.getElementById('modal-ipam-credential').classList.add('flex');
+}
+
+async function deleteIpamCredential(id) {
+  if (!confirm('¿Eliminar esta credencial SNMP?')) return;
+  try {
+    await api('DELETE', `/ipam/credentials/${id}`);
+    showToast('Credencial eliminada.', 'success');
+    loadIpamCredentials();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
 function toggleSnmpV3Fields() {
   const version = document.getElementById('ipam-cred-version').value;
   document.getElementById('snmpv2c-fields').classList.toggle('hidden', version !== '2c');
@@ -11131,11 +11523,14 @@ function toggleSnmpV3Fields() {
 
 async function submitIpamCredential(e) {
   e.preventDefault();
+  const credId = document.getElementById('ipam-cred-id').value;
   const data = {
     name: document.getElementById('ipam-cred-name').value.trim(),
     snmp_version: document.getElementById('ipam-cred-version').value,
     community: document.getElementById('ipam-cred-community').value.trim() || null,
-    security_level: document.getElementById('ipam-cred-level').value || null,
+    security_level: document.getElementById('ipam-cred-version').value === '2c'
+      ? 'Community'
+      : (document.getElementById('ipam-cred-level').value || null),
     username: document.getElementById('ipam-cred-username').value.trim() || null,
     auth_protocol: document.getElementById('ipam-cred-auth-proto').value || null,
     auth_secret: document.getElementById('ipam-cred-auth-secret').value || null,
@@ -11143,10 +11538,15 @@ async function submitIpamCredential(e) {
     priv_secret: document.getElementById('ipam-cred-priv-secret').value || null,
   };
   try {
-    await api('POST', '/ipam/credentials', data);
+    if (credId) {
+      await api('PUT', `/ipam/credentials/${credId}`, data);
+    } else {
+      await api('POST', '/ipam/credentials', data);
+    }
     closeIpamCredentialModal();
     showToast('Credencial guardada.', 'success');
     ipamCredentialsList = await api('GET', '/ipam/credentials');
+    if (currentTab === 'ipam-credentials') loadIpamCredentials();
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
   }
@@ -11155,7 +11555,32 @@ async function submitIpamCredential(e) {
 // ── IPAM Conflicts ──────────────────────────────────────────────────────────
 async function loadIpamConflicts() {
   try {
-    const conflicts = await api('GET', '/ipam/addresses/conflicts');
+    const [conflicts, alerts] = await Promise.all([
+      api('GET', '/ipam/addresses/conflicts'),
+      api('GET', '/ipam/arp-alerts'),
+    ]);
+
+    // ARP Spoofing alerts
+    const alertsTbody = document.getElementById('ipam-arp-alerts-tbody');
+    updateArpBadge(alerts.length);
+    if (!alerts.length) {
+      alertsTbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-green-600">Sin alertas. Todas las IPs mantienen su MAC histórica.</td></tr>';
+    } else {
+      alertsTbody.innerHTML = alerts.map(a => `
+        <tr class="hover:bg-red-50/50">
+          <td class="px-4 py-3 font-mono font-semibold text-red-600">${esc(a.ip_address)}</td>
+          <td class="px-4 py-3 font-mono text-xs text-red-600">${esc(a.current_mac)}</td>
+          <td class="px-4 py-3 font-mono text-xs text-green-600">${esc(a.expected_mac)}</td>
+          <td class="px-4 py-3 text-xs">${a.switch_name ? esc(a.switch_name) + ' → ' + esc(a.switch_port || 'puerto ' + a.bridge_port) : '—'}</td>
+          <td class="px-4 py-3 text-xs text-gray-400">${fmtDate(a.current_seen)}</td>
+          <td class="px-4 py-3 text-right">
+            <button onclick="resolveArpAlert('${esc(a.ip_address)}')" class="text-green-600 hover:text-green-800 text-xs font-medium">Marcar Resuelto</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // IP conflicts
     const tbody = document.getElementById('ipam-conflicts-tbody');
     if (!conflicts.length) {
       tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">No hay conflictos detectados.</td></tr>';
@@ -11178,11 +11603,23 @@ async function loadIpamConflicts() {
 
 async function resolveIpamConflict(address, vlanId) {
   try {
-    const addrs = await api('GET', `/ipam/addresses?search=${address}&vlan_id=${vlanId}`);
+    const params = new URLSearchParams({ search: address });
+    if (vlanId != null) params.set('vlan_id', String(vlanId));
+    const addrs = await api('GET', `/ipam/addresses?${params}`);
     for (const a of addrs.filter(x => x.status === 'conflict')) {
       await api('PUT', `/ipam/addresses/${a.id}`, { ...a, status: 'observed' });
     }
     showToast('Conflicto marcado como resuelto.', 'success');
+    loadIpamConflicts();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function resolveArpAlert(ipAddress) {
+  try {
+    await api('POST', `/ipam/arp-alerts/${encodeURIComponent(ipAddress)}/resolve`);
+    showToast('Alerta ARP resuelta.', 'success');
     loadIpamConflicts();
   } catch (err) {
     showToast('Error: ' + err.message, 'error');

@@ -139,6 +139,9 @@ app.use('/', routes);
 // ─── Manejo de errores ────────────────────────────────────────────────────────
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   console.error('[ERROR]', err.message, err.stack);
+  if (req.path.startsWith('/admin/api')) {
+    return res.status(500).json({ error: err.message || 'Error interno del servidor.' });
+  }
   if (req.path.startsWith('/auth')) {
     return res.status(500).json({ error: 'Error interno del servidor.' });
   }
